@@ -10,6 +10,8 @@ The original Media3 playback, M3U/M3U8/Xtream/authorized Stalker sources, XMLTV 
 
 New protection includes whole-database SQLCipher encryption with a Keystore-wrapped random key, encrypted credential-adjacent preferences, explicit backup exclusions, source URL/MAC/header validation, credential-free diagnostics, and retained-data recovery controls. A directly bound SQLCipher corruption handler avoids the library's default delete-and-retry behavior. Buffer policies change the active Media3 load control without replacing the player. Guide replacement is transactional; failed/truncated/empty refreshes keep valid data, and bounded temporary XML is encrypted with an ephemeral key.
 
+Protected startup settings and database work run on workers, including the Application's optional NAS-sync preference lookup, which otherwise initialized encrypted settings on the main thread.
+
 Optional Supabase email-code authentication and favorites/progress sync use an encrypted durable outbox, offline retries, explicit opt-in, typed metadata identities, owner-only RLS and atomic per-record conflict handling. Provider credentials and URLs are excluded. Existing LAN/NAS sync is preserved separately.
 
 The update manager uses stable `DisabledAbel/Nuvix` releases, numeric version codes, required `update.json`, integrity/size/package/version/installed-signer verification, cancellable downloads, optional scheduled checks/notifications/downloads and interactive Android PackageInstaller sessions. CI builds/tests/lints debug artifacts; release workflows require a production signer and pinned public fingerprint and attach APK metadata/checksums/corresponding source.
@@ -35,6 +37,7 @@ The complete path list is in `changed-files.txt` alongside this report and in th
 - **10 release-publication Python tests passed**, including wrong package/version/tag/debug key/changed signer/split APK rejection.
 - Supabase migration and isolation/replay assertions passed in isolated **PGlite/PostgreSQL**: forced/enabled RLS, owner access, cross-account/anonymous denial, owner reassignment rejection, unknown fields, bounds, stale rewind replay and deterministic ties. No connected production database was changed.
 - **Actionlint passed** for build, release and retained Pages workflows.
+- **Hosted GitHub CI passed** after explicitly selecting supported Android SDK 35/platform/build-tools packages instead of the setup action's retired `tools` default: https://github.com/DisabledAbel/Nuvix/actions/runs/38470175257. Final startup changes use the same workflow and are also rebuilt and tested locally.
 - **Android lint passed with zero errors and 64 warnings**. Warnings remain, including inherited locale/unused-resource/deprecation issues and intentionally durable preference commits. Specific untranslated English fallback strings are explicitly scoped; translations of new Nuvix surfaces remain further work.
 - `git diff --check` passed. The GPL license is byte-identical to the imported upstream license. The debug APK's Android signatures and package/version identity were checked.
 
@@ -44,11 +47,11 @@ JDK 17, Android SDK/build tools 35, Gradle 8.11.1 with verified wrapper/distribu
 
 `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease` completed successfully. The cloud workspace required its inherited proxy/CA configuration and a JDK with compiler; no signing or provider secrets were supplied.
 
-- Installable debug APK: `com.disabledabel.nuvix.debug`, version code 21 / version name 0.1.0, Android debug certificate. 56333370 bytes; SHA-256 `7fcf76bd823b7a56756706fa38b536e2c9da384af6db549c404ed6a1c60088a2`.
-- Optimized release APK: `com.disabledabel.nuvix`, version code 21 / version name 0.1.0, **unsigned**. 29916152 bytes; SHA-256 `9cf37f9a027fe094ca07698d9ee402d845a59565b357190852742d627dc5d7d4`. It must be signed before installation/distribution and is not a published production release.
+- Installable debug APK: `com.disabledabel.nuvix.debug`, version code 21 / version name 0.1.0, Android debug certificate. 56333370 bytes; SHA-256 `038e826172f5aac85521aaf2c3996896304f73fa6133722eef96058528bb796e`.
+- Optimized release APK: `com.disabledabel.nuvix`, version code 21 / version name 0.1.0, **unsigned**. 29916152 bytes; SHA-256 `fa866dc826897b59bacfbb67130f2139835e20ad1b85bb80bae2d82f6811e937`. It must be signed before installation/distribution and is not a published production release.
 - Corresponding Nuvix source, build scripts, migrations, tests and documentation are included in the source archive. The external artifact manifest identifies the exact source commit and file hashes.
 
-Runtime smoke result: Android TV 9 / API 28 x86 software emulator installed the debug APK and rendered the actual source-free Nuvix Home screen. Native Room/SQLCipher startup succeeded; its 16-byte database header is not the plaintext SQLite signature. Reinstall with adb -r also succeeded using the same debug identity. First-run checks were slow/time-limited without a hardware accelerator; this is not a hardware performance or complete remote/launcher/playback test. The screenshot in screenshots/nuvix-home.png is a real emulator capture, not a mockup.
+Runtime smoke result: Android TV 9 / API 28 x86 software emulator installed the debug APK and rendered the actual source-free Nuvix Home screen. Native Room/SQLCipher startup succeeded; its 16-byte database header is not the plaintext SQLite signature. Reinstall with adb -r also succeeded using the same debug identity. Software-emulator retries without a hardware accelerator included 37–55 second launches and an input-dispatch ANR while waiting for the first window; startup performance and responsiveness remain acceptance items. This is not a hardware performance or complete remote/launcher/playback test. The screenshot in screenshots/nuvix-home.png is a real emulator capture, not a mockup.
 
 ## 5. Unfinished or unverified
 
