@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  This file is part of OpenTV.
+  Copyright (C) 2026 The OpenTV Contributors
+  Licensed under the GNU General Public License v3.0 or later.
+
+  A permanent short address that always points at the newest APK, so what someone types into
+  Downloader on a TV remote never has to change between releases.
+
+  The owner and repo are read from this page's own URL, so a fork redirects to the fork's own
+  releases with no editing.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Downloading OpenTV…</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #07080c; color: #e8eaf0; text-align: center; padding: 24px;
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 10px; font-weight: 600; }
+  p { color: #a8aec0; margin: 8px 0; }
+  a { color: #7c93ff; }
+</style>
+</head>
+<body>
+<div>
+  <h1 id="headline">Starting your download…</h1>
+  <p id="detail">Finding the latest build.</p>
+  <p><a id="fallback" href="../">Back to the install page</a></p>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  var host = location.hostname;
+  var segments = location.pathname.split("/").filter(Boolean);
+  // Drop the trailing "apk" segment to get back to the project root.
+  segments.pop();
+
+  if (!/\.github\.io$/i.test(host)) {
+    document.getElementById("headline").textContent = "Can't work out where to download from";
+    document.getElementById("detail").textContent =
+      "Open this from its GitHub Pages address.";
+    return;
+  }
+
+  var owner = host.replace(/\.github\.io$/i, "");
+  var repo = segments.length ? segments[0] : owner + ".github.io";
+  var api = "https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest";
+
+  function fail(message) {
+    document.getElementById("headline").textContent = "No build available";
+    document.getElementById("detail").textContent = message;
+  }
+
+  fetch(api, { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (response) {
+      if (response.status === 404) { fail("No release has been published yet."); return null; }
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    })
+    .then(function (release) {
+      if (!release) return;
+      var apk = (release.assets || []).filter(function (a) { return /\.apk$/i.test(a.name); })[0];
+      if (!apk) { fail("The latest release has no APK attached."); return; }
+
+      document.getElementById("detail").textContent =
+        "OpenTV " + (release.tag_name || "") + " — if nothing happens, use the link below.";
+      document.getElementById("fallback").textContent = "Download manually";
+      document.getElementById("fallback").href = apk.browser_download_url;
+      location.replace(apk.browser_download_url);
+    })
+    .catch(function () {
+      fail("Couldn't reach GitHub. Check the connection and try again.");
+    });
+})();
+</script>
+</body>
+</html>

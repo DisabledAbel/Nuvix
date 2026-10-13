@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew test
+
+      # Only runs if a keystore has been added to repository secrets. Without one the
+      # release build falls back to the debug key, which still produces an installable
+      # APK — see docs/RELEASING.md.
+      # The secrets context is not usable directly in an `if:`, so it is lifted into env first.
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: Assemble release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      # A stable asset name matters: the install page and the /apk short link both look for
+      # a file ending in .apk, and a predictable name keeps direct links working.
+      - name: Name the artifact
+        id: artifact
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          SOURCE=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          if [ -z "$SOURCE" ]; then
+            echo "::error::No APK was produced by assembleRelease"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$SOURCE" "dist/opentv-${TAG}.apk"
+          cp "$SOURCE" "dist/opentv.apk"
+          echo "path=dist/opentv-${TAG}.apk" >> "$GITHUB_OUTPUT"
+          echo "signed=$([ -n "$KEYSTORE_PATH" ] && echo yes || echo debug-key)" >> "$GITHUB_OUTPUT"
+
+      - name: Release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '$0 ~ ("^## " v "([^0-9]|$)"){f=1;next} /^## /{f=0} f{print}' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then echo "See the changelog for what is new in this release." > release-notes.md; fi
+          {
+            echo ""
+            echo "---"
+            echo "Built by GitHub Actions from the tagged commit — the workflow is public, so anyone can verify this APK against the source."
+          } >> release-notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: false
+          body_path: release-notes.md

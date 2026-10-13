@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A plain, non-Compose splash theme. The real theming lives in ui/theme/Theme.kt; this
+      exists only so the window has a sensible background before Compose takes over, which
+      stops the white flash on launch that looks awful on a TV.
+    -->
+    <style name="Theme.OpenTV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

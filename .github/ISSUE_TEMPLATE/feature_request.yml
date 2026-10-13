@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest something
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening this, please check `docs/ARCHITECTURE.md`. Some features — anything
+        needing a server the project has to pay for — are deliberately out of scope, and the
+        reasoning there explains why.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you are in, not just the feature. It often has a simpler answer.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+  - type: checkboxes
+    id: server
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not require OpenTV to run a server

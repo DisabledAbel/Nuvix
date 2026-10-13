@@ -1,0 +1,23 @@
+<!--
+  ~ This file is part of OpenTV.
+  ~ Copyright (C) 2026 The OpenTV Contributors
+  ~ Licensed under the GNU General Public License v3.0 or later.
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- The screen: a rounded panel in the brand blue. -->
+    <path
+        android:fillColor="#5B8DEF"
+        android:pathData="M9,7 L39,7 A7,7 0 0 1 46,14 L46,34 A7,7 0 0 1 39,41 L9,41 A7,7 0 0 1 2,34 L2,14 A7,7 0 0 1 9,7 Z" />
+    <!-- The play mark, so it reads as a player at a glance. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M19,16 L34,24 L19,32 Z" />
+    <!-- A little stand foot, so the panel reads as a TV. -->
+    <path
+        android:fillColor="#5B8DEF"
+        android:pathData="M17,43 L31,43 L31,45.5 L17,45.5 Z" />
+</vector>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground. The safe zone is the centre 66dp of the 108dp canvas, so the
+  artwork stays well inside it or launchers that apply an aggressive mask will crop the aerial.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#4B5DB8"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M44,33 L54,42" />
+    <path
+        android:strokeColor="#4B5DB8"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M64,33 L54,42" />
+    <path
+        android:fillColor="#7C93FF"
+        android:pathData="M30,42h48a7,7 0,0 1,7 7v26a7,7 0,0 1,-7 7h-48a7,7 0,0 1,-7 -7v-26a7,7 0,0 1,7 -7z" />
+    <path
+        android:fillColor="#07080C"
+        android:pathData="M48,52l16,10l-16,10z" />
+</vector>
