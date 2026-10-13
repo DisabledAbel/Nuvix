@@ -1,6 +1,6 @@
 # Nuvix implementation report
 
-Date: October 13, 2026. Repository: https://github.com/DisabledAbel/Nuvix. Branch: `feat/nuvix-tv-foundation`.
+Date: October 13, 2026. Repository: https://github.com/DisabledAbel/Nuvix. Final branch: `fix/protected-startup-worker`.
 
 ## 1. Implemented
 
@@ -29,7 +29,7 @@ The baseline import contains 184 files including the unchanged LICENSE; seven up
 - `update/`, `data/remote/GitHubReleaseApi.kt`, update security/discovery tests and installer status receiver.
 - README, contributing/setup/changelog, feature/build/signing/privacy/architecture/roadmap documents, upstream provenance, COPYING, dependency notices and license texts.
 
-The complete path list is in `changed-files.txt` alongside this report and in the source archive.
+The complete foundation path list is in `changed-files.txt` alongside this report and in the source archive. The final follow-up changes only `OpenTvApp.kt` and this report.
 
 ## 3. Tests executed
 
@@ -85,4 +85,4 @@ Update metadata is not a signing trust root: the APK must match the installed si
 
 Complete **Phase 6 device acceptance** before announcing a stable consumer release. Test protected persistence and upgrade/recovery first, then remote navigation/launcher reversibility, authorized playback, recording/PiP, real cloud auth/offline conflicts and signed update installation. Configure production signing, run the release workflow on a matching tag, and distribute the exact corresponding source. Expand cloud preferences and continuous playback only after these flows pass.
 
-Publication: Committed and pushed on the feature branch; draft pull request https://github.com/DisabledAbel/Nuvix/pull/1 is open. Main remains unchanged. No production release/tag was published.
+Publication: The foundation pull request https://github.com/DisabledAbel/Nuvix/pull/1 was merged externally while final validation was running. The protected-startup correction and final report are committed on `fix/protected-startup-worker` in draft pull request https://github.com/DisabledAbel/Nuvix/pull/2. This task did not merge either pull request. No production release/tag was published.
