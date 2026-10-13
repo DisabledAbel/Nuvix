@@ -26,3 +26,6 @@ keystore.properties
 
 __pycache__/
 *.pyc
+
+# Supabase CLI transient state
+/supabase/.temp/

@@ -224,8 +224,10 @@ docs/ROADMAP.md
 docs/TESTING.md
 docs/apk/index.html
 docs/building.md
+docs/changed-files.txt
 docs/cloud-sync.md
 docs/database-security.md
+docs/implementation-report.md
 docs/index.html
 docs/launcher-compatibility.md
 docs/nuvix-architecture.md
@@ -235,6 +237,7 @@ docs/screenshots/03-cloud-sync.png
 docs/screenshots/04-movies.png
 docs/screenshots/05-settings.png
 docs/screenshots/06-about.png
+docs/screenshots/nuvix-home.png
 docs/signing.md
 docs/update-troubleshooting.md
 docs/upstream-audit.md
@@ -252,7 +255,6 @@ licenses/SQLCipher.txt
 scripts/create-release.py
 scripts/tests/test_create_release.py
 settings.gradle.kts
-supabase/.temp/cli-latest
 supabase/migrations/20261013185918_cloud_records.sql
 supabase/tests/cloud_records.sql
 tools/README.md
