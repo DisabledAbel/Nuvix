@@ -20,6 +20,12 @@ Nuvix is an **independent modified version of [OpenTV](https://github.com/opentv
 - Trusted GitHub release discovery with numeric version codes, release notes, optional automatic checks/notifications/background downloads, progress/cancellation, package/hash/signer/downgrade checks, and interactive Android PackageInstaller installation.
 - CI with Kotlin compilation, unit tests, lint, debug APK artifacts; manually triggered builds; signed tag releases with verified APK identity, pinned signing fingerprint, `update.json`, checksums, and corresponding GPL source.
 
+## Screenshot
+
+Actual Nuvix Home captured from the Android TV API 28 emulator, with no provider configured.
+
+![Nuvix Home](docs/screenshots/nuvix-home.png)
+
 ## Install and build
 
 The current development APK is a **debug build**, identified as `com.disabledabel.nuvix.debug`; it is not a production signed release. Production updates target the stable application ID and require the maintainer's consistent signing certificate. There is no published production release until signing and release configuration are supplied.
