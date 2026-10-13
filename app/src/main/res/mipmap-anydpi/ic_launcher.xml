@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Original Nuvix identity. Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="40dp" android:height="40dp" android:viewportWidth="40" android:viewportHeight="40">
-    <path android:fillColor="#58A6FF" android:pathData="M7,31 L7,9 L13,9 L26,24 L26,9 L33,9 L33,31 L27,31 L14,16 L14,31 Z" />
-    <path android:fillColor="#A2DAFF" android:pathData="M26,4 L33,4 L33,7 L26,7 Z" />
-</vector>
