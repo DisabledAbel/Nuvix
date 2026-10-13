@@ -4,7 +4,7 @@
 
 Nuvix is a free, open-source IPTV player and optional home launcher for Android TV, Google TV, and compatible Fire TV devices. Bring your own authorized provider—no channels, accounts, playlists, or media are included.
 
-An independent modified version of [OpenTV](https://github.com/opentvproject/opentv), based on commit `43b95c05d8f6a042f51c0cff662ef80789ee7528`. Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
+An independent modified version of [OpenTV](https://github.com/opentvproject/opentv),  Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
 
 ## Features
 
