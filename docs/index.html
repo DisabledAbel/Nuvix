@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<!--
+  This file is part of OpenTV.
+  Copyright (C) 2026 The OpenTV Contributors
+  Licensed under the GNU General Public License v3.0 or later.
+
+  Self-contained on purpose: no external CSS, no fonts, no analytics, no trackers.
+  Nothing here phones home except one call to api.github.com to find the newest build.
+
+  Nothing is hardcoded to a particular GitHub account either — the owner and repo are read
+  from this page's own URL at runtime, so the same file works whoever forks it.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install OpenTV</title>
+<meta name="description" content="Free, open-source IPTV player for Google TV, Fire TV, Android TV, phones and tablets.">
+<style>
+  :root {
+    --bg: #07080c;
+    --surface: #0d0f16;
+    --surface-2: #171a24;
+    --line: #2a2f3d;
+    --text: #e8eaf0;
+    --muted: #a8aec0;
+    --accent: #7c93ff;
+    --accent-dim: #4b5db8;
+    --ok: #6bd6a0;
+    --warn: #ffca6b;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  header { text-align: center; margin-bottom: 44px; }
+  .logo {
+    width: 74px; height: 74px; margin: 0 auto 20px; display: block;
+  }
+  h1 { font-size: 2.4rem; margin: 0 0 10px; letter-spacing: -0.02em; }
+  .tagline { color: var(--muted); font-size: 1.08rem; margin: 0; }
+  .pills { margin-top: 18px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .pill {
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 13px; font-size: .82rem; color: var(--muted);
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 26px; margin: 22px 0;
+  }
+
+  /* --- The download box --- */
+  #release-box { text-align: center; }
+  .btn {
+    display: inline-block; background: var(--accent); color: #0a0c14;
+    font-weight: 650; font-size: 1.05rem; text-decoration: none;
+    padding: 15px 34px; border-radius: 10px; border: 0; cursor: pointer;
+    transition: transform .08s ease, background .15s ease;
+  }
+  .btn:hover { background: #93a6ff; }
+  .btn:active { transform: translateY(1px); }
+  .btn[aria-disabled="true"] {
+    background: var(--surface-2); color: var(--muted); cursor: not-allowed; pointer-events: none;
+  }
+  .meta { color: var(--muted); font-size: .88rem; margin-top: 12px; }
+  .status-line { margin: 0 0 18px; color: var(--muted); font-size: .95rem; }
+  .status-line.warn { color: var(--warn); }
+
+  /* --- The short URL to type into Downloader --- */
+  .url-label { color: var(--muted); font-size: .9rem; margin: 0 0 10px; }
+  .url-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; justify-content: center; }
+  code.url {
+    flex: 1 1 260px; min-width: 0;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 15px 18px; font-size: 1.28rem; font-weight: 600; letter-spacing: .01em;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--text); word-break: break-all; text-align: center;
+  }
+  .copy {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 0 20px; font-size: .92rem; cursor: pointer; white-space: nowrap;
+  }
+  .copy:hover { border-color: var(--accent-dim); }
+
+  h2 { font-size: 1.35rem; margin: 40px 0 6px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  ol, ul { margin: 10px 0; padding-left: 22px; }
+  li { margin: 7px 0; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .small { font-size: .9rem; }
+
+  /* --- Device tabs --- */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 0; }
+  .tab {
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 17px; font-size: .92rem; cursor: pointer; font-family: inherit;
+  }
+  .tab[aria-selected="true"] {
+    background: var(--accent-dim); border-color: var(--accent-dim); color: #fff;
+  }
+  .panel[hidden] { display: none; }
+
+  kbd {
+    background: var(--surface-2); border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 7px; font-size: .87em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .path { color: var(--text); font-weight: 550; }
+
+  .note {
+    border-left: 3px solid var(--accent-dim); background: var(--surface);
+    padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 18px 0;
+    color: var(--muted); font-size: .94rem;
+  }
+  .note strong { color: var(--text); }
+
+  /* --- Feature grid --- */
+  .section-lead { color: var(--muted); margin: 6px 0 2px; }
+  .features { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+  @media (max-width: 620px) { .features { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .feature h3 { margin: 0 0 8px; font-size: 1rem; color: var(--accent); }
+  .feature ul { margin: 0; padding-left: 18px; }
+  .feature li { margin: 6px 0; font-size: .93rem; }
+  .feature .new {
+    color: var(--ok); font-size: .74rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; margin-left: 6px; vertical-align: 1px;
+  }
+
+  /* --- Screenshots --- */
+  .hero-shot {
+    width: 100%; border-radius: 14px; border: 1px solid var(--line);
+    display: block; margin: 0 0 8px;
+  }
+  .shot-caption { color: var(--muted); font-size: .86rem; text-align: center; margin: 0; }
+  .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+  @media (max-width: 620px) { .gallery { grid-template-columns: 1fr; } }
+  .gallery figure { margin: 0; }
+  .gallery img { width: 100%; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  .gallery figcaption { color: var(--muted); font-size: .84rem; margin-top: 7px; text-align: center; }
+
+  footer {
+    margin-top: 56px; padding-top: 26px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: .89rem; text-align: center;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg class="logo" viewBox="0 0 108 108" aria-hidden="true">
+      <!-- Aerial -->
+      <path d="M38 20l16 14M70 20l-16 14" stroke="#4b5db8" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <!-- Screen -->
+      <rect x="16" y="34" width="76" height="54" rx="9" fill="#7c93ff"/>
+      <!-- Play mark -->
+      <path d="M46 47l22 14l-22 14z" fill="#07080c"/>
+    </svg>
+    <h1>OpenTV</h1>
+    <p class="tagline">A free, open-source IPTV player for your TV.</p>
+    <div class="pills">
+      <span class="pill">No account</span>
+      <span class="pill">No subscription</span>
+      <span class="pill">No servers of ours</span>
+      <span class="pill">GPL-3.0</span>
+    </div>
+  </header>
+
+  <img class="hero-shot" src="screenshots/01-guide.png" alt="OpenTV live TV guide with the current channel playing in the preview pane" loading="lazy">
+  <p class="shot-caption">The guide — the channel you're on keeps playing while you browse.</p>
+
+  <div class="card" id="release-box">
+    <p class="status-line" id="status">Checking for the latest build…</p>
+    <a class="btn" id="download" href="#" aria-disabled="true">Download APK</a>
+    <p class="meta" id="release-meta"></p>
+  </div>
+
+  <div class="card">
+    <p class="url-label">On a TV, type this into the <strong>Downloader</strong> app:</p>
+    <div class="url-row">
+      <code class="url" id="short-url">…</code>
+      <button class="copy" id="copy-btn" type="button">Copy</button>
+    </div>
+    <p class="meta">It redirects straight to the newest APK, so it never goes out of date.</p>
+  </div>
+
+  <h2>What you get</h2>
+  <p class="section-lead small">A full IPTV player — you bring the playlist, it does the rest. Everything below is in the app today.</p>
+
+  <div class="features">
+    <div class="feature">
+      <h3>Live TV &amp; guide</h3>
+      <ul>
+        <li>Full EPG guide (XMLTV) that scrolls, survives restarts and refreshes in the background</li>
+        <li>Live preview — the highlighted channel plays, muted, in the guide</li>
+        <li>Catch-up / archive on providers that offer it</li>
+        <li>Programme reminders</li>
+        <li>Channel numbers, direct number entry and a last-channel button</li>
+      </ul>
+    </div>
+    <div class="feature">
+      <h3>Recording (DVR)</h3>
+      <ul>
+        <li>Record to the box, a plugged-in USB / external drive<span class="new">new</span>, or a NAS over SMB</li>
+        <li>Schedule from the guide, or series-link a whole show</li>
+        <li>Scheduled and failed recordings show when they were set, with one-tap retry<span class="new">new</span></li>
+        <li>Keeps recording when you leave the app or the TV sleeps<span class="new">new</span></li>
+        <li>Play recordings back in-app — even from your other devices</li>
+      </ul>
+    </div>
+    <div class="feature">
+      <h3>Movies &amp; series</h3>
+      <ul>
+        <li>Cinematic Movies &amp; Shows &mdash; big artwork, cast, director and genre<span class="new">new</span></li>
+        <li>&ldquo;More with this cast&rdquo; and by-genre rows, Plex-style<span class="new">new</span></li>
+        <li>Optional TMDB back-fill for missing posters and synopsis &mdash; your own free key, kept on-device<span class="new">new</span></li>
+        <li>Loads instantly &mdash; the catalogue is cached, not re-fetched each time<span class="new">new</span></li>
+        <li>Video-on-demand with resume and Continue Watching</li>
+        <li>Per-profile watch history</li>
+        <li>One search across channels, movies and shows</li>
+      </ul>
+    </div>
+    <div class="feature">
+      <h3>Channel management</h3>
+      <ul>
+        <li>Channel Manager: browse by category, hide or favourite</li>
+        <li>Manage from a phone or laptop — rename, reorder, hide, favourite<span class="new">new</span></li>
+        <li>Keep multiple providers separate instead of merged</li>
+        <li>Parental PIN and hidden categories</li>
+      </ul>
+    </div>
+    <div class="feature">
+      <h3>Player</h3>
+      <ul>
+        <li>Subtitle, audio-track, quality and aspect-ratio pickers</li>
+        <li>Picture-in-picture</li>
+        <li>HLS and MPEG-TS streams</li>
+        <li>Hand off to VLC or MX Player; sleep timer</li>
+      </ul>
+    </div>
+    <div class="feature">
+      <h3>Setup &amp; sync</h3>
+      <ul>
+        <li>Xtream login, or an M3U playlist with XMLTV guide</li>
+        <li>Set up from your phone by scanning a code, or on the TV</li>
+        <li>Free sync between your own devices — favourites, history, even recordings — over your wifi or Tailscale, with no server</li>
+        <li>Multiple profiles</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Free, forever.</strong> No account, no subscription, no servers of ours — happy with a
+    coffee, but nothing is ever paywalled. It's open-source (GPL-3.0), self-updating, translated
+    into Spanish, and runs on Android TV, Fire TV, Google TV, phones and tablets.
+  </div>
+
+  <h2>Screenshots</h2>
+  <div class="gallery">
+    <figure><img src="screenshots/02-recordings.png" alt="Recordings and reminders" loading="lazy"><figcaption>Recordings &amp; reminders</figcaption></figure>
+    <figure><img src="screenshots/04-movies.png" alt="Movies with Continue Watching" loading="lazy"><figcaption>Movies &amp; series, with resume</figcaption></figure>
+    <figure><img src="screenshots/03-cloud-sync.png" alt="Sync between your own devices" loading="lazy"><figcaption>Free sync between your devices</figcaption></figure>
+    <figure><img src="screenshots/05-settings.png" alt="OpenTV settings" loading="lazy"><figcaption>Settings</figcaption></figure>
+    <figure><img src="screenshots/06-about.png" alt="About OpenTV" loading="lazy"><figcaption>About</figcaption></figure>
+  </div>
+
+  <h2>How to install</h2>
+  <p class="muted small">
+    Android won't install apps from outside the Play Store until you allow it. That's a
+    sensible default — you're about to turn it off for one app, so it's worth knowing that's
+    what you're doing.
+  </p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-google" aria-selected="true" aria-controls="panel-google">Chromecast with Google TV</button>
+    <button class="tab" role="tab" id="tab-androidtv" aria-selected="false" aria-controls="panel-androidtv">Android TV box</button>
+    <button class="tab" role="tab" id="tab-fire" aria-selected="false" aria-controls="panel-fire">Fire TV Stick</button>
+    <button class="tab" role="tab" id="tab-phone" aria-selected="false" aria-controls="panel-phone">Phone or tablet</button>
+  </div>
+
+  <section class="panel" id="panel-google" role="tabpanel" aria-labelledby="tab-google">
+    <h3>1. Get the Downloader app</h3>
+    <ol>
+      <li>From the Google TV home screen, search for <strong>Downloader</strong> (the orange icon, by AFTVnews) and install it.</li>
+    </ol>
+
+    <h3>2. Allow it to install apps</h3>
+    <ol>
+      <li>Go to <span class="path">Settings → System → Apps → Security &amp; restrictions → Unknown sources</span>.</li>
+      <li>Turn the switch <strong>on</strong> for <strong>Downloader</strong>.</li>
+    </ol>
+    <p class="muted small">
+      Some Google TV builds hide this until you've tried and failed to install once. If you
+      can't find it, carry on to step 3 — the prompt will appear when it's needed and take you
+      straight there.
+    </p>
+
+    <h3>3. Download and install</h3>
+    <ol>
+      <li>Open Downloader and type the address from the box above into the URL field.</li>
+      <li>Press <strong>Go</strong>. It'll download the APK.</li>
+      <li>When it finishes, choose <strong>Install</strong>, then <strong>Done</strong>.</li>
+      <li>Choose <strong>Delete</strong> when Downloader offers — it's just clearing the copy it saved.</li>
+    </ol>
+
+    <h3>4. Find it</h3>
+    <p>
+      Sideloaded apps often don't show on the Google TV home row. Look in
+      <span class="path">Settings → Apps → See all apps</span>, or install
+      <strong>Sideload Launcher</strong> to pin it somewhere you can reach with the remote.
+    </p>
+  </section>
+
+  <section class="panel" id="panel-androidtv" role="tabpanel" aria-labelledby="tab-androidtv" hidden>
+    <p class="muted small">Onn boxes, Nvidia Shield, Ugoos, and TVs with Android TV or Google TV built in.</p>
+    <ol>
+      <li>Install <strong>Downloader</strong> from the Play Store.</li>
+      <li>Go to <span class="path">Settings → Apps → Security &amp; restrictions → Unknown sources</span> and enable <strong>Downloader</strong>.
+        On older Android TV builds it's <span class="path">Settings → Device Preferences → Security &amp; restrictions</span>.</li>
+      <li>Open Downloader, type the address from the box above, press <strong>Go</strong>.</li>
+      <li>Choose <strong>Install</strong> when the download finishes.</li>
+    </ol>
+    <h3>Or, if you have adb set up</h3>
+    <p>Faster and less fiddly if you already use it:</p>
+    <ul>
+      <li>Enable <span class="path">Developer options → USB debugging</span> on the box.</li>
+      <li>On your computer: <kbd>adb connect &lt;box-ip&gt;:5555</kbd> then <kbd>adb install opentv.apk</kbd></li>
+    </ul>
+  </section>
+
+  <section class="panel" id="panel-fire" role="tabpanel" aria-labelledby="tab-fire" hidden>
+    <p class="muted small">Fire OS hides this in a different place from Android TV.</p>
+    <ol>
+      <li>Go to <span class="path">Settings → My Fire TV → About</span> and click the name of your device <strong>seven times</strong> to unlock Developer options.</li>
+      <li>Back out one level, open <span class="path">Developer options</span>, and turn on
+        <strong>Install unknown apps</strong> (older sticks call it <strong>Apps from Unknown Sources</strong>).</li>
+      <li>Install <strong>Downloader</strong> from the Amazon Appstore.</li>
+      <li>If you turned on <em>Install unknown apps</em>, enable the switch for <strong>Downloader</strong> in that list.</li>
+      <li>Open Downloader, type the address from the box above, press <strong>Go</strong>, then <strong>Install</strong>.</li>
+    </ol>
+    <p class="muted small">
+      Fire TV Stick Lite and older 1st-gen sticks are slow with large channel lists. It'll work;
+      expect the first catalogue sync to take a while.
+    </p>
+  </section>
+
+  <section class="panel" id="panel-phone" role="tabpanel" aria-labelledby="tab-phone" hidden>
+    <ol>
+      <li>Open this page on the phone and tap <strong>Download APK</strong> above.</li>
+      <li>Your browser will warn you about the file type — that warning is expected for any APK not from the Play Store.</li>
+      <li>Open the downloaded file. Android will ask whether to allow your browser to install apps; allow it, then install.</li>
+    </ol>
+    <p class="muted small">
+      Worth doing first even if the TV is the real target — it's far quicker to find out
+      whether your provider details work using a touchscreen than a remote.
+    </p>
+  </section>
+
+  <h2>Is this safe to install?</h2>
+  <p class="small muted">
+    Fair question, and you shouldn't take anyone's word for it. Every APK here is built by
+    GitHub Actions from a public commit, and the build log is public too — you can read exactly
+    what went into it, and rebuild it yourself from the same source to check you get the same
+    thing. That's a stronger guarantee than a Play Store listing gives you, and it's the whole
+    reason this project is open in the first place.
+  </p>
+
+  <div class="note">
+    <strong>OpenTV supplies no channels.</strong> It's a player, like VLC. You point it at an
+    IPTV service you already pay for. The project has no affiliation with any provider and
+    doesn't help you find one.
+  </div>
+
+  <footer>
+    <p>
+      <a href="#" id="repo-link">Source on GitHub</a> ·
+      <a href="#" id="issues-link">Report a bug</a> ·
+      <a href="#" id="licence-link">GPL-3.0</a>
+    </p>
+    <p class="small">Your provider details stay on your device. There is no OpenTV account and no OpenTV server.</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Device tabs -------------------------------------------------------------------------
+  // Wired first, deliberately. Everything below can bail out early when the page is opened
+  // somewhere it cannot resolve a repo from, and the instructions must still work there.
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (other) {
+        var selected = other === tab;
+        other.setAttribute("aria-selected", String(selected));
+        document.getElementById(other.getAttribute("aria-controls")).hidden = !selected;
+      });
+    });
+  });
+
+  // ---- Work out which repo this page belongs to -------------------------------------------
+  // Nothing is hardcoded to one GitHub account, so a fork's copy of this page points at the
+  // fork's own releases without anyone editing it.
+  function resolveRepo() {
+    var host = location.hostname;                       // e.g. someone.github.io
+    var segments = location.pathname.split("/").filter(Boolean);
+
+    if (/\.github\.io$/i.test(host)) {
+      var owner = host.replace(/\.github\.io$/i, "");
+      // A project site lives at /<repo>/; a user site (owner.github.io) has no repo segment.
+      var repo = segments.length ? segments[0] : owner + ".github.io";
+      return { owner: owner, repo: repo };
+    }
+    return null; // custom domain or opened from disk — handled below
+  }
+
+  var target = resolveRepo();
+  var statusEl = document.getElementById("status");
+  var buttonEl = document.getElementById("download");
+  var metaEl = document.getElementById("release-meta");
+  var shortUrlEl = document.getElementById("short-url");
+
+  // ---- The short URL people type into Downloader ------------------------------------------
+  var shortUrl = location.host + location.pathname.replace(/\/?$/, "/") + "apk";
+  shortUrlEl.textContent = shortUrl;
+
+  document.getElementById("copy-btn").addEventListener("click", function () {
+    var button = this;
+    var done = function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = "Copy"; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText("https://" + shortUrl).then(done, done);
+    } else {
+      done();
+    }
+  });
+
+  // ---- Footer links ------------------------------------------------------------------------
+  if (target) {
+    var base = "https://github.com/" + target.owner + "/" + target.repo;
+    document.getElementById("repo-link").href = base;
+    document.getElementById("issues-link").href = base + "/issues/new/choose";
+    document.getElementById("licence-link").href = base + "/blob/main/LICENSE";
+  }
+
+  // ---- Find the newest published build -----------------------------------------------------
+  function humanSize(bytes) {
+    if (!bytes) return "";
+    return (bytes / 1048576).toFixed(1) + " MB";
+  }
+
+  function humanDate(iso) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric", month: "long", day: "numeric"
+      });
+    } catch (e) { return ""; }
+  }
+
+  function noBuildYet(reason) {
+    statusEl.textContent = reason;
+    statusEl.className = "status-line warn";
+    buttonEl.textContent = "No build published yet";
+    buttonEl.setAttribute("aria-disabled", "true");
+  }
+
+  if (!target) {
+    noBuildYet("Open this page from its GitHub Pages address to get the download link.");
+    return;
+  }
+
+  var api = "https://api.github.com/repos/" + target.owner + "/" + target.repo + "/releases/latest";
+
+  fetch(api, { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (response) {
+      if (response.status === 404) {
+        // Expected before the first tag is pushed. Say so plainly rather than showing a
+        // download button that 404s.
+        noBuildYet("No release has been published yet. Push a tag to build the first APK.");
+        return null;
+      }
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    })
+    .then(function (release) {
+      if (!release) return;
+
+      var apk = (release.assets || []).filter(function (asset) {
+        return /\.apk$/i.test(asset.name);
+      })[0];
+
+      if (!apk) {
+        noBuildYet("The latest release has no APK attached yet.");
+        return;
+      }
+
+      statusEl.textContent = "Latest build";
+      statusEl.className = "status-line";
+      buttonEl.textContent = "Download " + (release.tag_name || "APK");
+      buttonEl.href = apk.browser_download_url;
+      buttonEl.removeAttribute("aria-disabled");
+
+      var bits = [humanSize(apk.size), humanDate(release.published_at)].filter(Boolean);
+      metaEl.textContent = bits.join(" · ");
+    })
+    .catch(function () {
+      noBuildYet("Couldn't reach GitHub to check for a build. Try the Releases page directly.");
+    });
+
+})();
+</script>
+</body>
+</html>
