@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -37,7 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.pairing.ManagerServer
 import app.opentv.pairing.QrCodes
 import app.opentv.ui.WebManagerViewModel

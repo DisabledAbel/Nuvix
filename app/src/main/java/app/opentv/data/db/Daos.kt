@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -59,6 +60,23 @@ interface SourceDao {
 
 @Dao
 interface ChannelDao {
+    /** Bounded home shelves avoid materialising a full provider catalogue. */
+    @Query("SELECT * FROM channels WHERE hidden = 0 ORDER BY favourite DESC, sortIndex, displayName LIMIT :limit")
+    fun observeHomeChannels(limit: Int = 24): Flow<List<Channel>>
+
+    @Query("SELECT * FROM channels WHERE id IN (:ids) AND hidden = 0")
+    fun observeByIds(ids: List<Long>): Flow<List<Channel>>
+
+    /** Sports discovery uses only category metadata from the user's provider. */
+    @Query("""SELECT channels.* FROM channels INNER JOIN categories
+        ON channels.sourceId = categories.sourceId AND channels.categoryId = categories.id
+        WHERE channels.hidden = 0 AND categories.kind = 'LIVE'
+        AND (LOWER(categories.name) LIKE '%sport%' OR LOWER(categories.name) LIKE '%football%'
+        OR LOWER(categories.name) LIKE '%soccer%' OR LOWER(categories.name) LIKE '%cricket%'
+        OR LOWER(categories.name) LIKE '%basketball%' OR LOWER(categories.name) LIKE '%hockey%')
+        ORDER BY channels.sortIndex, channels.displayName LIMIT :limit""")
+    fun observeSportsChannels(limit: Int = 200): Flow<List<Channel>>
+
     @Query(
         """
         SELECT * FROM channels

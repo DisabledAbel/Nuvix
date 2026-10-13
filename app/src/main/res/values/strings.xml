@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">OpenTV</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Nuvix</string>
 
     <!-- ============================ Common / reused ============================ -->
     <string name="common_done">Done</string>
@@ -8,15 +8,15 @@
     <string name="common_back">Back</string>
     <string name="common_save">Save</string>
     <string name="common_remove">Remove</string>
-    <string name="common_edit">Edit</string>
+    <string name="common_edit" tools:ignore="MissingTranslation">Edit</string>
     <string name="common_play">Play</string>
     <string name="common_stop">Stop</string>
     <string name="common_delete">Delete</string>
     <string name="common_selected">Selected</string>
-    <string name="exit_title">Leave OpenTV?</string>
-    <string name="exit_body">You\'ll go back to your TV\'s home screen.</string>
-    <string name="exit_confirm">Leave</string>
-    <string name="exit_cancel">Stay</string>
+    <string name="exit_title" tools:ignore="MissingTranslation">Leave Nuvix?</string>
+    <string name="exit_body" tools:ignore="MissingTranslation">You\'ll go back to your TV\'s home screen.</string>
+    <string name="exit_confirm" tools:ignore="MissingTranslation">Leave</string>
+    <string name="exit_cancel" tools:ignore="MissingTranslation">Stay</string>
     <string name="common_favourite">Favourite</string>
     <string name="common_remove_favourite">Remove favourite</string>
     <string name="common_keep_typing">Keep typing…</string>
@@ -105,12 +105,12 @@
     <string name="rec_notification_one">Recording 1 programme</string>
     <string name="rec_notification_many">Recording %1$d programmes</string>
     <string name="rec_channel_name">Recording</string>
-    <string name="rec_channel_desc">Shown while OpenTV is recording</string>
+    <string name="rec_channel_desc">Shown while Nuvix is recording</string>
     <string name="rec_error_nothing">Nothing was recorded</string>
     <string name="rec_error_usb_no_folder">No USB folder chosen. Open Recording settings and pick a folder on your drive.</string>
     <string name="rec_error_usb_unavailable">USB drive not available. Re-plug the drive and choose the folder again in Recording settings.</string>
     <string name="rec_background_prompt_title">Keep recording when you leave?</string>
-    <string name="rec_background_prompt_body">Android may stop this recording when the screen sleeps or you leave OpenTV. Allow OpenTV to ignore battery optimisation so recordings keep running, even in standby — the way a set-top box does.</string>
+    <string name="rec_background_prompt_body">Android may stop this recording when the screen sleeps or you leave Nuvix. Allow Nuvix to ignore battery optimisation so recordings keep running, even in standby — the way a set-top box does.</string>
     <string name="rec_background_prompt_allow">Allow</string>
     <string name="rec_background_prompt_not_now">Not now</string>
 
@@ -135,11 +135,11 @@
 
     <!-- ============================ Settings hub ============================ -->
     <string name="settings_providers_title">Providers</string>
-    <string name="settings_edit_provider_title">Edit provider</string>
+    <string name="settings_edit_provider_title" tools:ignore="MissingTranslation">Edit provider</string>
     <string name="settings_providers_subtitle">Add, remove and re-test your IPTV sources</string>
     <string name="settings_addons_title">Add-ons (Stremio)</string>
     <string name="settings_addons_subtitle">Play from Stremio add-ons you set up yourself</string>
-    <string name="addons_note">Add a Stremio add-on by pasting its manifest URL. OpenTV ships with none — you bring your own. If the add-on is debrid-backed, set your debrid key up on the add-on\'s own site and paste the personalised URL it gives you; your key stays there, never in OpenTV.</string>
+    <string name="addons_note">Add a Stremio add-on by pasting its manifest URL. Nuvix ships with none — you bring your own. If the add-on is debrid-backed, set your debrid key up on the add-on\'s own site and paste the personalised URL it gives you; your key stays there, never in Nuvix.</string>
     <string name="addons_url_label">Add-on manifest URL</string>
     <string name="addons_add">Add</string>
     <string name="addons_checking">Checking…</string>
@@ -252,7 +252,7 @@
     <string name="recset_usb_change">Change folder</string>
     <string name="recset_usb_saving_to">Saving to: %1$s</string>
     <string name="recset_usb_none">No folder chosen yet</string>
-    <string name="recset_usb_hint">Plug in a USB drive or external storage formatted exFAT or FAT32, then choose a folder on it. Recordings are written straight to that folder and still play back and delete inside OpenTV.</string>
+    <string name="recset_usb_hint">Plug in a USB drive or external storage formatted exFAT or FAT32, then choose a folder on it. Recordings are written straight to that folder and still play back and delete inside Nuvix.</string>
     <string name="recset_usb_need_folder">Choose a folder before saving to USB.</string>
     <string name="recset_usb_no_picker">No folder picker is available on this device.</string>
     <string name="recset_nas_connection">NAS connection</string>
@@ -277,8 +277,8 @@
     <string name="recset_autoswitch_desc">On a single-connection provider, move the screen onto a recording as it starts (with a 30-second warning) so your live stream isn\'t cut off</string>
     <string name="recset_livepause">Pause &amp; rewind live TV</string>
     <string name="recset_livepause_desc">Hold a couple of minutes of live TV in memory so you can pause and rewind it (experimental — uses more memory)</string>
-    <string name="recset_pw_show">Show password</string>
-    <string name="recset_pw_hide">Hide password</string>
+    <string name="recset_pw_show" tools:ignore="MissingTranslation">Show password</string>
+    <string name="recset_pw_hide" tools:ignore="MissingTranslation">Hide password</string>
     <string name="recset_storage_title">Storage</string>
     <string name="recset_storage_reading">Reading…</string>
     <string name="recset_storage_used">%1$s used · %2$d recordings</string>
@@ -287,9 +287,9 @@
     <string name="recset_background_allowed">Allowed</string>
     <string name="recset_background_not_allowed">Not allowed</string>
     <string name="recset_background_fix">Fix</string>
-    <string name="recset_background_desc">Android may stop recordings when the device sleeps or you leave OpenTV, unless OpenTV is allowed to ignore battery optimisation. Allowing it keeps recordings running even in standby, like a set-top box.</string>
+    <string name="recset_background_desc">Android may stop recordings when the device sleeps or you leave Nuvix, unless Nuvix is allowed to ignore battery optimisation. Allowing it keeps recordings running even in standby, like a set-top box.</string>
     <string name="recset_background_on_title">Background recording is on</string>
-    <string name="recset_background_on_desc">Recordings will keep running when you leave OpenTV or the TV goes to sleep.</string>
+    <string name="recset_background_on_desc">Recordings will keep running when you leave Nuvix or the TV goes to sleep.</string>
     <string name="recset_background_toast">Background recording enabled — recordings will keep going in the background.</string>
 
     <!-- ============================ TV guide (EPG) settings ============================ -->
@@ -302,7 +302,7 @@
     <string name="epg_add_guide">Add guide</string>
 
     <!-- ============================ Sync watch history ============================ -->
-    <string name="sync_desc">Copy your continue-watching between two OpenTV devices over your own wifi — nothing leaves the house, and no account is involved.</string>
+    <string name="sync_desc">Copy your continue-watching between two Nuvix devices over your own wifi — nothing leaves the house, and no account is involved.</string>
     <string name="sync_share_from_here">Share from here</string>
     <string name="sync_receive">Receive</string>
     <string name="sync_ready_to_share">Ready to share</string>
@@ -329,20 +329,20 @@
     <string name="sync_nas_auto">Auto-sync when the app opens</string>
 
     <!-- ============================ About ============================ -->
-    <string name="about_title">About OpenTV</string>
+    <string name="about_title">About Nuvix</string>
     <string name="about_version">Version</string>
     <string name="about_update_available">Update available: %1$s — see the prompt to install.</string>
     <string name="about_up_to_date">You\'re on the latest version.</string>
     <string name="about_checking">Checking…</string>
     <string name="about_check_updates">Check for updates</string>
     <string name="about_what_is_title">What it is</string>
-    <string name="about_what_is_body">A free, open-source IPTV player for Android TV, Fire TV and phones. It\'s a player only — it doesn\'t supply channels; you connect the service you already pay for. Nothing you enter leaves your device except to talk to your own provider.</string>
+    <string name="about_what_is_body" tools:ignore="MissingTranslation">Nuvix brings authorized IPTV sources and installed apps together on your television. It supplies no channels or subscriptions. Provider credentials stay local; optional cloud sync sends only favorites and progress when you enable it.</string>
     <string name="about_built_open_title">Built in the open</string>
-    <string name="about_built_open_body">OpenTV is developed openly, with AI doing a large share of the coding under human direction — that\'s stated plainly, not hidden. Because it\'s open source, no single person going away can take it down: anyone can read every line, build it, and carry it on.</string>
+    <string name="about_built_open_body">Nuvix is developed openly, with AI doing a large share of the coding under human direction — that\'s stated plainly, not hidden. Because it\'s open source, no single person going away can take it down: anyone can read every line, build it, and carry it on.</string>
     <string name="about_support_title">Support the project</string>
-    <string name="about_support_body">OpenTV is free and always will be — nothing is gated. If it\'s useful and you\'d like to chip in, GitHub Sponsors or a one-off tip keeps the updates coming: new features, fixes and support all come out of spare evenings. Entirely optional, and genuinely appreciated.</string>
-    <string name="about_sponsor_github">GitHub Sponsors</string>
-    <string name="about_donate_paypal">Donate via PayPal</string>
+    <string name="about_support_body" tools:ignore="MissingTranslation">Nuvix is free and always will be — nothing is gated. If it\'s useful and you\'d like to chip in, GitHub Sponsors or a one-off tip keeps the updates coming: new features, fixes and support all come out of spare evenings. Entirely optional, and genuinely appreciated.</string>
+    <string name="about_sponsor_github" tools:ignore="MissingTranslation">GitHub Sponsors</string>
+    <string name="about_donate_paypal" tools:ignore="MissingTranslation">Donate via PayPal</string>
     <string name="about_scan_to_donate">Scan to donate</string>
     <string name="about_licence_links_title">Licence &amp; links</string>
     <string name="about_licence_label">Licence</string>
@@ -354,7 +354,7 @@
     <string name="onboarding_default_provider_name">My provider</string>
     <string name="onboarding_default_playlist_name">My playlist</string>
     <string name="onboarding_add_provider_title">Add your provider</string>
-    <string name="onboarding_add_provider_desc">OpenTV is a player. It doesn\'t supply channels — you connect the service you already pay for.</string>
+    <string name="onboarding_add_provider_desc">Nuvix is a player. It doesn\'t supply channels — you connect the service you already pay for.</string>
     <string name="onboarding_xtream_login">Xtream Codes login</string>
     <string name="onboarding_m3u_url">M3U playlist URL</string>
     <string name="onboarding_stalker_portal">Stalker portal</string>
@@ -374,7 +374,7 @@
     <string name="onboarding_working">Working…</string>
     <string name="onboarding_save_load">Save and load</string>
     <string name="onboarding_use_phone">Use my phone instead</string>
-    <string name="onboarding_privacy_note">Your provider details are stored on this device only. OpenTV has no account system and no server of its own — nothing you type here is sent anywhere except to your provider.</string>
+    <string name="onboarding_privacy_note">Your provider details are stored on this device only. Nuvix has no account system and no server of its own — nothing you type here is sent anywhere except to your provider.</string>
 
     <!-- ============================ Phone pairing ============================ -->
     <string name="pairing_stopped">Pairing stopped</string>
@@ -480,7 +480,7 @@
     <string name="rec_for_profile">For %1$s</string>
     <string name="rec_retry">Retry</string>
     <string name="rec_watch_live">Watch</string>
-    <string name="rec_watching_live_badge">Recording — live</string>
+    <string name="rec_watching_live_badge" tools:ignore="MissingTranslation">Recording — live</string>
     <!-- Single-connection auto-switch -->
     <string name="rec_switch_now_title">Recording %1$s</string>
     <string name="rec_switch_now_text">Now recording on %1$s — tap to watch</string>
@@ -489,10 +489,10 @@
     <string name="rec_switch_banner">“%1$s” records on %2$s — this screen will switch</string>
     <string name="rec_switch_keep_watching">Keep watching</string>
     <!-- Guard before opening live TV while a recording runs (single connection) -->
-    <string name="rec_live_warn_title">Recording in progress</string>
-    <string name="rec_live_warn_body">You\'re on a single connection, so watching live now will stop your recording of “%1$s”.</string>
-    <string name="rec_live_warn_watch">Watch live (stop recording)</string>
-    <string name="rec_live_warn_keep">Keep recording</string>
+    <string name="rec_live_warn_title" tools:ignore="MissingTranslation">Recording in progress</string>
+    <string name="rec_live_warn_body" tools:ignore="MissingTranslation">You\'re on a single connection, so watching live now will stop your recording of “%1$s”.</string>
+    <string name="rec_live_warn_watch" tools:ignore="MissingTranslation">Watch live (stop recording)</string>
+    <string name="rec_live_warn_keep" tools:ignore="MissingTranslation">Keep recording</string>
     <string name="rec_switch_channel_name">Recording auto-switch</string>
     <string name="rec_switch_channel_desc">Warns before switching the screen to a scheduled recording</string>
 
@@ -503,4 +503,10 @@
     <string name="settings_tmdb_save">Save key</string>
     <string name="settings_tmdb_saved">TMDB key saved</string>
     <string name="settings_tmdb_active">Active</string>
+    <string name="nav_home" tools:ignore="MissingTranslation">Home</string>
+    <string name="nav_guide" tools:ignore="MissingTranslation">Guide</string>
+    <string name="nav_sports" tools:ignore="MissingTranslation">Sports</string>
+    <string name="nav_apps" tools:ignore="MissingTranslation">Apps</string>
+    <string name="nav_library" tools:ignore="MissingTranslation">Library</string>
+    <!-- Scoped English fallbacks above are intentional until these strings are translated. -->
 </resources>

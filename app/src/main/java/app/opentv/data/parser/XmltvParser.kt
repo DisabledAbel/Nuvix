@@ -1,7 +1,9 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13: suspending alias batches.
  */
 package app.opentv.data.parser
 
@@ -54,7 +56,7 @@ object XmltvParser {
     suspend fun parse(
         input: InputStream,
         feedId: Long,
-        onChannelAlias: (id: String, displayName: String?) -> Unit = { _, _ -> },
+        onChannelAlias: suspend (id: String, displayName: String?) -> Unit = { _, _ -> },
         onProgramme: suspend (Programme) -> Unit,
     ): Stats {
         var channelCount = 0

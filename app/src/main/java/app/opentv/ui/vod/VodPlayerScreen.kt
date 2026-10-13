@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -87,7 +88,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Klaar</string>
     <string name="common_cancel">Annuleren</string>
     <string name="common_back">Terug</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">1 programma wordt opgenomen</string>
     <string name="rec_notification_many">%1$d programma\'s worden opgenomen</string>
     <string name="rec_channel_name">Opname</string>
-    <string name="rec_channel_desc">Wordt getoond terwijl OpenTV opneemt</string>
+    <string name="rec_channel_desc">Wordt getoond terwijl Nuvix opneemt</string>
     <string name="rec_error_nothing">Er is niets opgenomen</string>
     <string name="rec_error_usb_no_folder">Geen USB-map gekozen. Open Opname-instellingen en kies een map op je drive.</string>
     <string name="rec_error_usb_unavailable">USB-drive niet beschikbaar. Sluit de drive opnieuw aan en kies de map opnieuw in Opname-instellingen.</string>
     <string name="rec_background_prompt_title">Blijven opnemen als je weggaat?</string>
-    <string name="rec_background_prompt_body">Android kan deze opname stoppen als het scherm in slaapstand gaat of je OpenTV verlaat. Sta toe dat OpenTV batterijoptimalisatie negeert, zodat opnames blijven doorlopen, zelfs in stand-by — zoals een set-topbox dat doet.</string>
+    <string name="rec_background_prompt_body">Android kan deze opname stoppen als het scherm in slaapstand gaat of je Nuvix verlaat. Sta toe dat Nuvix batterijoptimalisatie negeert, zodat opnames blijven doorlopen, zelfs in stand-by — zoals een set-topbox dat doet.</string>
     <string name="rec_background_prompt_allow">Toestaan</string>
     <string name="rec_background_prompt_not_now">Niet nu</string>
     <string name="player_rewind">Terugspoelen</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Voeg je IPTV-bronnen toe, verwijder ze of test ze opnieuw</string>
     <string name="settings_addons_title">Add-ons (Stremio)</string>
     <string name="settings_addons_subtitle">Afspelen vanuit Stremio-add-ons die je zelf hebt ingesteld</string>
-    <string name="addons_note">Voeg een Stremio-add-on toe door de manifest-URL te plakken. OpenTV wordt zonder geleverd — je voegt je eigen toe. Als de add-on debrid-ondersteund is, stel je debrid-sleutel dan in op de site van de add-on zelf en plak de gepersonaliseerde URL die je daar krijgt; je sleutel blijft daar, nooit in OpenTV.</string>
+    <string name="addons_note">Voeg een Stremio-add-on toe door de manifest-URL te plakken. Nuvix wordt zonder geleverd — je voegt je eigen toe. Als de add-on debrid-ondersteund is, stel je debrid-sleutel dan in op de site van de add-on zelf en plak de gepersonaliseerde URL die je daar krijgt; je sleutel blijft daar, nooit in Nuvix.</string>
     <string name="addons_url_label">Manifest-URL van de add-on</string>
     <string name="addons_add">Toevoegen</string>
     <string name="addons_checking">Controleren…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Map wijzigen</string>
     <string name="recset_usb_saving_to">Opslaan naar: %1$s</string>
     <string name="recset_usb_none">Nog geen map gekozen</string>
-    <string name="recset_usb_hint">Sluit een USB-drive of externe opslag aan die geformatteerd is als exFAT of FAT32, en kies daarna een map erop. Opnames worden rechtstreeks naar die map geschreven en kunnen nog steeds worden afgespeeld en verwijderd binnen OpenTV.</string>
+    <string name="recset_usb_hint">Sluit een USB-drive of externe opslag aan die geformatteerd is als exFAT of FAT32, en kies daarna een map erop. Opnames worden rechtstreeks naar die map geschreven en kunnen nog steeds worden afgespeeld en verwijderd binnen Nuvix.</string>
     <string name="recset_usb_need_folder">Kies een map voordat je naar USB opslaat.</string>
     <string name="recset_usb_no_picker">Er is geen mapkiezer beschikbaar op dit apparaat.</string>
     <string name="recset_nas_connection">NAS-verbinding</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Toegestaan</string>
     <string name="recset_background_not_allowed">Niet toegestaan</string>
     <string name="recset_background_fix">Oplossen</string>
-    <string name="recset_background_desc">Android kan opnames stoppen wanneer het apparaat in slaapstand gaat of je OpenTV verlaat, tenzij OpenTV batterijoptimalisatie mag negeren. Als je dit toestaat, blijven opnames doorlopen, zelfs in stand-by, zoals bij een set-topbox.</string>
+    <string name="recset_background_desc">Android kan opnames stoppen wanneer het apparaat in slaapstand gaat of je Nuvix verlaat, tenzij Nuvix batterijoptimalisatie mag negeren. Als je dit toestaat, blijven opnames doorlopen, zelfs in stand-by, zoals bij een set-topbox.</string>
     <string name="recset_background_on_title">Opnemen op de achtergrond staat aan</string>
-    <string name="recset_background_on_desc">Opnames blijven doorlopen als je OpenTV verlaat of de tv in slaapstand gaat.</string>
+    <string name="recset_background_on_desc">Opnames blijven doorlopen als je Nuvix verlaat of de tv in slaapstand gaat.</string>
     <string name="recset_background_toast">Opnemen op de achtergrond ingeschakeld — opnames gaan door op de achtergrond.</string>
     <string name="epg_updating">Bijwerken…</string>
     <string name="epg_update_now">Gids nu bijwerken</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Naam (optioneel)</string>
     <string name="epg_xmltv_url">XMLTV-URL (.xml of .xml.gz)</string>
     <string name="epg_add_guide">Gids toevoegen</string>
-    <string name="sync_desc">Kopieer je verdergaan-met-kijken tussen twee OpenTV-apparaten via je eigen wifi — er verlaat niets het huis en er is geen account bij betrokken.</string>
+    <string name="sync_desc">Kopieer je verdergaan-met-kijken tussen twee Nuvix-apparaten via je eigen wifi — er verlaat niets het huis en er is geen account bij betrokken.</string>
     <string name="sync_share_from_here">Delen vanaf hier</string>
     <string name="sync_receive">Ontvangen</string>
     <string name="sync_ready_to_share">Klaar om te delen</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Dit apparaat is opgeslagen op de NAS. Er zijn nog geen andere apparaten hiermee gesynchroniseerd.</string>
     <string name="sync_nas_failed">Kan je NAS niet bereiken. Controleer of deze aanstaat en of de gegevens in Opname-instellingen kloppen.</string>
     <string name="sync_nas_auto">Automatisch synchroniseren bij het openen van de app</string>
-    <string name="about_title">Over OpenTV</string>
+    <string name="about_title">Over Nuvix</string>
     <string name="about_version">Versie</string>
     <string name="about_update_available">Update beschikbaar: %1$s — zie de melding om te installeren.</string>
     <string name="about_up_to_date">Je hebt de nieuwste versie.</string>
     <string name="about_checking">Controleren…</string>
     <string name="about_check_updates">Controleren op updates</string>
     <string name="about_what_is_title">Wat het is</string>
-    <string name="about_what_is_body">Een gratis, open-source IPTV-speler voor Android TV, Fire TV en telefoons. Het is alleen een speler — het levert geen zenders; je verbindt de dienst waarvoor je al betaalt. Niets wat je invoert verlaat je apparaat, behalve om met je eigen provider te communiceren.</string>
     <string name="about_built_open_title">In alle openheid gebouwd</string>
-    <string name="about_built_open_body">OpenTV wordt openlijk ontwikkeld, waarbij AI een groot deel van het programmeren doet onder menselijke leiding — dat wordt duidelijk vermeld, niet verborgen. Omdat het open source is, kan geen enkele persoon die vertrekt het laten verdwijnen: iedereen kan elke regel lezen, het bouwen en het voortzetten.</string>
+    <string name="about_built_open_body">Nuvix wordt openlijk ontwikkeld, waarbij AI een groot deel van het programmeren doet onder menselijke leiding — dat wordt duidelijk vermeld, niet verborgen. Omdat het open source is, kan geen enkele persoon die vertrekt het laten verdwijnen: iedereen kan elke regel lezen, het bouwen en het voortzetten.</string>
     <string name="about_support_title">Steun het project</string>
     <string name="about_scan_to_donate">Scan om te doneren</string>
     <string name="about_licence_links_title">Licentie en links</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Mijn provider</string>
     <string name="onboarding_default_playlist_name">Mijn afspeellijst</string>
     <string name="onboarding_add_provider_title">Voeg je provider toe</string>
-    <string name="onboarding_add_provider_desc">OpenTV is een speler. Het levert geen zenders — je verbindt de dienst waarvoor je al betaalt.</string>
+    <string name="onboarding_add_provider_desc">Nuvix is een speler. Het levert geen zenders — je verbindt de dienst waarvoor je al betaalt.</string>
     <string name="onboarding_xtream_login">Xtream Codes-login</string>
     <string name="onboarding_m3u_url">M3U-afspeellijst-URL</string>
     <string name="onboarding_stalker_portal">Stalker-portaal</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Bezig…</string>
     <string name="onboarding_save_load">Opslaan en laden</string>
     <string name="onboarding_use_phone">Mijn telefoon gebruiken in plaats daarvan</string>
-    <string name="onboarding_privacy_note">Je providergegevens worden alleen op dit apparaat opgeslagen. OpenTV heeft geen accountsysteem en geen eigen server — niets wat je hier typt wordt ergens naartoe gestuurd, behalve naar je provider.</string>
+    <string name="onboarding_privacy_note">Je providergegevens worden alleen op dit apparaat opgeslagen. Nuvix heeft geen accountsysteem en geen eigen server — niets wat je hier typt wordt ergens naartoe gestuurd, behalve naar je provider.</string>
     <string name="pairing_stopped">Koppelen gestopt</string>
     <string name="pairing_type_here">Typ het hier in plaats daarvan</string>
     <string name="pairing_got_it">Begrepen — verbinden met je provider…</string>

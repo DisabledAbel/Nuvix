@@ -1,6 +1,7 @@
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
+ * Nuvix modifications Copyright (C) 2026 Nuvix Contributors.
  * Licensed under the GNU General Public License v3.0 or later.
  */
 package app.opentv.data.remote
@@ -25,8 +26,8 @@ data class GitHubRelease(
     @SerialName("html_url") val htmlUrl: String = "",
     val assets: List<GitHubAsset> = emptyList(),
 ) {
-    /** The first attached `.apk`, which is the thing we can actually install. */
-    fun apkAsset(): GitHubAsset? = assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+    /** Only the documented release APK is eligible; unrelated attachments are ignored. */
+    fun apkAsset(): GitHubAsset? = assets.singleOrNull { it.name == "nuvix.apk" }
 }
 
 @Serializable

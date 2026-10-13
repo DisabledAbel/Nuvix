@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -50,7 +51,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.opentv.R
+import com.disabledabel.nuvix.R
 
 /**
  * The one settings entry point. Every other settings surface is reached from here, so there is
@@ -69,9 +70,17 @@ fun SettingsHubScreen(
     onOpenSync: () -> Unit,
     onOpenRecordings: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenLauncher: () -> Unit,
+    onOpenCloud: () -> Unit,
+    onOpenBuffer: () -> Unit,
+    onOpenUpdates: () -> Unit,
     onBack: () -> Unit,
 ) {
     val entries = listOf(
+        HubEntry(Icons.Filled.Tv, "Home launcher", "Choose your home screen and startup destination", onOpenLauncher),
+        HubEntry(Icons.Filled.Sync, "Supabase cloud sync", "Optional account sync · provider credentials stay local", onOpenCloud),
+        HubEntry(Icons.Filled.Tune, "Playback buffering", "Automatic, presets, or validated advanced values", onOpenBuffer),
+        HubEntry(Icons.Filled.Info, "Nuvix updates", "Release checks, download preferences, and installation", onOpenUpdates),
         HubEntry(Icons.Filled.Dns, stringResource(R.string.settings_providers_title), stringResource(R.string.settings_providers_subtitle), onOpenProviders),
         HubEntry(Icons.Filled.Extension, stringResource(R.string.settings_addons_title), stringResource(R.string.settings_addons_subtitle), onOpenAddons),
         HubEntry(Icons.Filled.LiveTv, stringResource(R.string.settings_guide_title), stringResource(R.string.settings_guide_subtitle), onOpenGuide),

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Selesai</string>
     <string name="common_cancel">Batal</string>
     <string name="common_back">Kembali</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Merekam 1 acara</string>
     <string name="rec_notification_many">Merekam %1$d acara</string>
     <string name="rec_channel_name">Rekaman</string>
-    <string name="rec_channel_desc">Ditampilkan saat OpenTV sedang merekam</string>
+    <string name="rec_channel_desc">Ditampilkan saat Nuvix sedang merekam</string>
     <string name="rec_error_nothing">Tidak ada yang terekam</string>
     <string name="rec_error_usb_no_folder">Belum ada folder USB dipilih. Buka pengaturan Rekaman dan pilih folder di drive Anda.</string>
     <string name="rec_error_usb_unavailable">Drive USB tidak tersedia. Colokkan ulang drive dan pilih folder lagi di pengaturan Rekaman.</string>
     <string name="rec_background_prompt_title">Lanjutkan rekaman saat Anda keluar?</string>
-    <string name="rec_background_prompt_body">Android dapat menghentikan rekaman ini saat layar tidur atau Anda keluar dari OpenTV. Izinkan OpenTV mengabaikan pengoptimalan baterai agar rekaman terus berjalan, bahkan dalam mode siaga — seperti set-top box.</string>
+    <string name="rec_background_prompt_body">Android dapat menghentikan rekaman ini saat layar tidur atau Anda keluar dari Nuvix. Izinkan Nuvix mengabaikan pengoptimalan baterai agar rekaman terus berjalan, bahkan dalam mode siaga — seperti set-top box.</string>
     <string name="rec_background_prompt_allow">Izinkan</string>
     <string name="rec_background_prompt_not_now">Nanti saja</string>
     <string name="player_rewind">Mundur</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Tambah, hapus, dan uji ulang sumber IPTV Anda</string>
     <string name="settings_addons_title">Add-on (Stremio)</string>
     <string name="settings_addons_subtitle">Putar dari add-on Stremio yang Anda siapkan sendiri</string>
-    <string name="addons_note">Tambahkan add-on Stremio dengan menempelkan URL manifestnya. OpenTV tidak menyertakan add-on apa pun — Anda membawa milik sendiri. Jika add-on tersebut berbasis debrid, atur kunci debrid Anda di situs add-on itu sendiri lalu tempelkan URL personal yang diberikannya; kunci Anda tetap di sana, tidak pernah di OpenTV.</string>
+    <string name="addons_note">Tambahkan add-on Stremio dengan menempelkan URL manifestnya. Nuvix tidak menyertakan add-on apa pun — Anda membawa milik sendiri. Jika add-on tersebut berbasis debrid, atur kunci debrid Anda di situs add-on itu sendiri lalu tempelkan URL personal yang diberikannya; kunci Anda tetap di sana, tidak pernah di Nuvix.</string>
     <string name="addons_url_label">URL manifes add-on</string>
     <string name="addons_add">Tambah</string>
     <string name="addons_checking">Memeriksa…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Ganti folder</string>
     <string name="recset_usb_saving_to">Menyimpan ke: %1$s</string>
     <string name="recset_usb_none">Belum ada folder dipilih</string>
-    <string name="recset_usb_hint">Colokkan drive USB atau penyimpanan eksternal berformat exFAT atau FAT32, lalu pilih folder di dalamnya. Rekaman ditulis langsung ke folder itu dan tetap dapat diputar serta dihapus dari dalam OpenTV.</string>
+    <string name="recset_usb_hint">Colokkan drive USB atau penyimpanan eksternal berformat exFAT atau FAT32, lalu pilih folder di dalamnya. Rekaman ditulis langsung ke folder itu dan tetap dapat diputar serta dihapus dari dalam Nuvix.</string>
     <string name="recset_usb_need_folder">Pilih folder sebelum menyimpan ke USB.</string>
     <string name="recset_usb_no_picker">Tidak ada pemilih folder yang tersedia di perangkat ini.</string>
     <string name="recset_nas_connection">Koneksi NAS</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Diizinkan</string>
     <string name="recset_background_not_allowed">Tidak diizinkan</string>
     <string name="recset_background_fix">Perbaiki</string>
-    <string name="recset_background_desc">Android dapat menghentikan rekaman saat perangkat tidur atau Anda keluar dari OpenTV, kecuali OpenTV diizinkan mengabaikan pengoptimalan baterai. Mengizinkannya membuat rekaman terus berjalan bahkan dalam mode siaga, seperti set-top box.</string>
+    <string name="recset_background_desc">Android dapat menghentikan rekaman saat perangkat tidur atau Anda keluar dari Nuvix, kecuali Nuvix diizinkan mengabaikan pengoptimalan baterai. Mengizinkannya membuat rekaman terus berjalan bahkan dalam mode siaga, seperti set-top box.</string>
     <string name="recset_background_on_title">Rekaman latar belakang aktif</string>
-    <string name="recset_background_on_desc">Rekaman akan terus berjalan saat Anda keluar dari OpenTV atau TV tidur.</string>
+    <string name="recset_background_on_desc">Rekaman akan terus berjalan saat Anda keluar dari Nuvix atau TV tidur.</string>
     <string name="recset_background_toast">Rekaman latar belakang diaktifkan — rekaman akan terus berjalan di latar belakang.</string>
     <string name="epg_updating">Memperbarui…</string>
     <string name="epg_update_now">Perbarui panduan sekarang</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Nama (opsional)</string>
     <string name="epg_xmltv_url">URL XMLTV (.xml atau .xml.gz)</string>
     <string name="epg_add_guide">Tambah panduan</string>
-    <string name="sync_desc">Salin lanjutkan-menonton antara dua perangkat OpenTV lewat wifi Anda sendiri — tidak ada yang keluar rumah, dan tanpa akun.</string>
+    <string name="sync_desc">Salin lanjutkan-menonton antara dua perangkat Nuvix lewat wifi Anda sendiri — tidak ada yang keluar rumah, dan tanpa akun.</string>
     <string name="sync_share_from_here">Bagikan dari sini</string>
     <string name="sync_receive">Terima</string>
     <string name="sync_ready_to_share">Siap dibagikan</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Perangkat ini disimpan ke NAS. Belum ada perangkat lain yang tersinkron ke sini.</string>
     <string name="sync_nas_failed">Tidak dapat menjangkau NAS Anda. Periksa apakah NAS menyala dan detail di pengaturan Rekaman sudah benar.</string>
     <string name="sync_nas_auto">Sinkron otomatis saat aplikasi dibuka</string>
-    <string name="about_title">Tentang OpenTV</string>
+    <string name="about_title">Tentang Nuvix</string>
     <string name="about_version">Versi</string>
     <string name="about_update_available">Pembaruan tersedia: %1$s — lihat perintah untuk memasang.</string>
     <string name="about_up_to_date">Anda menggunakan versi terbaru.</string>
     <string name="about_checking">Memeriksa…</string>
     <string name="about_check_updates">Periksa pembaruan</string>
     <string name="about_what_is_title">Apa ini</string>
-    <string name="about_what_is_body">Pemutar IPTV gratis dan sumber terbuka untuk Android TV, Fire TV, dan ponsel. Ini hanya pemutar — tidak menyediakan saluran; Anda menghubungkan layanan yang sudah Anda bayar. Tidak ada yang Anda masukkan yang keluar dari perangkat Anda kecuali untuk berkomunikasi dengan penyedia Anda sendiri.</string>
     <string name="about_built_open_title">Dibangun secara terbuka</string>
-    <string name="about_built_open_body">OpenTV dikembangkan secara terbuka, dengan AI mengerjakan sebagian besar coding di bawah arahan manusia — ini dinyatakan secara terus terang, bukan disembunyikan. Karena open source, satu orang yang pergi tidak dapat menjatuhkannya: siapa pun dapat membaca setiap baris, membangunnya, dan melanjutkannya.</string>
+    <string name="about_built_open_body">Nuvix dikembangkan secara terbuka, dengan AI mengerjakan sebagian besar coding di bawah arahan manusia — ini dinyatakan secara terus terang, bukan disembunyikan. Karena open source, satu orang yang pergi tidak dapat menjatuhkannya: siapa pun dapat membaca setiap baris, membangunnya, dan melanjutkannya.</string>
     <string name="about_support_title">Dukung proyek ini</string>
     <string name="about_scan_to_donate">Pindai untuk berdonasi</string>
     <string name="about_licence_links_title">Lisensi &amp; tautan</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Penyedia saya</string>
     <string name="onboarding_default_playlist_name">Playlist saya</string>
     <string name="onboarding_add_provider_title">Tambahkan penyedia Anda</string>
-    <string name="onboarding_add_provider_desc">OpenTV adalah pemutar. Tidak menyediakan saluran — Anda menghubungkan layanan yang sudah Anda bayar.</string>
+    <string name="onboarding_add_provider_desc">Nuvix adalah pemutar. Tidak menyediakan saluran — Anda menghubungkan layanan yang sudah Anda bayar.</string>
     <string name="onboarding_xtream_login">Login Xtream Codes</string>
     <string name="onboarding_m3u_url">URL playlist M3U</string>
     <string name="onboarding_stalker_portal">Portal Stalker</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Memproses…</string>
     <string name="onboarding_save_load">Simpan dan muat</string>
     <string name="onboarding_use_phone">Gunakan ponsel saya sebagai gantinya</string>
-    <string name="onboarding_privacy_note">Detail penyedia Anda hanya disimpan di perangkat ini. OpenTV tidak memiliki sistem akun dan server sendiri — tidak ada yang Anda ketik di sini yang dikirim ke mana pun kecuali ke penyedia Anda.</string>
+    <string name="onboarding_privacy_note">Detail penyedia Anda hanya disimpan di perangkat ini. Nuvix tidak memiliki sistem akun dan server sendiri — tidak ada yang Anda ketik di sini yang dikirim ke mana pun kecuali ke penyedia Anda.</string>
     <string name="pairing_stopped">Pemasangan dihentikan</string>
     <string name="pairing_type_here">Ketik di sini sebagai gantinya</string>
     <string name="pairing_got_it">Mengerti — menghubungkan ke penyedia Anda…</string>

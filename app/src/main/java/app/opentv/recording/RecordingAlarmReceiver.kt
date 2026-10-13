@@ -1,9 +1,14 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
  */
 package app.opentv.recording
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -16,7 +21,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.opentv.MainActivity
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.RecordingSignals
 import app.opentv.core.ServiceLocator
 import app.opentv.data.model.Recording
@@ -134,7 +139,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.rec_switch_now_title, rec.title))
             .setContentText(context.getString(R.string.rec_switch_now_text, rec.channelName))
-            .setSmallIcon(R.drawable.ic_opentv_logo)
+            .setSmallIcon(R.drawable.ic_nuvix_logo)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -148,7 +153,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.rec_switch_soon_title, rec.title))
             .setContentText(context.getString(R.string.rec_switch_soon_text, rec.channelName))
-            .setSmallIcon(R.drawable.ic_opentv_logo)
+            .setSmallIcon(R.drawable.ic_nuvix_logo)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -157,7 +162,11 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
     }
 
     private fun safeNotify(context: Context, id: Int, notification: Notification) {
-        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED) return
+        try { NotificationManagerCompat.from(context).notify(id, notification) }
+        catch (_: SecurityException) { /* Permission may change between checking and posting. */ }
     }
 
     private fun createChannel(context: Context) {

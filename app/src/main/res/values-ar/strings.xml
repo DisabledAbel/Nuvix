@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">تم</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_back">رجوع</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">جارٍ تسجيل برنامج واحد</string>
     <string name="rec_notification_many">جارٍ تسجيل %1$d برنامج</string>
     <string name="rec_channel_name">التسجيل</string>
-    <string name="rec_channel_desc">يظهر أثناء تسجيل OpenTV</string>
+    <string name="rec_channel_desc">يظهر أثناء تسجيل Nuvix</string>
     <string name="rec_error_nothing">لم يتم تسجيل أي شيء</string>
     <string name="rec_error_usb_no_folder">لم يتم اختيار مجلد USB. افتح إعدادات التسجيل واختر مجلدًا على محرك الأقراص.</string>
     <string name="rec_error_usb_unavailable">محرك USB غير متاح. أعد توصيل المحرك واختر المجلد مرة أخرى في إعدادات التسجيل.</string>
     <string name="rec_background_prompt_title">هل تريد متابعة التسجيل عند مغادرة التطبيق؟</string>
-    <string name="rec_background_prompt_body">قد يوقف Android هذا التسجيل عند إطفاء الشاشة أو مغادرة OpenTV. اسمح لتطبيق OpenTV بتجاهل تحسين البطارية حتى تستمر التسجيلات حتى في وضع الاستعداد — تمامًا مثل جهاز استقبال تلفزيوني تقليدي.</string>
+    <string name="rec_background_prompt_body">قد يوقف Android هذا التسجيل عند إطفاء الشاشة أو مغادرة Nuvix. اسمح لتطبيق Nuvix بتجاهل تحسين البطارية حتى تستمر التسجيلات حتى في وضع الاستعداد — تمامًا مثل جهاز استقبال تلفزيوني تقليدي.</string>
     <string name="rec_background_prompt_allow">سماح</string>
     <string name="rec_background_prompt_not_now">ليس الآن</string>
     <string name="player_rewind">إرجاع</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">إضافة مصادر IPTV وإزالتها وإعادة اختبارها</string>
     <string name="settings_addons_title">الإضافات (Stremio)</string>
     <string name="settings_addons_subtitle">التشغيل من إضافات Stremio التي تقوم بإعدادها بنفسك</string>
-    <string name="addons_note">أضف إضافة Stremio بلصق رابط الـ manifest الخاص بها. لا يأتي OpenTV مزودًا بأي إضافات — أنت تضيف إضافاتك الخاصة. إذا كانت الإضافة تعتمد على خدمة debrid، فاضبط مفتاح debrid الخاص بك على موقع الإضافة نفسه، ثم الصق الرابط المخصص الذي يمنحك إياه؛ يبقى مفتاحك هناك ولا يصل أبدًا إلى OpenTV.</string>
+    <string name="addons_note">أضف إضافة Stremio بلصق رابط الـ manifest الخاص بها. لا يأتي Nuvix مزودًا بأي إضافات — أنت تضيف إضافاتك الخاصة. إذا كانت الإضافة تعتمد على خدمة debrid، فاضبط مفتاح debrid الخاص بك على موقع الإضافة نفسه، ثم الصق الرابط المخصص الذي يمنحك إياه؛ يبقى مفتاحك هناك ولا يصل أبدًا إلى Nuvix.</string>
     <string name="addons_url_label">رابط manifest الإضافة</string>
     <string name="addons_add">إضافة</string>
     <string name="addons_checking">جارٍ التحقق…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">تغيير المجلد</string>
     <string name="recset_usb_saving_to">الحفظ في: %1$s</string>
     <string name="recset_usb_none">لم يتم اختيار مجلد بعد</string>
-    <string name="recset_usb_hint">وصّل محرك USB أو وحدة تخزين خارجية منسّقة بنظام exFAT أو FAT32، ثم اختر مجلدًا عليها. تُكتب التسجيلات مباشرة في ذلك المجلد، ويظل بإمكانك تشغيلها وحذفها داخل OpenTV.</string>
+    <string name="recset_usb_hint">وصّل محرك USB أو وحدة تخزين خارجية منسّقة بنظام exFAT أو FAT32، ثم اختر مجلدًا عليها. تُكتب التسجيلات مباشرة في ذلك المجلد، ويظل بإمكانك تشغيلها وحذفها داخل Nuvix.</string>
     <string name="recset_usb_need_folder">اختر مجلدًا قبل الحفظ على USB.</string>
     <string name="recset_usb_no_picker">أداة اختيار المجلد غير متاحة على هذا الجهاز.</string>
     <string name="recset_nas_connection">اتصال NAS</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">مسموح</string>
     <string name="recset_background_not_allowed">غير مسموح</string>
     <string name="recset_background_fix">إصلاح</string>
-    <string name="recset_background_desc">قد يوقف Android التسجيلات عند دخول الجهاز في وضع السكون أو مغادرة OpenTV، ما لم يُسمح لتطبيق OpenTV بتجاهل تحسين البطارية. يؤدي السماح بذلك إلى استمرار التسجيلات حتى في وضع الاستعداد، مثل جهاز استقبال تلفزيوني تقليدي.</string>
+    <string name="recset_background_desc">قد يوقف Android التسجيلات عند دخول الجهاز في وضع السكون أو مغادرة Nuvix، ما لم يُسمح لتطبيق Nuvix بتجاهل تحسين البطارية. يؤدي السماح بذلك إلى استمرار التسجيلات حتى في وضع الاستعداد، مثل جهاز استقبال تلفزيوني تقليدي.</string>
     <string name="recset_background_on_title">التسجيل في الخلفية مفعّل</string>
-    <string name="recset_background_on_desc">ستستمر التسجيلات عند مغادرة OpenTV أو دخول التلفاز في وضع السكون.</string>
+    <string name="recset_background_on_desc">ستستمر التسجيلات عند مغادرة Nuvix أو دخول التلفاز في وضع السكون.</string>
     <string name="recset_background_toast">تم تفعيل التسجيل في الخلفية — ستستمر التسجيلات في العمل بالخلفية.</string>
     <string name="epg_updating">جارٍ التحديث…</string>
     <string name="epg_update_now">تحديث الدليل الآن</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">الاسم (اختياري)</string>
     <string name="epg_xmltv_url">رابط XMLTV (.xml أو .xml.gz)</string>
     <string name="epg_add_guide">إضافة دليل</string>
-    <string name="sync_desc">انسخ \"متابعة المشاهدة\" بين جهازي OpenTV عبر شبكة Wi-Fi الخاصة بك — لا تغادر البيانات منزلك، ولا حاجة إلى حساب.</string>
+    <string name="sync_desc">انسخ \"متابعة المشاهدة\" بين جهازي Nuvix عبر شبكة Wi-Fi الخاصة بك — لا تغادر البيانات منزلك، ولا حاجة إلى حساب.</string>
     <string name="sync_share_from_here">المشاركة من هنا</string>
     <string name="sync_receive">استقبال</string>
     <string name="sync_ready_to_share">جاهز للمشاركة</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">تم حفظ هذا الجهاز على وحدة NAS. لم تتم مزامنة أي جهاز آخر هنا بعد.</string>
     <string name="sync_nas_failed">تعذر الوصول إلى وحدة NAS. تأكد من أنها قيد التشغيل وأن التفاصيل في إعدادات التسجيل صحيحة.</string>
     <string name="sync_nas_auto">مزامنة تلقائية عند فتح التطبيق</string>
-    <string name="about_title">حول OpenTV</string>
+    <string name="about_title">حول Nuvix</string>
     <string name="about_version">الإصدار</string>
     <string name="about_update_available">يتوفر تحديث: %1$s — راجع الرسالة لتثبيته.</string>
     <string name="about_up_to_date">أنت تستخدم أحدث إصدار.</string>
     <string name="about_checking">جارٍ التحقق…</string>
     <string name="about_check_updates">التحقق من التحديثات</string>
     <string name="about_what_is_title">ما هو التطبيق</string>
-    <string name="about_what_is_body">مشغّل IPTV مجاني ومفتوح المصدر لأجهزة Android TV وFire TV والهواتف. إنه مشغّل فقط — لا يوفر قنوات؛ أنت تربطه بالخدمة التي تدفع مقابلها بالفعل. لا يغادر أي شيء تُدخله جهازك إلا للتواصل مع مزوّدك الخاص.</string>
     <string name="about_built_open_title">تطوير مفتوح وشفاف</string>
-    <string name="about_built_open_body">يُطوَّر OpenTV بشفافية، حيث يقوم الذكاء الاصطناعي بجزء كبير من البرمجة بتوجيه بشري — وهذا معلن بوضوح، لا يُخفى. ولأنه مفتوح المصدر، فإن رحيل شخص واحد لا يمكن أن يوقفه: بإمكان أي شخص قراءة كل سطر فيه وبناءه ومواصلة تطويره.</string>
+    <string name="about_built_open_body">يُطوَّر Nuvix بشفافية، حيث يقوم الذكاء الاصطناعي بجزء كبير من البرمجة بتوجيه بشري — وهذا معلن بوضوح، لا يُخفى. ولأنه مفتوح المصدر، فإن رحيل شخص واحد لا يمكن أن يوقفه: بإمكان أي شخص قراءة كل سطر فيه وبناءه ومواصلة تطويره.</string>
     <string name="about_support_title">دعم المشروع</string>
     <string name="about_scan_to_donate">امسح للتبرع</string>
     <string name="about_licence_links_title">الترخيص والروابط</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">مزوّدي</string>
     <string name="onboarding_default_playlist_name">قائمة تشغيلي</string>
     <string name="onboarding_add_provider_title">أضف مزوّد خدمتك</string>
-    <string name="onboarding_add_provider_desc">OpenTV هو مشغّل فقط. لا يوفر قنوات — أنت تربطه بالخدمة التي تدفع مقابلها بالفعل.</string>
+    <string name="onboarding_add_provider_desc">Nuvix هو مشغّل فقط. لا يوفر قنوات — أنت تربطه بالخدمة التي تدفع مقابلها بالفعل.</string>
     <string name="onboarding_xtream_login">تسجيل الدخول عبر Xtream Codes</string>
     <string name="onboarding_m3u_url">رابط قائمة تشغيل M3U</string>
     <string name="onboarding_stalker_portal">بوابة Stalker</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">جارٍ العمل…</string>
     <string name="onboarding_save_load">حفظ وتحميل</string>
     <string name="onboarding_use_phone">استخدام هاتفي</string>
-    <string name="onboarding_privacy_note">تُخزَّن بيانات مزوّدك على هذا الجهاز فقط. لا يمتلك OpenTV نظام حسابات ولا خادمًا خاصًا به — لا يُرسل أي شيء تكتبه هنا إلى أي جهة سوى مزوّدك.</string>
+    <string name="onboarding_privacy_note">تُخزَّن بيانات مزوّدك على هذا الجهاز فقط. لا يمتلك Nuvix نظام حسابات ولا خادمًا خاصًا به — لا يُرسل أي شيء تكتبه هنا إلى أي جهة سوى مزوّدك.</string>
     <string name="pairing_stopped">تم إيقاف الإقران</string>
     <string name="pairing_type_here">أدخله هنا بدلًا من ذلك</string>
     <string name="pairing_got_it">تم — جارٍ الاتصال بمزوّدك…</string>

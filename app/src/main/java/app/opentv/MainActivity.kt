@@ -1,9 +1,12 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
  */
 package app.opentv
+
+import com.disabledabel.nuvix.R
 
 import android.app.PictureInPictureParams
 import android.app.UiModeManager
@@ -37,10 +40,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import app.opentv.core.findActivity
 import app.opentv.core.AppSettings
 import app.opentv.core.ServiceLocator
 import app.opentv.data.parser.displayTitle
@@ -84,6 +90,8 @@ import app.opentv.ui.vod.VodPlayerScreen
 import app.opentv.update.UpdateGate
 
 class MainActivity : ComponentActivity() {
+    private var homeGeneration by mutableIntStateOf(0)
+
 
     // Apply the chosen UI language before any view or resource is resolved. A language change in
     // settings calls recreate(), which re-runs this with the new tag.
@@ -98,8 +106,12 @@ class MainActivity : ComponentActivity() {
         val isTelevision = isRunningOnTelevision(this)
 
         setContent {
-            val settings = remember { ServiceLocator.get(this).settings }
-            val themeMode by settings.themeMode.collectAsState()
+            val settings by androidx.compose.runtime.produceState<AppSettings?>(initialValue = null) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { ServiceLocator.get(this@MainActivity).settings }.getOrNull()
+                }
+            }
+            val themeMode = settings?.themeMode?.collectAsState()?.value ?: AppSettings.ThemeMode.DARK
             val darkTheme = when (themeMode) {
                 AppSettings.ThemeMode.DARK -> true
                 AppSettings.ThemeMode.LIGHT -> false
@@ -111,7 +123,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    OpenTvApp(isTelevision = isTelevision)
+                    Box(Modifier.fillMaxSize()) {
+                        NuvixNavigation(isTelevision = isTelevision, homeGeneration = homeGeneration)
+                        // Available even if protected local data cannot open after a bad update.
+                        UpdateGate()
+                    }
                 }
             }
         }
@@ -126,6 +142,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handlePlayIntent(intent: Intent?) {
+        app.opentv.update.UpdateScheduler.handleIntent(this, intent)
+        if (app.opentv.launcher.LauncherController.isHomeIntent(intent)) homeGeneration++
         val id = intent?.getLongExtra(EXTRA_PLAY_CHANNEL, 0L) ?: 0L
         if (id != 0L) app.opentv.core.PlayRequests.request(id)
         val recId = intent?.getLongExtra(EXTRA_WATCH_RECORDING, 0L) ?: 0L
@@ -199,6 +217,10 @@ object Routes {
     const val SYNC = "sync"
     const val REC_SETTINGS = "recording-settings"
     const val ABOUT = "about"
+    const val LAUNCHER_SETTINGS = "launcher-settings"
+    const val CLOUD_SYNC = "cloud-sync"
+    const val BUFFER_SETTINGS = "buffer-settings"
+    const val UPDATE_SETTINGS = "update-settings"
     const val SERIES_DETAIL = "series/{seriesId}"
     const val MOVIE_DETAIL = "movie/{movieId}"
     const val EDIT_SOURCE = "edit-source/{sourceId}"
@@ -223,7 +245,40 @@ object Routes {
 }
 
 @Composable
-private fun OpenTvApp(isTelevision: Boolean) {
+private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
+    val startupContext = androidx.compose.ui.platform.LocalContext.current
+    val initialHomeGeneration = remember { homeGeneration }
+    val recoveryUpdater: app.opentv.update.UpdateViewModel = viewModel()
+    var databaseReady by remember { mutableStateOf(false) }
+    var databaseFailure by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val graph = ServiceLocator.get(startupContext)
+                graph.settings
+                graph.database.openHelper.writableDatabase
+            }
+        }
+        databaseReady = result.isSuccess
+        databaseFailure = result.isFailure
+    }
+    if (!databaseReady) {
+        if (databaseFailure) {
+            androidx.compose.foundation.layout.Column(
+                Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
+            ) {
+                Text("Your local data could not be opened", style = MaterialTheme.typography.headlineMedium)
+                Text("Nuvix has retained the existing database. Check available device storage and restart the app. If the device encryption key was lost, contact support before resetting or uninstalling.")
+                androidx.compose.material3.OutlinedButton(onClick = {
+                    runCatching { startupContext.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) }
+                }) { Text("Open device settings") }
+                androidx.compose.material3.OutlinedButton(onClick = recoveryUpdater::checkNow) { Text("Check for a recovery update") }
+                androidx.compose.material3.OutlinedButton(onClick = { startupContext.findActivity()?.finish() }) { Text("Close Nuvix") }
+            }
+        } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
     val navController = rememberNavController()
     val sourcesViewModel: SourcesViewModel = viewModel()
     val vodViewModel: VodViewModel = viewModel()
@@ -246,15 +301,25 @@ private fun OpenTvApp(isTelevision: Boolean) {
 
     // First run goes straight to setup — an empty channel list with no explanation is the
     // worst possible first impression.
-    val start = if (sourcesUi.sources.isEmpty()) Routes.ADD_SOURCE else Routes.HOME
+    val start = Routes.HOME
 
     // Boot to last channel: if enabled and we have one, jump straight into the player on launch.
     // Runs once; backing out returns to the guide and doesn't re-trigger.
     val bootContext = androidx.compose.ui.platform.LocalContext.current
     val bootSettings = remember { ServiceLocator.get(bootContext).settings }
-    LaunchedEffect(start) {
-        if (start == Routes.HOME && bootSettings.resumeLastChannel.value && bootSettings.lastChannelId != 0L) {
-            navController.navigate(Routes.player(bootSettings.lastChannelId))
+    val launcherSettings = remember { app.opentv.launcher.LauncherSettingsStore(bootContext) }
+    DisposableEffect(launcherSettings) { onDispose { launcherSettings.close() } }
+    LaunchedEffect(homeGeneration) {
+        if (homeGeneration != initialHomeGeneration) navController.navigate(Routes.HOME) {
+            launchSingleTop = true
+            popUpTo(Routes.HOME) { inclusive = false }
+        }
+        val destination = launcherSettings.preferences.value.startupDestination
+        val resumeLast = destination == app.opentv.launcher.StartupDestination.LAST_WATCHED ||
+            (destination == app.opentv.launcher.StartupDestination.HOME && bootSettings.resumeLastChannel.value)
+        if (homeGeneration == initialHomeGeneration && resumeLast && sourcesUi.sources.isNotEmpty() && bootSettings.lastChannelId != 0L &&
+            ServiceLocator.get(bootContext).database.channels().byId(bootSettings.lastChannelId) != null) {
+            navController.navigate(Routes.player(bootSettings.lastChannelId)) { launchSingleTop = true }
         }
     }
 
@@ -336,7 +401,7 @@ private fun OpenTvApp(isTelevision: Boolean) {
                     },
                     onResume = { key, url, title ->
                         navController.navigate(
-                            Routes.vodPlayer(key, url, title, "OpenTV/0.1 (Android)"),
+                            Routes.vodPlayer(key, url, title, "Nuvix/0.1 (Android)"),
                         )
                     },
                     onAddSource = { navController.navigate(Routes.ADD_SOURCE) },
@@ -375,6 +440,9 @@ private fun OpenTvApp(isTelevision: Boolean) {
                         navController.navigate(Routes.vodPlayer(key, url, title, ua))
                     },
                     activeProfileName = activeProfileName,
+                    onOpenLauncherSettings = { navController.navigate(Routes.LAUNCHER_SETTINGS) },
+                    startupGeneration = homeGeneration,
+                    initialStartupGeneration = initialHomeGeneration,
                 )
             }
 
@@ -394,7 +462,7 @@ private fun OpenTvApp(isTelevision: Boolean) {
                                 key = "movie:${movie.id}",
                                 url = movie.streamUrl,
                                 title = movie.displayTitle,
-                                ua = "OpenTV/0.1 (Android)",
+                                ua = "Nuvix/0.1 (Android)",
                             ),
                         )
                     },
@@ -415,10 +483,26 @@ private fun OpenTvApp(isTelevision: Boolean) {
                     onOpenSync = { navController.navigate(Routes.SYNC) },
                     onOpenRecordings = { navController.navigate(Routes.REC_SETTINGS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                    onOpenLauncher = { navController.navigate(Routes.LAUNCHER_SETTINGS) },
+                    onOpenCloud = { navController.navigate(Routes.CLOUD_SYNC) },
+                    onOpenBuffer = { navController.navigate(Routes.BUFFER_SETTINGS) },
+                    onOpenUpdates = { navController.navigate(Routes.UPDATE_SETTINGS) },
                     onBack = { navController.popBackStack() },
                 )
             }
 
+            composable(Routes.LAUNCHER_SETTINGS) {
+                app.opentv.launcher.LauncherSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.CLOUD_SYNC) {
+                app.opentv.cloud.SupabaseCloudScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BUFFER_SETTINGS) {
+                app.opentv.ui.settings.BufferSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.UPDATE_SETTINGS) {
+                app.opentv.ui.settings.NuvixUpdateSettingsScreen(onBack = { navController.popBackStack() })
+            }
             composable(Routes.SYNC) {
                 SyncScreen(onBack = { navController.popBackStack() })
             }
@@ -479,7 +563,7 @@ private fun OpenTvApp(isTelevision: Boolean) {
                     viewModel = vodViewModel,
                     onPlayEpisode = { key, url, title ->
                         navController.navigate(
-                            Routes.vodPlayer(key, url, title, "OpenTV/0.1 (Android)"),
+                            Routes.vodPlayer(key, url, title, "Nuvix/0.1 (Android)"),
                         )
                     },
                     onOpenSeries = { series -> navController.navigate(Routes.seriesDetail(series.id)) },
@@ -498,13 +582,13 @@ private fun OpenTvApp(isTelevision: Boolean) {
                                 key = "movie:${movie.id}",
                                 url = movie.streamUrl,
                                 title = movie.displayTitle,
-                                ua = "OpenTV/0.1 (Android)",
+                                ua = "Nuvix/0.1 (Android)",
                             ),
                         )
                     },
                     onPlayUrl = { key, url, title ->
                         navController.navigate(
-                            Routes.vodPlayer(key = key, url = url, title = title, ua = "OpenTV/0.1 (Android)"),
+                            Routes.vodPlayer(key = key, url = url, title = title, ua = "Nuvix/0.1 (Android)"),
                         )
                     },
                     onOpenMovie = { movie -> navController.navigate(Routes.movieDetail(movie.id)) },
@@ -531,14 +615,13 @@ private fun OpenTvApp(isTelevision: Boolean) {
                     mediaKey = arg("key"),
                     streamUrl = arg("url"),
                     title = arg("title"),
-                    userAgent = arg("ua").ifEmpty { "OpenTV/0.1 (Android)" },
+                    userAgent = arg("ua").ifEmpty { "Nuvix/0.1 (Android)" },
                     onBack = { navController.popBackStack() },
                 )
             }
         }
 
         // Sits above the whole nav graph so a found update can prompt from any screen.
-        UpdateGate()
 
         // "About to switch to a recording" banner — shows 30s before an auto-switch fires.
         RecordingSwitchBanner()

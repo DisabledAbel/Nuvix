@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">완료</string>
     <string name="common_cancel">취소</string>
     <string name="common_back">뒤로</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">프로그램 1개 녹화 중</string>
     <string name="rec_notification_many">프로그램 %1$d개 녹화 중</string>
     <string name="rec_channel_name">녹화</string>
-    <string name="rec_channel_desc">OpenTV가 녹화하는 동안 표시됩니다</string>
+    <string name="rec_channel_desc">Nuvix가 녹화하는 동안 표시됩니다</string>
     <string name="rec_error_nothing">녹화된 내용이 없습니다</string>
     <string name="rec_error_usb_no_folder">선택된 USB 폴더가 없습니다. 녹화 설정을 열어 드라이브에서 폴더를 선택하세요.</string>
     <string name="rec_error_usb_unavailable">USB 드라이브를 사용할 수 없습니다. 드라이브를 다시 연결한 후 녹화 설정에서 폴더를 다시 선택하세요.</string>
     <string name="rec_background_prompt_title">앱을 나가도 녹화를 계속할까요?</string>
-    <string name="rec_background_prompt_body">화면이 꺼지거나 OpenTV를 벗어나면 Android가 이 녹화를 중지할 수 있습니다. OpenTV가 배터리 최적화를 무시하도록 허용하면 셋톱박스처럼 대기 상태에서도 녹화가 계속됩니다.</string>
+    <string name="rec_background_prompt_body">화면이 꺼지거나 Nuvix를 벗어나면 Android가 이 녹화를 중지할 수 있습니다. Nuvix가 배터리 최적화를 무시하도록 허용하면 셋톱박스처럼 대기 상태에서도 녹화가 계속됩니다.</string>
     <string name="rec_background_prompt_allow">허용</string>
     <string name="rec_background_prompt_not_now">나중에</string>
     <string name="player_rewind">되감기</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">IPTV 소스 추가, 제거 및 재테스트</string>
     <string name="settings_addons_title">애드온(Stremio)</string>
     <string name="settings_addons_subtitle">직접 설정한 Stremio 애드온에서 재생</string>
-    <string name="addons_note">매니페스트 URL을 붙여넣어 Stremio 애드온을 추가하세요. OpenTV에는 애드온이 기본 포함되어 있지 않습니다 - 직접 추가해야 합니다. 애드온이 디브리드(debrid) 기반이라면 해당 애드온의 웹사이트에서 디브리드 키를 설정한 뒤 제공되는 개인화된 URL을 붙여넣으세요. 키는 그곳에만 저장되며 OpenTV에는 저장되지 않습니다.</string>
+    <string name="addons_note">매니페스트 URL을 붙여넣어 Stremio 애드온을 추가하세요. Nuvix에는 애드온이 기본 포함되어 있지 않습니다 - 직접 추가해야 합니다. 애드온이 디브리드(debrid) 기반이라면 해당 애드온의 웹사이트에서 디브리드 키를 설정한 뒤 제공되는 개인화된 URL을 붙여넣으세요. 키는 그곳에만 저장되며 Nuvix에는 저장되지 않습니다.</string>
     <string name="addons_url_label">애드온 매니페스트 URL</string>
     <string name="addons_add">추가</string>
     <string name="addons_checking">확인 중…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">폴더 변경</string>
     <string name="recset_usb_saving_to">저장 위치: %1$s</string>
     <string name="recset_usb_none">아직 선택된 폴더가 없습니다</string>
-    <string name="recset_usb_hint">exFAT 또는 FAT32로 포맷된 USB 드라이브나 외장 저장소를 연결한 후 폴더를 선택하세요. 녹화 파일은 해당 폴더에 바로 저장되며, OpenTV 안에서 재생하고 삭제할 수 있습니다.</string>
+    <string name="recset_usb_hint">exFAT 또는 FAT32로 포맷된 USB 드라이브나 외장 저장소를 연결한 후 폴더를 선택하세요. 녹화 파일은 해당 폴더에 바로 저장되며, Nuvix 안에서 재생하고 삭제할 수 있습니다.</string>
     <string name="recset_usb_need_folder">USB에 저장하기 전에 폴더를 선택하세요.</string>
     <string name="recset_usb_no_picker">이 기기에서는 폴더 선택 기능을 사용할 수 없습니다.</string>
     <string name="recset_nas_connection">NAS 연결</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">허용됨</string>
     <string name="recset_background_not_allowed">허용되지 않음</string>
     <string name="recset_background_fix">수정</string>
-    <string name="recset_background_desc">OpenTV가 배터리 최적화를 무시하도록 허용하지 않으면, 기기가 절전 모드로 전환되거나 OpenTV를 벗어날 때 Android가 녹화를 중지할 수 있습니다. 허용하면 셋톱박스처럼 대기 상태에서도 녹화가 계속됩니다.</string>
+    <string name="recset_background_desc">Nuvix가 배터리 최적화를 무시하도록 허용하지 않으면, 기기가 절전 모드로 전환되거나 Nuvix를 벗어날 때 Android가 녹화를 중지할 수 있습니다. 허용하면 셋톱박스처럼 대기 상태에서도 녹화가 계속됩니다.</string>
     <string name="recset_background_on_title">백그라운드 녹화가 켜져 있습니다</string>
-    <string name="recset_background_on_desc">OpenTV를 벗어나거나 TV가 절전 모드로 전환되어도 녹화가 계속됩니다.</string>
+    <string name="recset_background_on_desc">Nuvix를 벗어나거나 TV가 절전 모드로 전환되어도 녹화가 계속됩니다.</string>
     <string name="recset_background_toast">백그라운드 녹화가 활성화되었습니다 - 녹화가 백그라운드에서 계속됩니다.</string>
     <string name="epg_updating">업데이트 중…</string>
     <string name="epg_update_now">지금 편성표 업데이트</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">이름(선택 사항)</string>
     <string name="epg_xmltv_url">XMLTV URL(.xml 또는 .xml.gz)</string>
     <string name="epg_add_guide">편성표 추가</string>
-    <string name="sync_desc">자신의 Wi-Fi를 통해 두 OpenTV 기기 간에 이어보기 기록을 복사합니다 - 데이터는 집 밖으로 나가지 않으며 계정도 필요 없습니다.</string>
+    <string name="sync_desc">자신의 Wi-Fi를 통해 두 Nuvix 기기 간에 이어보기 기록을 복사합니다 - 데이터는 집 밖으로 나가지 않으며 계정도 필요 없습니다.</string>
     <string name="sync_share_from_here">여기서 공유</string>
     <string name="sync_receive">받기</string>
     <string name="sync_ready_to_share">공유 준비 완료</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">이 기기의 데이터를 NAS에 저장했습니다. 아직 다른 기기가 동기화하지 않았습니다.</string>
     <string name="sync_nas_failed">NAS에 연결하지 못했습니다. 전원이 켜져 있는지, 녹화 설정의 정보가 올바른지 확인하세요.</string>
     <string name="sync_nas_auto">앱을 열 때 자동 동기화</string>
-    <string name="about_title">OpenTV 정보</string>
+    <string name="about_title">Nuvix 정보</string>
     <string name="about_version">버전</string>
     <string name="about_update_available">업데이트 가능: %1$s - 설치 안내를 확인하세요.</string>
     <string name="about_up_to_date">최신 버전을 사용 중입니다.</string>
     <string name="about_checking">확인 중…</string>
     <string name="about_check_updates">업데이트 확인</string>
     <string name="about_what_is_title">소개</string>
-    <string name="about_what_is_body">Android TV, Fire TV, 휴대폰용 무료 오픈소스 IPTV 플레이어입니다. 이 앱은 플레이어일 뿐 채널을 제공하지 않습니다. 이미 이용 중인 서비스에 연결하여 사용하세요. 입력한 정보는 사용자의 공급자와 통신하는 경우를 제외하고는 기기 밖으로 나가지 않습니다.</string>
     <string name="about_built_open_title">공개 개발</string>
-    <string name="about_built_open_body">OpenTV는 공개적으로 개발되며, 코드의 상당 부분은 사람의 지시에 따라 AI가 작성합니다 - 이는 숨기지 않고 명확히 밝힙니다. 오픈소스이기 때문에 특정 한 사람이 떠나더라도 프로젝트가 사라지지 않습니다. 누구나 모든 코드를 읽고 빌드하여 이어갈 수 있습니다.</string>
+    <string name="about_built_open_body">Nuvix는 공개적으로 개발되며, 코드의 상당 부분은 사람의 지시에 따라 AI가 작성합니다 - 이는 숨기지 않고 명확히 밝힙니다. 오픈소스이기 때문에 특정 한 사람이 떠나더라도 프로젝트가 사라지지 않습니다. 누구나 모든 코드를 읽고 빌드하여 이어갈 수 있습니다.</string>
     <string name="about_support_title">프로젝트 후원</string>
     <string name="about_scan_to_donate">스캔하여 후원</string>
     <string name="about_licence_links_title">라이선스 및 링크</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">내 공급자</string>
     <string name="onboarding_default_playlist_name">내 재생 목록</string>
     <string name="onboarding_add_provider_title">공급자 추가</string>
-    <string name="onboarding_add_provider_desc">OpenTV는 플레이어입니다. 채널을 제공하지 않으며, 이미 이용 중인 서비스에 연결해야 합니다.</string>
+    <string name="onboarding_add_provider_desc">Nuvix는 플레이어입니다. 채널을 제공하지 않으며, 이미 이용 중인 서비스에 연결해야 합니다.</string>
     <string name="onboarding_xtream_login">Xtream Codes 로그인</string>
     <string name="onboarding_m3u_url">M3U 재생 목록 URL</string>
     <string name="onboarding_stalker_portal">Stalker 포털</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">처리 중…</string>
     <string name="onboarding_save_load">저장 후 불러오기</string>
     <string name="onboarding_use_phone">대신 휴대폰 사용</string>
-    <string name="onboarding_privacy_note">공급자 정보는 이 기기에만 저장됩니다. OpenTV에는 계정 시스템도 자체 서버도 없습니다 - 여기에 입력한 내용은 공급자 외에는 어디로도 전송되지 않습니다.</string>
+    <string name="onboarding_privacy_note">공급자 정보는 이 기기에만 저장됩니다. Nuvix에는 계정 시스템도 자체 서버도 없습니다 - 여기에 입력한 내용은 공급자 외에는 어디로도 전송되지 않습니다.</string>
     <string name="pairing_stopped">페어링이 중지되었습니다</string>
     <string name="pairing_type_here">대신 여기에 입력</string>
     <string name="pairing_got_it">확인했습니다 - 공급자에 연결하는 중…</string>

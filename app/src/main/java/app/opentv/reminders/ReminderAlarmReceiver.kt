@@ -1,9 +1,14 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
  */
 package app.opentv.reminders
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -16,7 +21,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.opentv.MainActivity
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import app.opentv.data.model.Reminder
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +90,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(reminder.title)
             .setContentText(context.getString(R.string.reminder_starting_now, reminder.channelName))
-            .setSmallIcon(R.drawable.ic_opentv_logo)
+            .setSmallIcon(R.drawable.ic_nuvix_logo)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -99,8 +104,13 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             builder.setFullScreenIntent(contentPi, true)
         }
 
-        NotificationManagerCompat.from(context)
-            .notify(NOTIFICATION_BASE + reminder.id.toInt(), builder.build() as Notification)
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_BASE + reminder.id.toInt(), builder.build())
+        } catch (_: SecurityException) { /* Permission may change between checking and posting. */ }
     }
 
     private fun createChannel(context: Context) {

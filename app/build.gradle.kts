@@ -7,28 +7,32 @@ plugins {
 }
 
 android {
-    namespace = "app.opentv"
+    namespace = "com.disabledabel.nuvix"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
-        applicationId = "app.opentv"
+        applicationId = "com.disabledabel.nuvix"
         minSdk = 23
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.11.8"
+        versionCode = 21
+        versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("upload") {
-            // Populated from environment variables in CI. Absent locally, which is why the
-            // release build type falls back to the debug key below.
-            val storePath = providers.environmentVariable("KEYSTORE_PATH").orNull
-            if (storePath != null) {
-                storeFile = file(storePath)
-                storePassword = providers.environmentVariable("KEYSTORE_PASSWORD").orNull
-                keyAlias = providers.environmentVariable("KEY_ALIAS").orNull
-                keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+    val signingVariables = listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
+    val signingValues = signingVariables.associateWith { providers.environmentVariable(it).orNull }
+    val signingConfigured = signingValues.values.all { !it.isNullOrBlank() }
+    check(signingValues.values.all { it.isNullOrBlank() } || signingConfigured) {
+        "Release signing requires KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD together."
+    }
+    if (signingConfigured) {
+        signingConfigs {
+            create("upload") {
+                storeFile = file(signingValues.getValue("KEYSTORE_PATH")!!)
+                storePassword = signingValues.getValue("KEYSTORE_PASSWORD")
+                keyAlias = signingValues.getValue("KEY_ALIAS")
+                keyPassword = signingValues.getValue("KEY_PASSWORD")
             }
         }
     }
@@ -42,24 +46,9 @@ android {
                 "proguard-rules.pro",
             )
 
-            /*
-             * Falls back to the debug key when no keystore is configured.
-             *
-             * An *unsigned* APK cannot be installed on Android at all — it is rejected before
-             * the user sees anything, with an error that explains nothing. For an early
-             * project that means every tester is blocked on the maintainer setting up signing
-             * infrastructure first.
-             *
-             * The trade-off is real and is written up in docs/RELEASING.md: moving to a
-             * proper keystore later changes the signature, and Android will refuse to upgrade
-             * over a debug-signed install. Set up real signing before announcing publicly.
-             */
-            signingConfig =
-                if (providers.environmentVariable("KEYSTORE_PATH").orNull != null) {
-                    signingConfigs.getByName("upload")
-                } else {
-                    signingConfigs.getByName("debug")
-                }
+            // Missing local credentials produce an unsigned APK. Publication verifies signing;
+            // release builds never inherit the publicly known Android debug certificate.
+            signingConfig = if (signingConfigured) signingConfigs.getByName("upload") else null
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -128,6 +117,7 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.datasource.okhttp)
 
+    implementation("net.zetetic:sqlcipher-android:4.12.0")
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
@@ -148,6 +138,7 @@ dependencies {
     // back in-app over the network. Pure-Java SMB2/3, no native bits.
     implementation("com.hierynomus:smbj:0.12.2")
 
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)

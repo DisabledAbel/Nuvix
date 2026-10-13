@@ -1,11 +1,15 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13: atomic, bounded guide refresh.
  */
 package app.opentv.data.repo
 
 import android.util.Log
+import androidx.room.withTransaction
+import app.opentv.data.db.OpenTvDatabase
 import app.opentv.data.db.ChannelDao
 import app.opentv.data.db.EpgChannelAliasDao
 import app.opentv.data.db.EpgFeedDao
@@ -20,12 +24,17 @@ import app.opentv.data.parser.XmltvParser
 import app.opentv.data.remote.XtreamApi
 import java.io.BufferedInputStream
 import java.io.InputStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -48,12 +57,11 @@ import okhttp3.Request
  *
  * OpenTV never deletes before it has the replacement:
  *
- * - Programmes are **upserted in batches** as they stream out of the parser. The unique index
- *   on `(feedId, epgChannelId, startUtcMillis)` makes a re-run idempotent, so a sync that
- *   dies at 60% leaves 60% of a fresher guide behind — strictly better than before.
+ * - Downloads spool to a bounded temporary file before taking a database write lock.
+ * - Each feed replaces programmes and aliases in one Room transaction, using batches of 500.
+ *   Failed/truncated/empty feeds roll back the entire replacement to the last valid cache.
  * - Old programmes are pruned **by age**, only after at least one feed succeeds.
- * - A failed feed leaves that feed's previous data intact and records the reason on the
- *   feed row, where the settings screen shows it — no silent failure.
+ * - A failed feed records a credential-free reason and keeps its prior refresh timestamp.
  */
 class EpgRepository(
     private val programmeDao: ProgrammeDao,
@@ -63,6 +71,8 @@ class EpgRepository(
     private val sourceDao: SourceDao,
     private val api: XtreamApi,
     private val http: OkHttpClient,
+    private val database: OpenTvDatabase,
+    private val cacheDirectory: File,
 ) {
 
     data class SyncSummary(
@@ -72,6 +82,8 @@ class EpgRepository(
         val channelsMatched: Int,
         val channelsTotal: Int,
     )
+
+    private val refreshMutex = Mutex()
 
     // ---- Reads -----------------------------------------------------------------------------
 
@@ -98,12 +110,13 @@ class EpgRepository(
 
     suspend fun setFeedEnabled(id: Long, enabled: Boolean) = feedDao.setEnabled(id, enabled)
 
-    suspend fun removeFeed(feed: EpgFeed) {
-        // A removed feed takes its guide data with it — orphaned programmes would otherwise
-        // keep matching channels forever with content that never refreshes.
-        programmeDao.deleteForFeed(feed.id)
-        aliasDao.deleteForFeed(feed.id)
-        feedDao.delete(feed.id)
+    suspend fun removeFeed(feed: EpgFeed) = refreshMutex.withLock {
+        // Serialize deletion with in-flight downloads so a removed feed cannot reappear.
+        database.withTransaction {
+            programmeDao.deleteForFeed(feed.id)
+            aliasDao.deleteForFeed(feed.id)
+            feedDao.delete(feed.id)
+        }
     }
 
     /**
@@ -136,7 +149,7 @@ class EpgRepository(
 
     /** Downloads every enabled feed, merges, prunes, and re-runs the matcher. */
     suspend fun syncAll(nowUtcMillis: Long, force: Boolean = false): SyncSummary =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) { refreshMutex.withLock {
             ensureFeeds()
             maybeAutoEnableRegionalFeed()
 
@@ -153,18 +166,13 @@ class EpgRepository(
                     is FeedResult.Success -> {
                         succeeded++
                         written += result.programmes
-                        feedDao.markSynced(
-                            feed.id,
-                            nowUtcMillis,
-                            "${result.programmes} programmes, ${result.channels} channels",
-                        )
                     }
                     is FeedResult.Failed -> {
                         failed++
                         // The stamp is NOT advanced on failure, so the next sync retries
                         // rather than waiting out the interval on a feed that never landed.
                         feedDao.markSynced(feed.id, feed.lastSyncMillis, result.reason)
-                        Log.w(TAG, "Feed '${feed.name}' failed: ${result.reason}")
+                        Log.w(TAG, "Guide feed ${feed.id} failed: ${result.reason}")
                     }
                 }
             }
@@ -175,7 +183,9 @@ class EpgRepository(
 
             val (matched, total) = runMatcher()
             SyncSummary(succeeded, failed, written, matched, total)
-        }
+        } }
+
+    private class GuideHttpException(val status: Int) : Exception()
 
     private sealed interface FeedResult {
         data class Success(val programmes: Int, val channels: Int) : FeedResult
@@ -183,55 +193,83 @@ class EpgRepository(
     }
 
     private suspend fun syncFeed(feed: EpgFeed, nowUtcMillis: Long): FeedResult {
-        val batch = ArrayList<Programme>(BATCH_SIZE)
-        val aliases = ArrayList<EpgChannelAlias>(256)
-        var written = 0
+        var downloaded: File? = null
+        return try {
+            // Network IO finishes before taking a database write transaction. The bounded disk
+            // spool keeps large guides off the heap and prevents a slow provider blocking writes.
+            cacheDirectory.mkdirs()
+            val file = File.createTempFile("nuvix-guide-", ".encrypted", cacheDirectory)
+            downloaded = file
+            // Frames keep decryption bounded even on GCM providers that buffer until a tag.
+            val temporaryKey = openFeedStream(feed).use { stream ->
+                EncryptedGuideSpool.write(stream, file, MAX_GUIDE_BYTES)
+            }
 
-        try {
-            openFeedStream(feed).use { stream ->
-                val stats = XmltvParser.parse(
-                    input = stream,
-                    feedId = feed.id,
-                    onChannelAlias = { id, displayName ->
-                        aliases += EpgChannelAlias(
-                            feedId = feed.id,
-                            epgId = id,
-                            displayName = displayName ?: id,
-                            normalizedKey = ChannelNameNormalizer.normalize(displayName ?: id).groupKey,
-                        )
-                    },
-                    onProgramme = { programme ->
-                        // Skip anything that finished before the retention cut-off; no point
-                        // writing rows we are about to prune.
-                        if (programme.endUtcMillis >= nowUtcMillis - RETENTION_PAST_MILLIS) {
-                            batch += programme
-                            if (batch.size >= BATCH_SIZE) {
-                                programmeDao.upsertAll(batch)
-                                written += batch.size
-                                batch.clear()
+            database.withTransaction {
+                val batch = ArrayList<Programme>(BATCH_SIZE)
+                val aliases = ArrayList<EpgChannelAlias>(BATCH_SIZE)
+                var written = 0
+                // All replacement writes and deletes commit together. Parser failures, empty
+                // feeds, cancelled work, or database errors roll back to the previous guide.
+                programmeDao.deleteForFeed(feed.id)
+                aliasDao.deleteForFeed(feed.id)
+                val stats = EncryptedGuideSpool.open(file, temporaryKey).use { stream ->
+                    XmltvParser.parse(
+                        input = stream,
+                        feedId = feed.id,
+                        onChannelAlias = { id, displayName ->
+                            aliases += EpgChannelAlias(
+                                feedId = feed.id, epgId = id,
+                                displayName = displayName ?: id,
+                                normalizedKey = ChannelNameNormalizer.normalize(displayName ?: id).groupKey,
+                            )
+                            if (aliases.size >= BATCH_SIZE) {
+                                currentCoroutineContext().ensureActive()
+                                aliasDao.upsertAll(aliases)
+                                aliases.clear()
                             }
-                        }
-                    },
-                )
+                        },
+                        onProgramme = { programme ->
+                            if (programme.endUtcMillis >= nowUtcMillis - RETENTION_PAST_MILLIS) {
+                                batch += programme
+                                if (batch.size >= BATCH_SIZE) {
+                                    currentCoroutineContext().ensureActive()
+                                    programmeDao.upsertAll(batch)
+                                    written += batch.size
+                                    batch.clear()
+                                }
+                            }
+                        },
+                    )
+                }
                 if (batch.isNotEmpty()) {
                     programmeDao.upsertAll(batch)
                     written += batch.size
                 }
-                if (aliases.isNotEmpty()) {
-                    aliases.chunked(BATCH_SIZE).forEach { aliasDao.upsertAll(it) }
-                }
-
-                if (written == 0 && stats.programmeCount == 0) {
-                    return FeedResult.Failed("Downloaded, but contained no programmes.")
-                }
-                return FeedResult.Success(written, stats.channelCount)
+                if (aliases.isNotEmpty()) aliasDao.upsertAll(aliases)
+                check(written > 0) { "Downloaded, but contained no current or upcoming programmes. Previous guide kept." }
+                currentCoroutineContext().ensureActive()
+                feedDao.markSynced(feed.id, nowUtcMillis, "$written programmes, ${stats.channelCount} channels")
+                FeedResult.Success(written, stats.channelCount)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Deliberately no cleanup. Whatever was written is newer than what was there,
-            // and what was there is still there.
-            return FeedResult.Failed(e.message ?: "Download failed.")
+            // URLs (including signed query strings) may be included in parser/network exception
+            // messages. Keep diagnostics useful without retaining credential-bearing text.
+            val reason = when (e) {
+                is GuideHttpException -> "Guide download failed (HTTP ${e.status}). Previous guide kept."
+                is java.net.SocketTimeoutException -> "Guide download timed out. Previous guide kept."
+                is java.io.IOException -> "Guide could not be downloaded. Previous guide kept."
+                is org.xmlpull.v1.XmlPullParserException -> "Guide XML was incomplete or invalid. Previous guide kept."
+                else -> if (e.message == "Guide exceeds the 256 MB download limit." ||
+                    e.message == "Downloaded, but contained no current or upcoming programmes. Previous guide kept.") {
+                    e.message!!
+                } else "Guide refresh failed. Previous guide kept."
+            }
+            FeedResult.Failed(reason)
+        } finally {
+            downloaded?.delete()
         }
     }
 
@@ -254,7 +292,7 @@ class EpgRepository(
                 val response = http.newCall(Request.Builder().url(feed.url).build()).execute()
                 if (!response.isSuccessful) {
                     response.close()
-                    throw IllegalStateException("Guide download failed (HTTP ${response.code}).")
+                    throw GuideHttpException(response.code)
                 }
                 response.body?.byteStream()
                     ?: throw IllegalStateException("The server returned an empty guide.")
@@ -346,6 +384,7 @@ class EpgRepository(
 
         /** Writes per transaction. Large enough to be fast, small enough not to hold WAL open. */
         const val BATCH_SIZE = 500
+        private const val MAX_GUIDE_BYTES = 256L * 1024 * 1024
 
         /** Keep finished programmes for a day so "what was on" still works. */
         val RETENTION_PAST_MILLIS: Long = TimeUnit.DAYS.toMillis(1)

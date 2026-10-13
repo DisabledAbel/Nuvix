@@ -1,3 +1,5 @@
+> Historical upstream testing notes. Exact Nuvix validation is recorded in [implementation-report.md](implementation-report.md); build commands are in [building.md](building.md).
+
 # Testing OpenTV
 
 There is no QA department; there is you, your provider and your telly. This page makes that

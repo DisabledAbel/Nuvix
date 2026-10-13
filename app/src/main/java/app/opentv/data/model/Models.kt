@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -79,7 +80,7 @@ data class Source(
     val lastCatalogSyncMillis: Long = 0,
 ) {
     companion object {
-        const val DEFAULT_USER_AGENT: String = "OpenTV/0.1 (Android)"
+        const val DEFAULT_USER_AGENT: String = "Nuvix/0.1 (Android)"
     }
 }
 

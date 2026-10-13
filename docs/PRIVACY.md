@@ -1,40 +1,15 @@
-# Privacy
+# Nuvix privacy and security
 
-OpenTV collects nothing. There is no analytics SDK, no crash reporter, no telemetry, and no
-network call to any domain the project controls — because the project controls none.
+Nuvix ships no IPTV content, provider accounts, analytics, or tracking SDK. Users add their authorized providers. The local provider database includes source credentials and credential-bearing playback URLs; the Nuvix database protection is described in the implementation report. Android backup is disabled so provider and Keystore-dependent state is not copied into automatic cloud backups.
 
-## What is stored, and where
+Ordinary playback contacts the configured provider and image/stream addresses supplied by that provider. User-enabled metadata, guide, Stremio, LAN pairing, NAS, update, and Supabase features have their own destinations. Existing optional regional guide feeds contain program listings only; they are not bundled channels or playlists.
 
-Everything lives in a SQLite database in the app's private storage on your device:
+Supabase cloud sync starts disabled. It sends only typed favorites/progress records with hashed metadata identities, bounded progress/timestamps, and device identifiers to the user-configured HTTPS project. Hashing is an identity mechanism, not a promise of anonymous viewing history. No stream/playlist URL, provider login/password/MAC/token, arbitrary settings blob, service-role key, or recording path is uploaded. Cloud tokens and durable outbox state use Keystore-backed encryption. Signing out removes local cloud tokens; existing server records are not automatically deleted.
 
-- Your provider's address, username and password
-- The channel, movie and series catalogue downloaded from your provider
-- The guide (EPG)
-- Your favourites, hidden channels and resume positions
+Legacy LAN/NAS sync is explicitly user controlled and preserved. Its original bundles use stream URLs as cross-device identifiers; those may contain provider credentials. Use only trusted local peers/private NAS storage, protect NAS accounts, and do not expose pairing/sync servers publicly. The new Supabase path never reuses those bundles.
 
-None of it is uploaded anywhere. There is no account to create and no server to sync with.
+HTTP-only providers remain supported. On HTTP, usernames, passwords, and stream requests are unencrypted in transit. Prefer provider HTTPS addresses. Local encryption does not protect network HTTP or a fully compromised/rooted device. Do not paste secrets in public bug reports; diagnostics should classify failures without credential-bearing URLs or raw exceptions.
 
-## Who your device talks to
+Updates contact only the explicitly configured `DisabledAbel/Nuvix` GitHub release origin and its approved HTTPS download destinations. The APK must match declared SHA-256/size, installed package, increasing numeric version code, and the installed signing certificate. The OS validates installation and asks for required user approval. Debug and release signatures/identities are distinct.
 
-Only your provider, and only at the address you entered. Channel logos and posters are fetched
-from whatever URLs your provider puts in its catalogue, which are usually its own servers but
-may be third parties — that is your provider's choice, not ours.
-
-## Cleartext HTTP
-
-The app allows plain HTTP (`usesCleartextTraffic="true"`). The overwhelming majority of IPTV
-panels are HTTP-only; refusing them would make the app useless to most of the people it is for.
-
-Be aware of what that means: **on an HTTP connection, your provider username and password are
-sent unencrypted**, and anyone able to observe the network between you and your provider can
-read them. This is a property of how these services are built, not of OpenTV. If your provider
-offers an HTTPS endpoint, use it.
-
-## Uninstalling
-
-Removing the app removes the database and everything in it.
-
-## Reporting a privacy problem
-
-Open an issue. If it involves something you would rather not post publicly, say so in the issue
-without the details and a maintainer will arrange somewhere better.
+Uninstalling removes local data and Keystore material. Cloud records remain until removed from the configured Supabase project. Keep private signing keys off source control and securely backed up.

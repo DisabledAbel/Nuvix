@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">完成</string>
     <string name="common_cancel">取消</string>
     <string name="common_back">返回</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">正在录制 1 个节目</string>
     <string name="rec_notification_many">正在录制 %1$d 个节目</string>
     <string name="rec_channel_name">录制</string>
-    <string name="rec_channel_desc">OpenTV 录制时显示</string>
+    <string name="rec_channel_desc">Nuvix 录制时显示</string>
     <string name="rec_error_nothing">未录制任何内容</string>
     <string name="rec_error_usb_no_folder">尚未选择 USB 文件夹。请打开“录制”设置，在你的存储设备上选择一个文件夹。</string>
     <string name="rec_error_usb_unavailable">USB 存储设备不可用。请重新插入设备，并在“录制”设置中重新选择文件夹。</string>
     <string name="rec_background_prompt_title">离开后是否继续录制？</string>
-    <string name="rec_background_prompt_body">当屏幕休眠或你离开 OpenTV 时，Android 可能会停止此次录制。允许 OpenTV 忽略电池优化，即可让录制像机顶盒一样，在待机状态下也能持续进行。</string>
+    <string name="rec_background_prompt_body">当屏幕休眠或你离开 Nuvix 时，Android 可能会停止此次录制。允许 Nuvix 忽略电池优化，即可让录制像机顶盒一样，在待机状态下也能持续进行。</string>
     <string name="rec_background_prompt_allow">允许</string>
     <string name="rec_background_prompt_not_now">暂不</string>
     <string name="player_rewind">快退</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">添加、移除并重新测试你的 IPTV 来源</string>
     <string name="settings_addons_title">插件（Stremio）</string>
     <string name="settings_addons_subtitle">播放你自行设置的 Stremio 插件内容</string>
-    <string name="addons_note">粘贴清单（manifest）URL 即可添加 Stremio 插件。OpenTV 本身不附带任何插件——需要你自行添加。如果插件基于 Debrid 服务，请先在该插件自己的网站上设置好你的 Debrid 密钥，然后粘贴它提供给你的专属 URL；你的密钥只保存在那里，绝不会保存在 OpenTV 中。</string>
+    <string name="addons_note">粘贴清单（manifest）URL 即可添加 Stremio 插件。Nuvix 本身不附带任何插件——需要你自行添加。如果插件基于 Debrid 服务，请先在该插件自己的网站上设置好你的 Debrid 密钥，然后粘贴它提供给你的专属 URL；你的密钥只保存在那里，绝不会保存在 Nuvix 中。</string>
     <string name="addons_url_label">插件清单 URL</string>
     <string name="addons_add">添加</string>
     <string name="addons_checking">检查中…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">更改文件夹</string>
     <string name="recset_usb_saving_to">保存到：%1$s</string>
     <string name="recset_usb_none">尚未选择文件夹</string>
-    <string name="recset_usb_hint">插入格式化为 exFAT 或 FAT32 的 USB 存储设备或外部存储，然后在其中选择一个文件夹。录制内容会直接写入该文件夹，仍可在 OpenTV 内播放和删除。</string>
+    <string name="recset_usb_hint">插入格式化为 exFAT 或 FAT32 的 USB 存储设备或外部存储，然后在其中选择一个文件夹。录制内容会直接写入该文件夹，仍可在 Nuvix 内播放和删除。</string>
     <string name="recset_usb_need_folder">保存到 USB 前请先选择文件夹。</string>
     <string name="recset_usb_no_picker">本设备不支持文件夹选择器。</string>
     <string name="recset_nas_connection">NAS 连接</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">已允许</string>
     <string name="recset_background_not_allowed">未允许</string>
     <string name="recset_background_fix">修复</string>
-    <string name="recset_background_desc">除非允许 OpenTV 忽略电池优化，否则当设备休眠或你离开 OpenTV 时，Android 可能会停止录制。允许后，即使在待机状态下，录制也能像机顶盒一样持续进行。</string>
+    <string name="recset_background_desc">除非允许 Nuvix 忽略电池优化，否则当设备休眠或你离开 Nuvix 时，Android 可能会停止录制。允许后，即使在待机状态下，录制也能像机顶盒一样持续进行。</string>
     <string name="recset_background_on_title">后台录制已开启</string>
-    <string name="recset_background_on_desc">离开 OpenTV 或电视进入休眠时，录制仍会继续进行。</string>
+    <string name="recset_background_on_desc">离开 Nuvix 或电视进入休眠时，录制仍会继续进行。</string>
     <string name="recset_background_toast">已启用后台录制——录制将在后台继续进行。</string>
     <string name="epg_updating">更新中…</string>
     <string name="epg_update_now">立即更新节目单</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">名称（可选）</string>
     <string name="epg_xmltv_url">XMLTV URL（.xml 或 .xml.gz）</string>
     <string name="epg_add_guide">添加节目单</string>
-    <string name="sync_desc">通过你自己的 Wi-Fi，在两台 OpenTV 设备之间复制“继续观看”记录——数据不会离开你的家，也无需账户。</string>
+    <string name="sync_desc">通过你自己的 Wi-Fi，在两台 Nuvix 设备之间复制“继续观看”记录——数据不会离开你的家，也无需账户。</string>
     <string name="sync_share_from_here">从此设备共享</string>
     <string name="sync_receive">接收</string>
     <string name="sync_ready_to_share">准备共享</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">已将本设备的数据保存到 NAS。目前还没有其他设备同步到这里。</string>
     <string name="sync_nas_failed">无法连接到你的 NAS。请确认它已开机，并检查“录制”设置中的信息是否正确。</string>
     <string name="sync_nas_auto">打开应用时自动同步</string>
-    <string name="about_title">关于 OpenTV</string>
+    <string name="about_title">关于 Nuvix</string>
     <string name="about_version">版本</string>
     <string name="about_update_available">有可用更新：%1$s——请查看安装提示。</string>
     <string name="about_up_to_date">你使用的已是最新版本。</string>
     <string name="about_checking">检查中…</string>
     <string name="about_check_updates">检查更新</string>
     <string name="about_what_is_title">这是什么</string>
-    <string name="about_what_is_body">一款适用于 Android TV、Fire TV 和手机的免费开源 IPTV 播放器。它只是一个播放器——不提供频道内容，你需要连接自己已付费订阅的服务。你输入的任何信息都不会离开你的设备，除非是与你自己的提供商通信。</string>
     <string name="about_built_open_title">公开开发</string>
-    <string name="about_built_open_body">OpenTV 采用公开开发的方式，其中很大一部分代码由 AI 在人工指导下编写——这一点直接说明，并不隐瞒。由于它是开源的，不会因某一个人的离开而消失：任何人都可以阅读每一行代码、自行构建，并将项目延续下去。</string>
+    <string name="about_built_open_body">Nuvix 采用公开开发的方式，其中很大一部分代码由 AI 在人工指导下编写——这一点直接说明，并不隐瞒。由于它是开源的，不会因某一个人的离开而消失：任何人都可以阅读每一行代码、自行构建，并将项目延续下去。</string>
     <string name="about_support_title">支持本项目</string>
     <string name="about_scan_to_donate">扫码捐赠</string>
     <string name="about_licence_links_title">许可与链接</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">我的提供商</string>
     <string name="onboarding_default_playlist_name">我的播放列表</string>
     <string name="onboarding_add_provider_title">添加你的提供商</string>
-    <string name="onboarding_add_provider_desc">OpenTV 是一款播放器，不提供频道内容——你需要连接自己已付费订阅的服务。</string>
+    <string name="onboarding_add_provider_desc">Nuvix 是一款播放器，不提供频道内容——你需要连接自己已付费订阅的服务。</string>
     <string name="onboarding_xtream_login">Xtream Codes 登录</string>
     <string name="onboarding_m3u_url">M3U 播放列表 URL</string>
     <string name="onboarding_stalker_portal">Stalker 门户</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">处理中…</string>
     <string name="onboarding_save_load">保存并加载</string>
     <string name="onboarding_use_phone">改用手机</string>
-    <string name="onboarding_privacy_note">你的提供商信息仅保存在本设备上。OpenTV 没有账户系统，也没有自己的服务器——你在此输入的内容不会发送到任何地方，除了你的提供商。</string>
+    <string name="onboarding_privacy_note">你的提供商信息仅保存在本设备上。Nuvix 没有账户系统，也没有自己的服务器——你在此输入的内容不会发送到任何地方，除了你的提供商。</string>
     <string name="pairing_stopped">配对已停止</string>
     <string name="pairing_type_here">改为在此输入</string>
     <string name="pairing_got_it">已收到——正在连接你的提供商…</string>
