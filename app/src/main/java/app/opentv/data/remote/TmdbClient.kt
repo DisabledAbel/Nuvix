@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -95,7 +96,7 @@ class TmdbClient(
         if (query.isBlank() && tmdbId.isNullOrBlank()) return null
         val id = tmdbId?.takeIf { it.isNotBlank() } ?: searchId(isMovie, query, year, key) ?: return null
         return runCatching { details(isMovie, id, key) }
-            .onFailure { Log.w(TAG, "TMDB details failed for $id", it) }
+            .onFailure { Log.w(TAG, "TMDB details failed for $id") }
             .getOrNull()
     }
 
@@ -160,14 +161,14 @@ class TmdbClient(
     }
 
     private fun get(url: HttpUrl): JsonElement? {
-        val request = Request.Builder().url(url).header("User-Agent", "OpenTV").build()
+        val request = Request.Builder().url(url).header("User-Agent", "Nuvix").build()
         return runCatching {
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string() ?: return null
                 json.parseToJsonElement(body)
             }
-        }.onFailure { Log.w(TAG, "TMDB request failed", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "TMDB request failed") }.getOrNull()
     }
 
     /** Strips a trailing "(2023)"/year and collapses whitespace so the title searches cleanly. */

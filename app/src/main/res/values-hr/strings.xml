@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Gotovo</string>
     <string name="common_cancel">Odustani</string>
     <string name="common_back">Natrag</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Snimanje 1 programa</string>
     <string name="rec_notification_many">Snimanje %1$d programa</string>
     <string name="rec_channel_name">Snimanje</string>
-    <string name="rec_channel_desc">Prikazuje se dok OpenTV snima</string>
+    <string name="rec_channel_desc">Prikazuje se dok Nuvix snima</string>
     <string name="rec_error_nothing">Ništa nije snimljeno</string>
     <string name="rec_error_usb_no_folder">Nije odabrana USB mapa. Otvorite postavke snimanja i odaberite mapu na svom disku.</string>
     <string name="rec_error_usb_unavailable">USB disk nije dostupan. Ponovno priključite disk i odaberite mapu u postavkama snimanja.</string>
     <string name="rec_background_prompt_title">Nastaviti snimanje kad izađete?</string>
-    <string name="rec_background_prompt_body">Android može zaustaviti ovo snimanje kad se zaslon isključi ili napustite OpenTV. Dopustite OpenTV-u da zanemari optimizaciju baterije kako bi snimanja nastavila raditi, čak i u stanju mirovanja — baš kao kod set-top box uređaja.</string>
+    <string name="rec_background_prompt_body">Android može zaustaviti ovo snimanje kad se zaslon isključi ili napustite Nuvix. Dopustite Nuvix-u da zanemari optimizaciju baterije kako bi snimanja nastavila raditi, čak i u stanju mirovanja — baš kao kod set-top box uređaja.</string>
     <string name="rec_background_prompt_allow">Dopusti</string>
     <string name="rec_background_prompt_not_now">Ne sada</string>
     <string name="player_rewind">Premotaj natrag</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Dodajte, uklonite i ponovno testirajte svoje IPTV izvore</string>
     <string name="settings_addons_title">Dodaci (Stremio)</string>
     <string name="settings_addons_subtitle">Reproducirajte iz Stremio dodataka koje sami postavite</string>
-    <string name="addons_note">Dodajte Stremio dodatak lijepljenjem URL-a njegovog manifesta. OpenTV ne dolazi ni s jednim — sami ih dodajete. Ako je dodatak podržan debrid uslugom, postavite svoj debrid ključ na web-mjestu tog dodatka i zalijepite personalizirani URL koji vam da; vaš ključ ostaje ondje, nikad u OpenTV-u.</string>
+    <string name="addons_note">Dodajte Stremio dodatak lijepljenjem URL-a njegovog manifesta. Nuvix ne dolazi ni s jednim — sami ih dodajete. Ako je dodatak podržan debrid uslugom, postavite svoj debrid ključ na web-mjestu tog dodatka i zalijepite personalizirani URL koji vam da; vaš ključ ostaje ondje, nikad u Nuvix-u.</string>
     <string name="addons_url_label">URL manifesta dodatka</string>
     <string name="addons_add">Dodaj</string>
     <string name="addons_checking">Provjera…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Promijeni mapu</string>
     <string name="recset_usb_saving_to">Spremanje na: %1$s</string>
     <string name="recset_usb_none">Mapa još nije odabrana</string>
-    <string name="recset_usb_hint">Priključite USB disk ili vanjsku pohranu formatiranu u exFAT ili FAT32, zatim odaberite mapu na njoj. Snimke se zapisuju izravno u tu mapu i i dalje se reproduciraju i brišu unutar OpenTV-a.</string>
+    <string name="recset_usb_hint">Priključite USB disk ili vanjsku pohranu formatiranu u exFAT ili FAT32, zatim odaberite mapu na njoj. Snimke se zapisuju izravno u tu mapu i i dalje se reproduciraju i brišu unutar Nuvix-a.</string>
     <string name="recset_usb_need_folder">Odaberite mapu prije spremanja na USB.</string>
     <string name="recset_usb_no_picker">Na ovom uređaju nije dostupan alat za odabir mape.</string>
     <string name="recset_nas_connection">NAS veza</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Dopušteno</string>
     <string name="recset_background_not_allowed">Nije dopušteno</string>
     <string name="recset_background_fix">Popravi</string>
-    <string name="recset_background_desc">Android može zaustaviti snimanja kad uređaj spava ili napustite OpenTV, osim ako OpenTV-u nije dopušteno zanemariti optimizaciju baterije. Dopuštanje toga održava snimanja u tijeku čak i u stanju mirovanja, poput set-top box uređaja.</string>
+    <string name="recset_background_desc">Android može zaustaviti snimanja kad uređaj spava ili napustite Nuvix, osim ako Nuvix-u nije dopušteno zanemariti optimizaciju baterije. Dopuštanje toga održava snimanja u tijeku čak i u stanju mirovanja, poput set-top box uređaja.</string>
     <string name="recset_background_on_title">Snimanje u pozadini je uključeno</string>
-    <string name="recset_background_on_desc">Snimke će se nastaviti izvoditi kad napustite OpenTV ili TV prijeđe u stanje mirovanja.</string>
+    <string name="recset_background_on_desc">Snimke će se nastaviti izvoditi kad napustite Nuvix ili TV prijeđe u stanje mirovanja.</string>
     <string name="recset_background_toast">Snimanje u pozadini omogućeno — snimke će se nastaviti izvoditi u pozadini.</string>
     <string name="epg_updating">Ažuriranje…</string>
     <string name="epg_update_now">Ažuriraj vodič sada</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Naziv (neobavezno)</string>
     <string name="epg_xmltv_url">XMLTV URL (.xml ili .xml.gz)</string>
     <string name="epg_add_guide">Dodaj vodič</string>
-    <string name="sync_desc">Kopirajte nastavak gledanja između dva OpenTV uređaja putem vlastitog Wi-Fi-ja — ništa ne napušta dom, a nije potreban ni jedan račun.</string>
+    <string name="sync_desc">Kopirajte nastavak gledanja između dva Nuvix uređaja putem vlastitog Wi-Fi-ja — ništa ne napušta dom, a nije potreban ni jedan račun.</string>
     <string name="sync_share_from_here">Dijeli odavde</string>
     <string name="sync_receive">Primi</string>
     <string name="sync_ready_to_share">Spremno za dijeljenje</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Ovaj uređaj spremljen je na NAS. Nijedan drugi uređaj još se nije sinkronizirao ovdje.</string>
     <string name="sync_nas_failed">Nije moguće doći do NAS-a. Provjerite je li uključen i jesu li podaci u postavkama snimanja točni.</string>
     <string name="sync_nas_auto">Automatska sinkronizacija pri pokretanju aplikacije</string>
-    <string name="about_title">O aplikaciji OpenTV</string>
+    <string name="about_title">O aplikaciji Nuvix</string>
     <string name="about_version">Verzija</string>
     <string name="about_update_available">Dostupno ažuriranje: %1$s — pogledajte upit za instalaciju.</string>
     <string name="about_up_to_date">Koristite najnoviju verziju.</string>
     <string name="about_checking">Provjera…</string>
     <string name="about_check_updates">Provjeri ažuriranja</string>
     <string name="about_what_is_title">Što je ovo</string>
-    <string name="about_what_is_body">Besplatan, open-source IPTV player za Android TV, Fire TV i telefone. To je samo player — ne isporučuje kanale; povezujete uslugu koju već plaćate. Ništa što unesete ne napušta vaš uređaj, osim za komunikaciju s vašim pružateljem usluge.</string>
     <string name="about_built_open_title">Razvijen otvoreno</string>
-    <string name="about_built_open_body">OpenTV se razvija otvoreno, a AI obavlja velik dio programiranja pod ljudskim vodstvom — to je jasno navedeno, ne skriveno. Budući da je open source, nijedna osoba koja ode ne može ga ugasiti: svatko može pročitati svaki redak koda, izraditi ga i nastaviti dalje.</string>
+    <string name="about_built_open_body">Nuvix se razvija otvoreno, a AI obavlja velik dio programiranja pod ljudskim vodstvom — to je jasno navedeno, ne skriveno. Budući da je open source, nijedna osoba koja ode ne može ga ugasiti: svatko može pročitati svaki redak koda, izraditi ga i nastaviti dalje.</string>
     <string name="about_support_title">Podržite projekt</string>
     <string name="about_scan_to_donate">Skenirajte za donaciju</string>
     <string name="about_licence_links_title">Licenca i poveznice</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Moj pružatelj usluge</string>
     <string name="onboarding_default_playlist_name">Moja playlista</string>
     <string name="onboarding_add_provider_title">Dodajte svog pružatelja usluge</string>
-    <string name="onboarding_add_provider_desc">OpenTV je player. Ne isporučuje kanale — povezujete uslugu koju već plaćate.</string>
+    <string name="onboarding_add_provider_desc">Nuvix je player. Ne isporučuje kanale — povezujete uslugu koju već plaćate.</string>
     <string name="onboarding_xtream_login">Xtream Codes prijava</string>
     <string name="onboarding_m3u_url">URL M3U playliste</string>
     <string name="onboarding_stalker_portal">Stalker portal</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Obrada…</string>
     <string name="onboarding_save_load">Spremi i učitaj</string>
     <string name="onboarding_use_phone">Koristi moj telefon umjesto toga</string>
-    <string name="onboarding_privacy_note">Podaci vašeg pružatelja usluge pohranjuju se samo na ovom uređaju. OpenTV nema sustav računa niti vlastiti poslužitelj — ništa što ovdje upišete ne šalje se nikamo osim vašem pružatelju usluge.</string>
+    <string name="onboarding_privacy_note">Podaci vašeg pružatelja usluge pohranjuju se samo na ovom uređaju. Nuvix nema sustav računa niti vlastiti poslužitelj — ništa što ovdje upišete ne šalje se nikamo osim vašem pružatelju usluge.</string>
     <string name="pairing_stopped">Uparivanje zaustavljeno</string>
     <string name="pairing_type_here">Upišite ovdje umjesto toga</string>
     <string name="pairing_got_it">Primljeno — povezivanje s vašim pružateljem usluge…</string>

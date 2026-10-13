@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -278,7 +279,7 @@ class StalkerApi(
                 if (text.isBlank()) return null
                 json.parseToJsonElement(text)
             }
-        }.onFailure { Log.w(TAG, "Stalker request failed", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "Stalker request failed") }.getOrNull()
     }
 
     /** Candidate API endpoints for a portal URL, most common first. First that handshakes wins. */

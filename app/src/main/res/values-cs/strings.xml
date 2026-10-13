@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Hotovo</string>
     <string name="common_cancel">Zrušit</string>
     <string name="common_back">Zpět</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Nahrává se 1 pořad</string>
     <string name="rec_notification_many">Nahrává se %1$d pořadů</string>
     <string name="rec_channel_name">Nahrávání</string>
-    <string name="rec_channel_desc">Zobrazeno, když OpenTV nahrává</string>
+    <string name="rec_channel_desc">Zobrazeno, když Nuvix nahrává</string>
     <string name="rec_error_nothing">Nic se nenahrálo</string>
     <string name="rec_error_usb_no_folder">Nebyla vybrána žádná složka na USB. Otevřete nastavení nahrávání a vyberte složku na svém disku.</string>
     <string name="rec_error_usb_unavailable">USB disk není k dispozici. Znovu připojte disk a v nastavení nahrávání znovu vyberte složku.</string>
     <string name="rec_background_prompt_title">Pokračovat v nahrávání i po opuštění aplikace?</string>
-    <string name="rec_background_prompt_body">Android může toto nahrávání zastavit, když se vypne obrazovka nebo opustíte OpenTV. Povolte OpenTV ignorovat optimalizaci baterie, aby nahrávání pokračovalo i v pohotovostním režimu — stejně jako u set-top boxu.</string>
+    <string name="rec_background_prompt_body">Android může toto nahrávání zastavit, když se vypne obrazovka nebo opustíte Nuvix. Povolte Nuvix ignorovat optimalizaci baterie, aby nahrávání pokračovalo i v pohotovostním režimu — stejně jako u set-top boxu.</string>
     <string name="rec_background_prompt_allow">Povolit</string>
     <string name="rec_background_prompt_not_now">Teď ne</string>
     <string name="player_rewind">Přetočit zpět</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Přidávejte, odebírejte a opakovaně testujte své zdroje IPTV</string>
     <string name="settings_addons_title">Doplňky (Stremio)</string>
     <string name="settings_addons_subtitle">Přehrávejte z doplňků Stremio, které si sami nastavíte</string>
-    <string name="addons_note">Doplněk Stremio přidáte vložením URL adresy jeho manifestu. OpenTV neobsahuje žádné výchozí doplňky — přinesete si vlastní. Pokud je doplněk napojen na debrid službu, nastavte si debrid klíč na webu daného doplňku a vložte personalizovanou URL adresu, kterou vám poskytne; váš klíč zůstává tam, nikdy ne v OpenTV.</string>
+    <string name="addons_note">Doplněk Stremio přidáte vložením URL adresy jeho manifestu. Nuvix neobsahuje žádné výchozí doplňky — přinesete si vlastní. Pokud je doplněk napojen na debrid službu, nastavte si debrid klíč na webu daného doplňku a vložte personalizovanou URL adresu, kterou vám poskytne; váš klíč zůstává tam, nikdy ne v Nuvix.</string>
     <string name="addons_url_label">URL adresa manifestu doplňku</string>
     <string name="addons_add">Přidat</string>
     <string name="addons_checking">Kontrola…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Změnit složku</string>
     <string name="recset_usb_saving_to">Ukládá se do: %1$s</string>
     <string name="recset_usb_none">Zatím není vybrána žádná složka</string>
-    <string name="recset_usb_hint">Připojte USB disk nebo externí úložiště naformátované na exFAT nebo FAT32 a poté na něm vyberte složku. Nahrávky se zapisují přímo do dané složky a lze je i nadále přehrávat a mazat v OpenTV.</string>
+    <string name="recset_usb_hint">Připojte USB disk nebo externí úložiště naformátované na exFAT nebo FAT32 a poté na něm vyberte složku. Nahrávky se zapisují přímo do dané složky a lze je i nadále přehrávat a mazat v Nuvix.</string>
     <string name="recset_usb_need_folder">Před ukládáním na USB vyberte složku.</string>
     <string name="recset_usb_no_picker">V tomto zařízení není k dispozici žádný výběr složek.</string>
     <string name="recset_nas_connection">Připojení k NAS</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Povoleno</string>
     <string name="recset_background_not_allowed">Nepovoleno</string>
     <string name="recset_background_fix">Opravit</string>
-    <string name="recset_background_desc">Android může nahrávání zastavit, když zařízení přejde do režimu spánku nebo opustíte OpenTV, pokud OpenTV nesmí ignorovat optimalizaci baterie. Povolením zůstane nahrávání aktivní i v pohotovostním režimu, podobně jako u set-top boxu.</string>
+    <string name="recset_background_desc">Android může nahrávání zastavit, když zařízení přejde do režimu spánku nebo opustíte Nuvix, pokud Nuvix nesmí ignorovat optimalizaci baterie. Povolením zůstane nahrávání aktivní i v pohotovostním režimu, podobně jako u set-top boxu.</string>
     <string name="recset_background_on_title">Nahrávání na pozadí je zapnuto</string>
-    <string name="recset_background_on_desc">Nahrávání bude pokračovat, i když opustíte OpenTV nebo televize přejde do režimu spánku.</string>
+    <string name="recset_background_on_desc">Nahrávání bude pokračovat, i když opustíte Nuvix nebo televize přejde do režimu spánku.</string>
     <string name="recset_background_toast">Nahrávání na pozadí povoleno — nahrávání bude pokračovat i na pozadí.</string>
     <string name="epg_updating">Aktualizace…</string>
     <string name="epg_update_now">Aktualizovat program nyní</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Název (volitelné)</string>
     <string name="epg_xmltv_url">URL adresa XMLTV (.xml nebo .xml.gz)</string>
     <string name="epg_add_guide">Přidat program</string>
-    <string name="sync_desc">Zkopírujte si rozkoukané pořady mezi dvěma zařízeními OpenTV přes vlastní wifi — nic neopustí domácnost a není potřeba žádný účet.</string>
+    <string name="sync_desc">Zkopírujte si rozkoukané pořady mezi dvěma zařízeními Nuvix přes vlastní wifi — nic neopustí domácnost a není potřeba žádný účet.</string>
     <string name="sync_share_from_here">Sdílet odsud</string>
     <string name="sync_receive">Přijmout</string>
     <string name="sync_ready_to_share">Připraveno ke sdílení</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Toto zařízení bylo uloženo na NAS. Zatím se sem nesynchronizovalo žádné jiné zařízení.</string>
     <string name="sync_nas_failed">Nepodařilo se připojit k vašemu NAS. Zkontrolujte, že je zapnutý a že údaje v nastavení nahrávání jsou správné.</string>
     <string name="sync_nas_auto">Automaticky synchronizovat při spuštění aplikace</string>
-    <string name="about_title">O aplikaci OpenTV</string>
+    <string name="about_title">O aplikaci Nuvix</string>
     <string name="about_version">Verze</string>
     <string name="about_update_available">Dostupná aktualizace: %1$s — pokyny k instalaci najdete ve výzvě.</string>
     <string name="about_up_to_date">Máte nejnovější verzi.</string>
     <string name="about_checking">Kontrola…</string>
     <string name="about_check_updates">Zkontrolovat aktualizace</string>
     <string name="about_what_is_title">Co to je</string>
-    <string name="about_what_is_body">Bezplatný přehrávač IPTV s otevřeným zdrojovým kódem pro Android TV, Fire TV a telefony. Je to pouze přehrávač — nedodává kanály; připojíte službu, kterou už platíte. Nic, co zadáte, neopustí vaše zařízení, kromě komunikace s vaším vlastním poskytovatelem.</string>
     <string name="about_built_open_title">Vyvíjeno otevřeně</string>
-    <string name="about_built_open_body">OpenTV se vyvíjí otevřeně a velkou část kódování zajišťuje AI pod lidským vedením — to se otevřeně přiznává, nic se neskrývá. Protože jde o otevřený zdrojový kód, odchod jediné osoby jej nemůže zastavit: kdokoli si může přečíst každý řádek, sestavit jej a pokračovat v jeho vývoji.</string>
+    <string name="about_built_open_body">Nuvix se vyvíjí otevřeně a velkou část kódování zajišťuje AI pod lidským vedením — to se otevřeně přiznává, nic se neskrývá. Protože jde o otevřený zdrojový kód, odchod jediné osoby jej nemůže zastavit: kdokoli si může přečíst každý řádek, sestavit jej a pokračovat v jeho vývoji.</string>
     <string name="about_support_title">Podpořte projekt</string>
     <string name="about_scan_to_donate">Naskenováním přispějete</string>
     <string name="about_licence_links_title">Licence a odkazy</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Můj poskytovatel</string>
     <string name="onboarding_default_playlist_name">Můj playlist</string>
     <string name="onboarding_add_provider_title">Přidejte svého poskytovatele</string>
-    <string name="onboarding_add_provider_desc">OpenTV je přehrávač. Nedodává kanály — připojíte službu, kterou už platíte.</string>
+    <string name="onboarding_add_provider_desc">Nuvix je přehrávač. Nedodává kanály — připojíte službu, kterou už platíte.</string>
     <string name="onboarding_xtream_login">Přihlášení Xtream Codes</string>
     <string name="onboarding_m3u_url">URL adresa playlistu M3U</string>
     <string name="onboarding_stalker_portal">Portál Stalker</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Pracuje se…</string>
     <string name="onboarding_save_load">Uložit a načíst</string>
     <string name="onboarding_use_phone">Použít místo toho můj telefon</string>
-    <string name="onboarding_privacy_note">Údaje o vašem poskytovateli se ukládají pouze v tomto zařízení. OpenTV nemá žádný systém účtů ani vlastní server — nic, co sem zadáte, se nikam neodesílá, kromě komunikace s vaším poskytovatelem.</string>
+    <string name="onboarding_privacy_note">Údaje o vašem poskytovateli se ukládají pouze v tomto zařízení. Nuvix nemá žádný systém účtů ani vlastní server — nic, co sem zadáte, se nikam neodesílá, kromě komunikace s vaším poskytovatelem.</string>
     <string name="pairing_stopped">Párování zastaveno</string>
     <string name="pairing_type_here">Zadat to místo toho zde</string>
     <string name="pairing_got_it">Rozumím — připojování k vašemu poskytovateli…</string>

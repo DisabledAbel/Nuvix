@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">完了</string>
     <string name="common_cancel">キャンセル</string>
     <string name="common_back">戻る</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">1件の番組を録画中</string>
     <string name="rec_notification_many">%1$d件の番組を録画中</string>
     <string name="rec_channel_name">録画</string>
-    <string name="rec_channel_desc">OpenTVが録画している間に表示されます</string>
+    <string name="rec_channel_desc">Nuvixが録画している間に表示されます</string>
     <string name="rec_error_nothing">何も録画されませんでした</string>
     <string name="rec_error_usb_no_folder">USBフォルダが選択されていません。「録画」設定を開き、ドライブ内のフォルダを選択してください。</string>
     <string name="rec_error_usb_unavailable">USBドライブが利用できません。ドライブを挿し直し、「録画」設定でフォルダを選び直してください。</string>
     <string name="rec_background_prompt_title">離れても録画を続けますか？</string>
-    <string name="rec_background_prompt_body">画面がスリープしたりOpenTVから離れたりすると、Androidがこの録画を停止することがあります。OpenTVにバッテリー最適化を無視することを許可すると、セットトップボックスのようにスタンバイ中でも録画を継続できます。</string>
+    <string name="rec_background_prompt_body">画面がスリープしたりNuvixから離れたりすると、Androidがこの録画を停止することがあります。Nuvixにバッテリー最適化を無視することを許可すると、セットトップボックスのようにスタンバイ中でも録画を継続できます。</string>
     <string name="rec_background_prompt_allow">許可</string>
     <string name="rec_background_prompt_not_now">今はしない</string>
     <string name="player_rewind">早戻し</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">IPTVソースの追加・削除・再テスト</string>
     <string name="settings_addons_title">アドオン（Stremio）</string>
     <string name="settings_addons_subtitle">自分で設定したStremioアドオンから再生</string>
-    <string name="addons_note">マニフェストURLを貼り付けてStremioアドオンを追加します。OpenTVにはアドオンが同梱されていません——ご自身で用意してください。アドオンがデブリッド（debrid）対応の場合は、そのアドオンのサイトでデブリッドキーを設定し、発行された専用URLを貼り付けてください。キーはそちらに保存され、OpenTVには保存されません。</string>
+    <string name="addons_note">マニフェストURLを貼り付けてStremioアドオンを追加します。Nuvixにはアドオンが同梱されていません——ご自身で用意してください。アドオンがデブリッド（debrid）対応の場合は、そのアドオンのサイトでデブリッドキーを設定し、発行された専用URLを貼り付けてください。キーはそちらに保存され、Nuvixには保存されません。</string>
     <string name="addons_url_label">アドオンのマニフェストURL</string>
     <string name="addons_add">追加</string>
     <string name="addons_checking">確認中…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">フォルダを変更</string>
     <string name="recset_usb_saving_to">保存先：%1$s</string>
     <string name="recset_usb_none">まだフォルダが選択されていません</string>
-    <string name="recset_usb_hint">exFATまたはFAT32でフォーマットしたUSBドライブや外部ストレージを接続し、フォルダを選択してください。録画はそのフォルダに直接書き込まれ、OpenTV内で再生・削除できます。</string>
+    <string name="recset_usb_hint">exFATまたはFAT32でフォーマットしたUSBドライブや外部ストレージを接続し、フォルダを選択してください。録画はそのフォルダに直接書き込まれ、Nuvix内で再生・削除できます。</string>
     <string name="recset_usb_need_folder">USBに保存する前にフォルダを選択してください。</string>
     <string name="recset_usb_no_picker">この端末ではフォルダ選択機能が利用できません。</string>
     <string name="recset_nas_connection">NAS接続</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">許可済み</string>
     <string name="recset_background_not_allowed">許可されていません</string>
     <string name="recset_background_fix">修正</string>
-    <string name="recset_background_desc">OpenTVがバッテリー最適化を無視することを許可しない限り、端末がスリープしたりOpenTVから離れたりするとAndroidが録画を停止することがあります。許可すると、セットトップボックスのようにスタンバイ中でも録画が継続します。</string>
+    <string name="recset_background_desc">Nuvixがバッテリー最適化を無視することを許可しない限り、端末がスリープしたりNuvixから離れたりするとAndroidが録画を停止することがあります。許可すると、セットトップボックスのようにスタンバイ中でも録画が継続します。</string>
     <string name="recset_background_on_title">バックグラウンド録画はオンです</string>
-    <string name="recset_background_on_desc">OpenTVを離れたりテレビがスリープしたりしても、録画は継続します。</string>
+    <string name="recset_background_on_desc">Nuvixを離れたりテレビがスリープしたりしても、録画は継続します。</string>
     <string name="recset_background_toast">バックグラウンド録画が有効になりました——録画はバックグラウンドで継続します。</string>
     <string name="epg_updating">更新中…</string>
     <string name="epg_update_now">番組表を今すぐ更新</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">名前（任意）</string>
     <string name="epg_xmltv_url">XMLTV URL（.xmlまたは.xml.gz）</string>
     <string name="epg_add_guide">番組表を追加</string>
-    <string name="sync_desc">自宅のWi-Fiを使って、2台のOpenTV端末間で「続きから再生」をコピーします——データは家の外に出ず、アカウントも不要です。</string>
+    <string name="sync_desc">自宅のWi-Fiを使って、2台のNuvix端末間で「続きから再生」をコピーします——データは家の外に出ず、アカウントも不要です。</string>
     <string name="sync_share_from_here">この端末から共有</string>
     <string name="sync_receive">受信</string>
     <string name="sync_ready_to_share">共有の準備ができました</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">この端末のデータをNASに保存しました。まだ他の端末からの同期はありません。</string>
     <string name="sync_nas_failed">NASに接続できませんでした。電源が入っているか、また「録画」設定の情報が正しいかご確認ください。</string>
     <string name="sync_nas_auto">アプリを開いたときに自動同期</string>
-    <string name="about_title">OpenTVについて</string>
+    <string name="about_title">Nuvixについて</string>
     <string name="about_version">バージョン</string>
     <string name="about_update_available">アップデートが利用可能です：%1$s——インストールの案内をご確認ください。</string>
     <string name="about_up_to_date">最新バージョンをご利用中です。</string>
     <string name="about_checking">確認中…</string>
     <string name="about_check_updates">アップデートを確認</string>
     <string name="about_what_is_title">これは何か</string>
-    <string name="about_what_is_body">Android TV、Fire TV、スマートフォン向けの無料オープンソースIPTVプレーヤーです。これは再生専用アプリであり、チャンネルは提供しません——すでに契約しているサービスに接続してご利用ください。入力した情報は、ご自身のプロバイダーとの通信を除き、端末の外に出ることはありません。</string>
     <string name="about_built_open_title">オープンな開発</string>
-    <string name="about_built_open_body">OpenTVはオープンに開発されており、コードの大部分は人の指示のもとAIが記述しています——これは隠さず、はっきりと明示しています。オープンソースであるため、特定の誰か一人がいなくなってもプロジェクトが消えることはありません。誰でもすべてのコードを読み、ビルドし、引き継ぐことができます。</string>
+    <string name="about_built_open_body">Nuvixはオープンに開発されており、コードの大部分は人の指示のもとAIが記述しています——これは隠さず、はっきりと明示しています。オープンソースであるため、特定の誰か一人がいなくなってもプロジェクトが消えることはありません。誰でもすべてのコードを読み、ビルドし、引き継ぐことができます。</string>
     <string name="about_support_title">プロジェクトを支援</string>
     <string name="about_scan_to_donate">スキャンして寄付</string>
     <string name="about_licence_links_title">ライセンスとリンク</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">マイプロバイダー</string>
     <string name="onboarding_default_playlist_name">マイプレイリスト</string>
     <string name="onboarding_add_provider_title">プロバイダーを追加</string>
-    <string name="onboarding_add_provider_desc">OpenTVはプレーヤーです。チャンネルは提供しません——すでに契約しているサービスに接続してください。</string>
+    <string name="onboarding_add_provider_desc">Nuvixはプレーヤーです。チャンネルは提供しません——すでに契約しているサービスに接続してください。</string>
     <string name="onboarding_xtream_login">Xtream Codesログイン</string>
     <string name="onboarding_m3u_url">M3Uプレイリスト URL</string>
     <string name="onboarding_stalker_portal">Stalkerポータル</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">処理中…</string>
     <string name="onboarding_save_load">保存して読み込み</string>
     <string name="onboarding_use_phone">代わりにスマホを使う</string>
-    <string name="onboarding_privacy_note">プロバイダーの情報はこの端末にのみ保存されます。OpenTVにはアカウントシステムも独自のサーバーもありません——ここで入力した内容は、プロバイダー宛て以外どこにも送信されません。</string>
+    <string name="onboarding_privacy_note">プロバイダーの情報はこの端末にのみ保存されます。Nuvixにはアカウントシステムも独自のサーバーもありません——ここで入力した内容は、プロバイダー宛て以外どこにも送信されません。</string>
     <string name="pairing_stopped">ペアリングを停止しました</string>
     <string name="pairing_type_here">代わりにここに入力</string>
     <string name="pairing_got_it">受信しました——プロバイダーに接続中…</string>

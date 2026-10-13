@@ -1,3 +1,5 @@
+> Historical OpenTV architecture, retained for attribution and port context. See [Nuvix architecture](nuvix-architecture.md) and [cloud sync](cloud-sync.md) for current changes.
+
 # Architecture
 
 This document explains the decisions that are not obvious from reading the code, and in

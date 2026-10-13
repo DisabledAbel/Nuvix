@@ -16,3 +16,13 @@ captures/
 
 # Kotlin compiler transient logs
 .kotlin/
+
+# Release signing material and local distribution staging
+*.jks
+*.p12
+*.pem
+keystore.properties
+/dist/
+
+__pycache__/
+*.pyc

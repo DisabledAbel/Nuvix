@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0 — Nuvix development foundation
+
+- Independently import OpenTV Android source at `43b95c05d8f6a042f51c0cff662ef80789ee7528`, preserving GPL-3.0-or-later notices and working provider/playback/guide/recording/LAN/NAS systems.
+- Rebrand Android identity, icon, TV banner, splash and About; add Home, Live TV, Guide, Movies, TV Shows, Sports, Apps, Library and Settings navigation with provider-derived shelves.
+- Add optional reversible HOME launcher entry, startup preferences and real installed-app launch/pinning/ordering.
+- Add encrypted local database/secret preferences, retained-data recovery and explicit backup exclusions; guard provider URL/MAC/header inputs and redact diagnostics.
+- Add live-applied validated buffer presets/custom values, transactional EPG replacement and bounded encrypted temporary guide downloads.
+- Add optional email-code Supabase favorites/progress synchronization, local-first outbox, guarded merge RPC and owner-only RLS. Provider credentials/URLs are excluded.
+- Add versionCode-based stable update discovery, APK integrity/package/signer checks, background preferences and interactive Android installation.
+- Add debug CI and signed release verification/metadata/source archives. Production signing and real-device acceptance remain maintainer setup.
+
+## Historical OpenTV changes
+
+The entries below are preserved upstream history, not Nuvix release versions.
+
 ## 0.11.8
 
 - **Edit a saved provider.** Settings → Providers now has an **Edit** button on each provider, so you

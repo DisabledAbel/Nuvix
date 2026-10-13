@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Kész</string>
     <string name="common_cancel">Mégse</string>
     <string name="common_back">Vissza</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">1 műsor rögzítése</string>
     <string name="rec_notification_many">%1$d műsor rögzítése</string>
     <string name="rec_channel_name">Felvétel</string>
-    <string name="rec_channel_desc">Akkor jelenik meg, amikor az OpenTV felvételt készít</string>
+    <string name="rec_channel_desc">Akkor jelenik meg, amikor az Nuvix felvételt készít</string>
     <string name="rec_error_nothing">Semmi nem lett rögzítve</string>
     <string name="rec_error_usb_no_folder">Nincs kiválasztva USB-mappa. Nyissa meg a Felvétel beállításait, és válasszon mappát a meghajtón.</string>
     <string name="rec_error_usb_unavailable">Az USB-meghajtó nem érhető el. Csatlakoztassa újra a meghajtót, és válassza ki ismét a mappát a Felvétel beállításaiban.</string>
     <string name="rec_background_prompt_title">Folytatódjon a felvétel kilépéskor?</string>
-    <string name="rec_background_prompt_body">Előfordulhat, hogy az Android leállítja ezt a felvételt, amikor a képernyő elalszik, vagy kilép az OpenTV-ből. Engedélyezze, hogy az OpenTV figyelmen kívül hagyja az akkumulátor-optimalizálást, hogy a felvételek készenléti módban is folytatódjanak — ahogyan egy set-top boxnál.</string>
+    <string name="rec_background_prompt_body">Előfordulhat, hogy az Android leállítja ezt a felvételt, amikor a képernyő elalszik, vagy kilép az Nuvix-ből. Engedélyezze, hogy az Nuvix figyelmen kívül hagyja az akkumulátor-optimalizálást, hogy a felvételek készenléti módban is folytatódjanak — ahogyan egy set-top boxnál.</string>
     <string name="rec_background_prompt_allow">Engedélyezés</string>
     <string name="rec_background_prompt_not_now">Most nem</string>
     <string name="player_rewind">Visszatekerés</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">IPTV-forrásainak hozzáadása, eltávolítása és újratesztelése</string>
     <string name="settings_addons_title">Bővítmények (Stremio)</string>
     <string name="settings_addons_subtitle">Lejátszás az Ön által beállított Stremio-bővítményekből</string>
-    <string name="addons_note">Adjon hozzá egy Stremio-bővítményt a manifest URL-jének beillesztésével. Az OpenTV egyet sem tartalmaz — Ön hozza a sajátját. Ha a bővítmény debrid-alapú, állítsa be a debrid kulcsát a bővítmény saját weboldalán, és illessze be az onnan kapott személyre szabott URL-t; a kulcsa ott marad, soha nem kerül az OpenTV-be.</string>
+    <string name="addons_note">Adjon hozzá egy Stremio-bővítményt a manifest URL-jének beillesztésével. Az Nuvix egyet sem tartalmaz — Ön hozza a sajátját. Ha a bővítmény debrid-alapú, állítsa be a debrid kulcsát a bővítmény saját weboldalán, és illessze be az onnan kapott személyre szabott URL-t; a kulcsa ott marad, soha nem kerül az Nuvix-be.</string>
     <string name="addons_url_label">Bővítmény manifest URL</string>
     <string name="addons_add">Hozzáadás</string>
     <string name="addons_checking">Ellenőrzés…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Mappa módosítása</string>
     <string name="recset_usb_saving_to">Mentés ide: %1$s</string>
     <string name="recset_usb_none">Még nincs kiválasztva mappa</string>
-    <string name="recset_usb_hint">Csatlakoztasson egy exFAT vagy FAT32 formátumú USB-meghajtót vagy külső tárolót, majd válasszon rajta egy mappát. A felvételek közvetlenül abba a mappába kerülnek, és továbbra is az OpenTV-ből játszhatók le és törölhetők.</string>
+    <string name="recset_usb_hint">Csatlakoztasson egy exFAT vagy FAT32 formátumú USB-meghajtót vagy külső tárolót, majd válasszon rajta egy mappát. A felvételek közvetlenül abba a mappába kerülnek, és továbbra is az Nuvix-ből játszhatók le és törölhetők.</string>
     <string name="recset_usb_need_folder">Válasszon mappát, mielőtt USB-re menti.</string>
     <string name="recset_usb_no_picker">Ezen az eszközön nem érhető el mappaválasztó.</string>
     <string name="recset_nas_connection">NAS-kapcsolat</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Engedélyezve</string>
     <string name="recset_background_not_allowed">Nincs engedélyezve</string>
     <string name="recset_background_fix">Javítás</string>
-    <string name="recset_background_desc">Előfordulhat, hogy az Android leállítja a felvételeket, amikor a készülék elalszik, vagy kilép az OpenTV-ből, hacsak nem engedélyezi, hogy az OpenTV figyelmen kívül hagyja az akkumulátor-optimalizálást. Ha engedélyezi, a felvételek készenléti módban is futnak tovább, akárcsak egy set-top boxnál.</string>
+    <string name="recset_background_desc">Előfordulhat, hogy az Android leállítja a felvételeket, amikor a készülék elalszik, vagy kilép az Nuvix-ből, hacsak nem engedélyezi, hogy az Nuvix figyelmen kívül hagyja az akkumulátor-optimalizálást. Ha engedélyezi, a felvételek készenléti módban is futnak tovább, akárcsak egy set-top boxnál.</string>
     <string name="recset_background_on_title">A háttérfelvétel be van kapcsolva</string>
-    <string name="recset_background_on_desc">A felvételek akkor is folytatódnak, ha kilép az OpenTV-ből, vagy a TV elalszik.</string>
+    <string name="recset_background_on_desc">A felvételek akkor is folytatódnak, ha kilép az Nuvix-ből, vagy a TV elalszik.</string>
     <string name="recset_background_toast">A háttérfelvétel engedélyezve — a felvételek a háttérben is folytatódnak.</string>
     <string name="epg_updating">Frissítés…</string>
     <string name="epg_update_now">Műsorújság frissítése most</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Név (nem kötelező)</string>
     <string name="epg_xmltv_url">XMLTV URL (.xml vagy .xml.gz)</string>
     <string name="epg_add_guide">Műsorújság hozzáadása</string>
-    <string name="sync_desc">Másolja át a folytatás adatait két OpenTV-eszköz között a saját Wi-Fi-jén keresztül — semmi nem hagyja el az otthonát, és fiókra sincs szükség.</string>
+    <string name="sync_desc">Másolja át a folytatás adatait két Nuvix-eszköz között a saját Wi-Fi-jén keresztül — semmi nem hagyja el az otthonát, és fiókra sincs szükség.</string>
     <string name="sync_share_from_here">Megosztás innen</string>
     <string name="sync_receive">Fogadás</string>
     <string name="sync_ready_to_share">Kész a megosztásra</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Ez az eszköz mentve a NAS-ra. Még egyetlen másik eszköz sem szinkronizált ide.</string>
     <string name="sync_nas_failed">Nem sikerült elérni a NAS-t. Ellenőrizze, hogy be van-e kapcsolva, és hogy a Felvétel beállításaiban megadott adatok helyesek-e.</string>
     <string name="sync_nas_auto">Automatikus szinkronizálás az alkalmazás megnyitásakor</string>
-    <string name="about_title">Az OpenTV névjegye</string>
+    <string name="about_title">Az Nuvix névjegye</string>
     <string name="about_version">Verzió</string>
     <string name="about_update_available">Elérhető frissítés: %1$s — a telepítéshez lásd a felugró ablakot.</string>
     <string name="about_up_to_date">A legújabb verziót használja.</string>
     <string name="about_checking">Ellenőrzés…</string>
     <string name="about_check_updates">Frissítések keresése</string>
     <string name="about_what_is_title">Mi ez</string>
-    <string name="about_what_is_body">Ingyenes, nyílt forráskódú IPTV-lejátszó Android TV-hez, Fire TV-hez és telefonokhoz. Ez csak egy lejátszó — nem biztosít csatornákat, hanem az Ön által már fizetett szolgáltatáshoz csatlakozik. Amit megad, nem hagyja el az eszközét, kivéve a saját szolgáltatójával való kommunikációt.</string>
     <string name="about_built_open_title">Nyílt fejlesztés</string>
-    <string name="about_built_open_body">Az OpenTV nyíltan fejlődik, a kód nagy részét mesterséges intelligencia írja emberi irányítás alatt — ezt nyíltan kimondjuk, nem titkoljuk. Mivel nyílt forráskódú, egyetlen ember távozása sem állíthatja meg: bárki elolvashatja az összes sort, lefordíthatja, és folytathatja.</string>
+    <string name="about_built_open_body">Az Nuvix nyíltan fejlődik, a kód nagy részét mesterséges intelligencia írja emberi irányítás alatt — ezt nyíltan kimondjuk, nem titkoljuk. Mivel nyílt forráskódú, egyetlen ember távozása sem állíthatja meg: bárki elolvashatja az összes sort, lefordíthatja, és folytathatja.</string>
     <string name="about_support_title">Támogassa a projektet</string>
     <string name="about_scan_to_donate">Olvassa be az adományozáshoz</string>
     <string name="about_licence_links_title">Licenc &amp; hivatkozások</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Saját szolgáltató</string>
     <string name="onboarding_default_playlist_name">Saját lejátszási lista</string>
     <string name="onboarding_add_provider_title">Adja hozzá a szolgáltatóját</string>
-    <string name="onboarding_add_provider_desc">Az OpenTV egy lejátszó. Nem biztosít csatornákat — az Ön által már fizetett szolgáltatáshoz csatlakozik.</string>
+    <string name="onboarding_add_provider_desc">Az Nuvix egy lejátszó. Nem biztosít csatornákat — az Ön által már fizetett szolgáltatáshoz csatlakozik.</string>
     <string name="onboarding_xtream_login">Xtream Codes bejelentkezés</string>
     <string name="onboarding_m3u_url">M3U lejátszási lista URL</string>
     <string name="onboarding_stalker_portal">Stalker portál</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Feldolgozás…</string>
     <string name="onboarding_save_load">Mentés és betöltés</string>
     <string name="onboarding_use_phone">Inkább a telefonomat használom</string>
-    <string name="onboarding_privacy_note">A szolgáltatói adatai kizárólag ezen az eszközön tárolódnak. Az OpenTV-nek nincs fiókrendszere és saját szervere sem — amit itt beír, sehova nem kerül elküldésre, kivéve a szolgáltatójához.</string>
+    <string name="onboarding_privacy_note">A szolgáltatói adatai kizárólag ezen az eszközön tárolódnak. Az Nuvix-nek nincs fiókrendszere és saját szervere sem — amit itt beír, sehova nem kerül elküldésre, kivéve a szolgáltatójához.</string>
     <string name="pairing_stopped">Párosítás leállítva</string>
     <string name="pairing_type_here">Inkább írja be itt</string>
     <string name="pairing_got_it">Megvan — csatlakozás a szolgáltatóhoz…</string>

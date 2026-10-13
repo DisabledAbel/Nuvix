@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -73,14 +74,14 @@ class StremioClient(
     }
 
     private fun get(url: HttpUrl): JsonElement? {
-        val request = Request.Builder().url(url).header("User-Agent", "OpenTV").build()
+        val request = Request.Builder().url(url).header("User-Agent", "Nuvix").build()
         return runCatching {
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string() ?: return null
                 json.parseToJsonElement(body)
             }
-        }.onFailure { Log.w(TAG, "Stremio request failed", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "Stremio request failed") }.getOrNull()
     }
 
     private companion object {

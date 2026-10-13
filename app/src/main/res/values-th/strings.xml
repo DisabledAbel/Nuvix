@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">เสร็จสิ้น</string>
     <string name="common_cancel">ยกเลิก</string>
     <string name="common_back">ย้อนกลับ</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">กำลังบันทึก 1 รายการ</string>
     <string name="rec_notification_many">กำลังบันทึก %1$d รายการ</string>
     <string name="rec_channel_name">การบันทึก</string>
-    <string name="rec_channel_desc">แสดงขณะ OpenTV กำลังบันทึก</string>
+    <string name="rec_channel_desc">แสดงขณะ Nuvix กำลังบันทึก</string>
     <string name="rec_error_nothing">ไม่มีการบันทึกใด ๆ</string>
     <string name="rec_error_usb_no_folder">ยังไม่ได้เลือกโฟลเดอร์ USB เปิดการตั้งค่าการบันทึกแล้วเลือกโฟลเดอร์บนไดรฟ์ของคุณ</string>
     <string name="rec_error_usb_unavailable">ไม่พบไดรฟ์ USB เสียบไดรฟ์ใหม่แล้วเลือกโฟลเดอร์อีกครั้งในการตั้งค่าการบันทึก</string>
     <string name="rec_background_prompt_title">บันทึกต่อไปเมื่อคุณออกจากแอปหรือไม่?</string>
-    <string name="rec_background_prompt_body">Android อาจหยุดการบันทึกนี้เมื่อหน้าจอพัก หรือเมื่อคุณออกจาก OpenTV อนุญาตให้ OpenTV ไม่ใช้การจำกัดการใช้พลังงานแบตเตอรี่ เพื่อให้การบันทึกทำงานต่อแม้ในโหมดสแตนด์บาย เหมือนกล่องรับสัญญาณทีวี</string>
+    <string name="rec_background_prompt_body">Android อาจหยุดการบันทึกนี้เมื่อหน้าจอพัก หรือเมื่อคุณออกจาก Nuvix อนุญาตให้ Nuvix ไม่ใช้การจำกัดการใช้พลังงานแบตเตอรี่ เพื่อให้การบันทึกทำงานต่อแม้ในโหมดสแตนด์บาย เหมือนกล่องรับสัญญาณทีวี</string>
     <string name="rec_background_prompt_allow">อนุญาต</string>
     <string name="rec_background_prompt_not_now">ไว้ทีหลัง</string>
     <string name="player_rewind">ถอยกลับ</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">เพิ่ม ลบ และทดสอบแหล่งที่มา IPTV ของคุณอีกครั้ง</string>
     <string name="settings_addons_title">แอดออน (Stremio)</string>
     <string name="settings_addons_subtitle">เล่นจากแอดออน Stremio ที่คุณตั้งค่าเอง</string>
-    <string name="addons_note">เพิ่มแอดออน Stremio โดยวาง URL ไฟล์ manifest ของแอดออนนั้น OpenTV ไม่มีแอดออนมาให้ — คุณต้องนำมาเอง หากแอดออนอิงกับ debrid ให้ตั้งค่าคีย์ debrid ของคุณบนเว็บไซต์ของแอดออนนั้นเอง แล้ววาง URL เฉพาะบุคคลที่ได้รับมา คีย์ของคุณจะอยู่ที่นั่น ไม่เก็บไว้ใน OpenTV</string>
+    <string name="addons_note">เพิ่มแอดออน Stremio โดยวาง URL ไฟล์ manifest ของแอดออนนั้น Nuvix ไม่มีแอดออนมาให้ — คุณต้องนำมาเอง หากแอดออนอิงกับ debrid ให้ตั้งค่าคีย์ debrid ของคุณบนเว็บไซต์ของแอดออนนั้นเอง แล้ววาง URL เฉพาะบุคคลที่ได้รับมา คีย์ของคุณจะอยู่ที่นั่น ไม่เก็บไว้ใน Nuvix</string>
     <string name="addons_url_label">URL manifest ของแอดออน</string>
     <string name="addons_add">เพิ่ม</string>
     <string name="addons_checking">กำลังตรวจสอบ…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">เปลี่ยนโฟลเดอร์</string>
     <string name="recset_usb_saving_to">กำลังบันทึกไปที่: %1$s</string>
     <string name="recset_usb_none">ยังไม่ได้เลือกโฟลเดอร์</string>
-    <string name="recset_usb_hint">เสียบไดรฟ์ USB หรืออุปกรณ์จัดเก็บข้อมูลภายนอกที่ฟอร์แมตเป็น exFAT หรือ FAT32 แล้วเลือกโฟลเดอร์บนนั้น การบันทึกจะเขียนตรงไปยังโฟลเดอร์นั้น และยังเล่นและลบได้ภายใน OpenTV</string>
+    <string name="recset_usb_hint">เสียบไดรฟ์ USB หรืออุปกรณ์จัดเก็บข้อมูลภายนอกที่ฟอร์แมตเป็น exFAT หรือ FAT32 แล้วเลือกโฟลเดอร์บนนั้น การบันทึกจะเขียนตรงไปยังโฟลเดอร์นั้น และยังเล่นและลบได้ภายใน Nuvix</string>
     <string name="recset_usb_need_folder">เลือกโฟลเดอร์ก่อนบันทึกลง USB</string>
     <string name="recset_usb_no_picker">ไม่มีตัวเลือกโฟลเดอร์ในอุปกรณ์นี้</string>
     <string name="recset_nas_connection">การเชื่อมต่อ NAS</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">อนุญาตแล้ว</string>
     <string name="recset_background_not_allowed">ไม่ได้รับอนุญาต</string>
     <string name="recset_background_fix">แก้ไข</string>
-    <string name="recset_background_desc">Android อาจหยุดการบันทึกเมื่ออุปกรณ์เข้าสู่โหมดพักหรือเมื่อคุณออกจาก OpenTV เว้นแต่จะอนุญาตให้ OpenTV ไม่ใช้การจำกัดการใช้พลังงานแบตเตอรี่ การอนุญาตจะทำให้การบันทึกทำงานต่อแม้ในโหมดสแตนด์บาย เหมือนกล่องรับสัญญาณทีวี</string>
+    <string name="recset_background_desc">Android อาจหยุดการบันทึกเมื่ออุปกรณ์เข้าสู่โหมดพักหรือเมื่อคุณออกจาก Nuvix เว้นแต่จะอนุญาตให้ Nuvix ไม่ใช้การจำกัดการใช้พลังงานแบตเตอรี่ การอนุญาตจะทำให้การบันทึกทำงานต่อแม้ในโหมดสแตนด์บาย เหมือนกล่องรับสัญญาณทีวี</string>
     <string name="recset_background_on_title">เปิดใช้การบันทึกพื้นหลังแล้ว</string>
-    <string name="recset_background_on_desc">การบันทึกจะทำงานต่อไปเมื่อคุณออกจาก OpenTV หรือทีวีเข้าสู่โหมดพัก</string>
+    <string name="recset_background_on_desc">การบันทึกจะทำงานต่อไปเมื่อคุณออกจาก Nuvix หรือทีวีเข้าสู่โหมดพัก</string>
     <string name="recset_background_toast">เปิดใช้การบันทึกพื้นหลังแล้ว — การบันทึกจะทำงานต่อในพื้นหลัง</string>
     <string name="epg_updating">กำลังอัปเดต…</string>
     <string name="epg_update_now">อัปเดตผังรายการตอนนี้</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">ชื่อ (ไม่บังคับ)</string>
     <string name="epg_xmltv_url">URL ของ XMLTV (.xml หรือ .xml.gz)</string>
     <string name="epg_add_guide">เพิ่มผังรายการ</string>
-    <string name="sync_desc">คัดลอกรายการที่ดูค้างไว้ระหว่างอุปกรณ์ OpenTV สองเครื่องผ่าน Wi-Fi ของคุณเอง — ไม่มีอะไรออกจากบ้านคุณ และไม่ต้องใช้บัญชี</string>
+    <string name="sync_desc">คัดลอกรายการที่ดูค้างไว้ระหว่างอุปกรณ์ Nuvix สองเครื่องผ่าน Wi-Fi ของคุณเอง — ไม่มีอะไรออกจากบ้านคุณ และไม่ต้องใช้บัญชี</string>
     <string name="sync_share_from_here">แชร์จากที่นี่</string>
     <string name="sync_receive">รับ</string>
     <string name="sync_ready_to_share">พร้อมแชร์แล้ว</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">บันทึกอุปกรณ์นี้ไปยัง NAS แล้ว ยังไม่มีอุปกรณ์อื่นซิงค์มาที่นี่</string>
     <string name="sync_nas_failed">ไม่สามารถเข้าถึง NAS ของคุณได้ ตรวจสอบว่าเปิดเครื่องอยู่และรายละเอียดในการตั้งค่าการบันทึกถูกต้อง</string>
     <string name="sync_nas_auto">ซิงค์อัตโนมัติเมื่อเปิดแอป</string>
-    <string name="about_title">เกี่ยวกับ OpenTV</string>
+    <string name="about_title">เกี่ยวกับ Nuvix</string>
     <string name="about_version">เวอร์ชัน</string>
     <string name="about_update_available">มีอัปเดต: %1$s — ดูข้อความแจ้งเพื่อติดตั้ง</string>
     <string name="about_up_to_date">คุณใช้เวอร์ชันล่าสุดอยู่แล้ว</string>
     <string name="about_checking">กำลังตรวจสอบ…</string>
     <string name="about_check_updates">ตรวจสอบการอัปเดต</string>
     <string name="about_what_is_title">แอปนี้คืออะไร</string>
-    <string name="about_what_is_body">เครื่องเล่น IPTV ฟรีและโอเพนซอร์สสำหรับ Android TV, Fire TV และโทรศัพท์ เป็นเพียงเครื่องเล่นเท่านั้น — ไม่มีช่องให้ในตัว คุณต้องเชื่อมต่อบริการที่คุณจ่ายเงินอยู่แล้ว ไม่มีสิ่งใดที่คุณป้อนออกจากอุปกรณ์ของคุณ ยกเว้นเพื่อติดต่อกับผู้ให้บริการของคุณเอง</string>
     <string name="about_built_open_title">พัฒนาอย่างเปิดเผย</string>
-    <string name="about_built_open_body">OpenTV ได้รับการพัฒนาอย่างเปิดเผย โดย AI เป็นผู้เขียนโค้ดส่วนใหญ่ภายใต้การกำกับดูแลของมนุษย์ — ระบุไว้อย่างตรงไปตรงมา ไม่ปิดบัง เนื่องจากเป็นโอเพนซอร์ส การที่คนคนเดียวหายไปจึงไม่สามารถทำให้โปรเจกต์นี้ล่มได้ ใครก็ตามสามารถอ่านโค้ดทุกบรรทัด สร้างแอปเอง และสานต่อได้</string>
+    <string name="about_built_open_body">Nuvix ได้รับการพัฒนาอย่างเปิดเผย โดย AI เป็นผู้เขียนโค้ดส่วนใหญ่ภายใต้การกำกับดูแลของมนุษย์ — ระบุไว้อย่างตรงไปตรงมา ไม่ปิดบัง เนื่องจากเป็นโอเพนซอร์ส การที่คนคนเดียวหายไปจึงไม่สามารถทำให้โปรเจกต์นี้ล่มได้ ใครก็ตามสามารถอ่านโค้ดทุกบรรทัด สร้างแอปเอง และสานต่อได้</string>
     <string name="about_support_title">สนับสนุนโปรเจกต์นี้</string>
     <string name="about_scan_to_donate">สแกนเพื่อบริจาค</string>
     <string name="about_licence_links_title">ใบอนุญาตและลิงก์</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">ผู้ให้บริการของฉัน</string>
     <string name="onboarding_default_playlist_name">เพลย์ลิสต์ของฉัน</string>
     <string name="onboarding_add_provider_title">เพิ่มผู้ให้บริการของคุณ</string>
-    <string name="onboarding_add_provider_desc">OpenTV เป็นเครื่องเล่น ไม่มีช่องให้ในตัว — คุณต้องเชื่อมต่อบริการที่คุณจ่ายเงินอยู่แล้ว</string>
+    <string name="onboarding_add_provider_desc">Nuvix เป็นเครื่องเล่น ไม่มีช่องให้ในตัว — คุณต้องเชื่อมต่อบริการที่คุณจ่ายเงินอยู่แล้ว</string>
     <string name="onboarding_xtream_login">เข้าสู่ระบบ Xtream Codes</string>
     <string name="onboarding_m3u_url">URL เพลย์ลิสต์ M3U</string>
     <string name="onboarding_stalker_portal">พอร์ทัล Stalker</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">กำลังดำเนินการ…</string>
     <string name="onboarding_save_load">บันทึกและโหลด</string>
     <string name="onboarding_use_phone">ใช้โทรศัพท์ของฉันแทน</string>
-    <string name="onboarding_privacy_note">รายละเอียดผู้ให้บริการของคุณถูกเก็บไว้บนอุปกรณ์นี้เท่านั้น OpenTV ไม่มีระบบบัญชีและไม่มีเซิร์ฟเวอร์เป็นของตัวเอง — สิ่งที่คุณพิมพ์ที่นี่จะไม่ถูกส่งไปที่ใดนอกจากผู้ให้บริการของคุณ</string>
+    <string name="onboarding_privacy_note">รายละเอียดผู้ให้บริการของคุณถูกเก็บไว้บนอุปกรณ์นี้เท่านั้น Nuvix ไม่มีระบบบัญชีและไม่มีเซิร์ฟเวอร์เป็นของตัวเอง — สิ่งที่คุณพิมพ์ที่นี่จะไม่ถูกส่งไปที่ใดนอกจากผู้ให้บริการของคุณ</string>
     <string name="pairing_stopped">หยุดการจับคู่แล้ว</string>
     <string name="pairing_type_here">พิมพ์ที่นี่แทน</string>
     <string name="pairing_got_it">เข้าใจแล้ว — กำลังเชื่อมต่อกับผู้ให้บริการของคุณ…</string>

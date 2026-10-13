@@ -43,10 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.opentv.BuildConfig
-import app.opentv.R
+import com.disabledabel.nuvix.BuildConfig
+import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
-import app.opentv.update.UpdateChecker
 import kotlinx.coroutines.launch
 
 /**
@@ -57,9 +56,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var updateLine by remember { mutableStateOf<String?>(null) }
-    var checking by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -75,39 +71,9 @@ fun AboutScreen(onBack: () -> Unit) {
 
         Spacer(Modifier.height(20.dp))
 
-        Section(stringResource(R.string.about_version)) {
-            Text("OpenTV ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(
-                    enabled = !checking,
-                    onClick = {
-                        checking = true
-                        updateLine = null
-                        scope.launch {
-                            val graph = ServiceLocator.get(context)
-                            val update = runCatching {
-                                UpdateChecker(graph.httpClient, BuildConfig.VERSION_NAME).check()
-                            }.getOrNull()
-                            updateLine = when {
-                                update != null -> context.getString(R.string.about_update_available, update.versionName)
-                                else -> context.getString(R.string.about_up_to_date)
-                            }
-                            // Raise the shared update prompt right here — UpdateGate overlays every
-                            // screen, so the install dialog appears over About immediately.
-                            if (update != null) {
-                                app.opentv.update.UpdateHub.state.value =
-                                    app.opentv.update.UpdateUiState.Available(update)
-                            }
-                            checking = false
-                        }
-                    },
-                ) { Text(if (checking) stringResource(R.string.about_checking) else stringResource(R.string.about_check_updates)) }
-                updateLine?.let {
-                    Spacer(Modifier.width(16.dp))
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                }
-            }
+        Section("Nuvix version") {
+            Text("Nuvix ${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}", style = MaterialTheme.typography.titleMedium)
+            Text("Independent IPTV player and optional television home launcher.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -122,58 +88,24 @@ fun AboutScreen(onBack: () -> Unit) {
 
         Spacer(Modifier.height(16.dp))
 
-        Section(stringResource(R.string.about_built_open_title)) {
-            Text(
-                stringResource(R.string.about_built_open_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Section("OpenTV attribution") {
+            Text("Nuvix is an independent modified version of OpenTV, based on opentvproject/opentv commit 43b95c05d8f6a042f51c0cff662ef80789ee7528. Copyright (C) 2026 The OpenTV Contributors. Nuvix modifications Copyright (C) 2026 Nuvix Contributors.")
+            Text("Significant changes include Nuvix branding and navigation, Android TV home launcher and installed apps, optional Supabase synchronization, buffering controls, and verified releases.")
+            Text("Licensed under GPL-3.0-or-later. No official affiliation with OpenTV or DIRECTV.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LinkLine("Original project", "github.com/opentvproject/opentv")
         }
-
         Spacer(Modifier.height(16.dp))
-
-        Section(stringResource(R.string.about_support_title)) {
-            Text(
-                stringResource(R.string.about_support_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            LinkLine(stringResource(R.string.about_sponsor_github), "github.com/sponsors/legionnaireneyland")
-            Spacer(Modifier.height(12.dp))
-            LinkLine(
-                stringResource(R.string.about_donate_paypal),
-                "leetobin1982@gmail.com",
-                url = "https://www.paypal.com/donate/?business=leetobin1982@gmail.com&item_name=Support+OpenTV&no_recurring=0&currency_code=GBP",
-            )
-            Spacer(Modifier.height(12.dp))
-            val donateQr = remember { QrCodes.render("https://github.com/sponsors/legionnaireneyland", 400) }
-            donateQr?.let { bmp ->
-                Image(
-                    bitmap = bmp.asImageBitmap(),
-                    contentDescription = stringResource(R.string.about_scan_to_donate),
-                    modifier = Modifier.size(180.dp).clip(RoundedCornerShape(8.dp)),
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    stringResource(R.string.about_scan_to_donate),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
+        Section("Updates") { app.opentv.update.UpdateSettingsControls() }
         Spacer(Modifier.height(16.dp))
-
         Section(stringResource(R.string.about_licence_links_title)) {
             LinkLine(
                 stringResource(R.string.about_licence_label),
-                "GNU General Public License v3.0",
+                "GNU General Public License v3.0 or later",
                 url = "https://www.gnu.org/licenses/gpl-3.0.html",
             )
-            LinkLine(stringResource(R.string.about_source_code), "github.com/opentvproject/opentv")
-            LinkLine(stringResource(R.string.about_report_bug), "github.com/opentvproject/opentv/issues")
-            LinkLine(stringResource(R.string.about_install_page), "opentvproject.github.io/opentv")
+            LinkLine(stringResource(R.string.about_source_code), "github.com/DisabledAbel/Nuvix")
+            LinkLine(stringResource(R.string.about_report_bug), "github.com/DisabledAbel/Nuvix/issues")
+            LinkLine("Nuvix releases", "github.com/DisabledAbel/Nuvix/releases")
         }
     }
 }

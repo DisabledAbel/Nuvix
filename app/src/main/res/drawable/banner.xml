@@ -1,30 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Android TV home-screen banner. Must be 320x180; the launcher does not letterbox.
-  Replace with real artwork before a public release.
--->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="320dp"
-    android:height="180dp"
-    android:viewportWidth="320"
-    android:viewportHeight="180">
-    <path
-        android:fillColor="#07080C"
-        android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:strokeColor="#4B5DB8"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:pathData="M138,44 L152,58" />
-    <path
-        android:strokeColor="#4B5DB8"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:pathData="M166,44 L152,58" />
-    <path
-        android:fillColor="#7C93FF"
-        android:pathData="M112,58h80a10,10 0,0 1,10 10v44a10,10 0,0 1,-10 10h-80a10,10 0,0 1,-10 -10v-44a10,10 0,0 1,10 -10z" />
-    <path
-        android:fillColor="#07080C"
-        android:pathData="M142,74l26,16l-26,16z" />
+<!-- Original Nuvix TV banner, 320 x 180. GPL-3.0-or-later. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="320dp" android:height="180dp" android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#06101F" android:pathData="M0,0 H320 V180 H0 Z" />
+    <path android:fillColor="#102A4E" android:pathData="M230,0 H320 V180 H110 Z" />
+    <path android:fillColor="#58A6FF" android:pathData="M25,119 V65 H39 L65,99 V65 H80 V119 H66 L40,84 V119 Z" />
+    <path android:fillColor="#A2DAFF" android:pathData="M65,52 H80 V59 H65 Z" />
+    <path android:fillColor="#E8F1FF" android:pathData="M106,108 V72 H113 L130,96 V72 H137 V108 H130 L113,84 V108 Z M145,72 H152 V99 H168 V72 H175 V101 L168,108 H152 L145,101 Z M181,72 H189 L200,99 L211,72 H219 L204,108 H196 Z M226,72 H233 V108 H226 Z M241,72 H250 L260,84 L270,72 H279 L264,90 L279,108 H270 L260,96 L250,108 H241 L255,90 Z" />
 </vector>

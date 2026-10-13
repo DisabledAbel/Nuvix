@@ -1,7 +1,9 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13: configurable live buffer policy.
  */
 package app.opentv.player
 
@@ -17,7 +19,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import okhttp3.OkHttpClient
 
 /**
@@ -179,6 +181,27 @@ class PlayerController(
             .build()
     }
 
+    private val bufferSettings = BufferSettings.get(context)
+    private val lowMemory = BufferSettings.isLowMemory(context)
+
+    private fun effectiveBuffer(configuration: BufferConfiguration): BufferPolicy {
+        if (preview) return BufferPolicy.PREVIEW
+        val selected = configuration.resolve(lowMemory)
+        // Growing recordings need an eight-second cushion; DVR retains its existing forward span.
+        return selected.copy(
+            minimumMs = if (liveRecording) maxOf(selected.minimumMs, 8_000) else selected.minimumMs,
+            maximumMs = if (dvr) DVR_MAX_BUFFER_MILLIS else maxOf(selected.maximumMs, if (liveRecording) 8_000 else 0),
+            playbackMs = if (liveRecording) 8_000 else selected.playbackMs,
+            rebufferMs = if (liveRecording) 8_000 else selected.rebufferMs,
+        )
+    }
+
+    private val loadControl = ConfigurableLoadControl(
+        initial = effectiveBuffer(bufferSettings.configuration.value),
+        budgetBytes = if (preview) 8 * 1024 * 1024 else if (lowMemory) 16 * 1024 * 1024 else 32 * 1024 * 1024,
+        backBufferMs = if (dvr) DVR_BACK_BUFFER_MILLIS else 0,
+    )
+
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setSeekBackIncrementMs(SEEK_INCREMENT_MILLIS)
         .setSeekForwardIncrementMs(SEEK_INCREMENT_MILLIS)
@@ -187,31 +210,7 @@ class PlayerController(
                 .setLoadErrorHandlingPolicy(loadErrorPolicy),
         )
         .setTrackSelector(trackSelector)
-        .setLoadControl(
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    if (preview) PREVIEW_MIN_BUFFER_MILLIS else MIN_BUFFER_MILLIS,
-                    when {
-                        preview -> PREVIEW_MAX_BUFFER_MILLIS
-                        dvr -> DVR_MAX_BUFFER_MILLIS
-                        liveRecording -> LIVE_REC_MAX_BUFFER_MILLIS
-                        else -> MAX_BUFFER_MILLIS
-                    },
-                    when {
-                        preview -> PREVIEW_BUFFER_FOR_PLAYBACK_MILLIS
-                        liveRecording -> LIVE_REC_BUFFER_FOR_PLAYBACK_MILLIS
-                        else -> BUFFER_FOR_PLAYBACK_MILLIS
-                    },
-                    when {
-                        preview -> PREVIEW_BUFFER_AFTER_REBUFFER_MILLIS
-                        liveRecording -> LIVE_REC_BUFFER_AFTER_REBUFFER_MILLIS
-                        else -> BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MILLIS
-                    },
-                )
-                // Retain the last few minutes so pause/rewind of live TV has something to seek into.
-                .apply { if (dvr) setBackBuffer(DVR_BACK_BUFFER_MILLIS, true) }
-                .build(),
-        )
+        .setLoadControl(loadControl)
         .build()
         .apply {
             addListener(object : Player.Listener {
@@ -252,6 +251,10 @@ class PlayerController(
                 }
             })
         }
+
+    private val bufferJob = scope.launch {
+        bufferSettings.configuration.collectLatest { loadControl.update(effectiveBuffer(it)) }
+    }
 
     /**
      * Switches playback.
@@ -368,12 +371,13 @@ class PlayerController(
     }
 
     fun release() {
+        bufferJob.cancel()
         switchJob?.cancel()
         player.release()
     }
 
     private companion object {
-        const val DEFAULT_USER_AGENT = "OpenTV/0.1 (Android)"
+        const val DEFAULT_USER_AGENT = "Nuvix/0.1 (Android)"
 
         /** ExoPlayer's "do not retry" sentinel. */
         const val C_TIME_UNSET = androidx.media3.common.C.TIME_UNSET
@@ -386,39 +390,9 @@ class PlayerController(
         const val MAX_AUTO_RESTARTS = 3
         const val AUTO_RESTART_DELAY_MILLIS = 1_500L
 
-        /**
-         * Larger than ExoPlayer's defaults. IPTV sources are much twitchier than a CDN, and a
-         * deeper buffer is the difference between a momentary hiccup and a visible stall.
-         */
-        const val MIN_BUFFER_MILLIS = 15_000
-        const val MAX_BUFFER_MILLIS = 60_000
-        const val BUFFER_FOR_PLAYBACK_MILLIS = 2_500
-        const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MILLIS = 5_000
-
-        // DVR mode (pause & rewind live TV): keep a couple of minutes behind the live edge to seek
-        // into, and let the forward buffer grow to match so a pause of up to a couple of minutes
-        // resumes cleanly. Deliberately bounded — this is memory the box has to find.
+        // Opt-in DVR retains the upstream two-minute history and forward span.
         const val DVR_BACK_BUFFER_MILLIS = 120_000
         const val DVR_MAX_BUFFER_MILLIS = 120_000
-
-        // Watch-while-recording: hold playback a cushion *behind* the file's growing edge rather than
-        // right on it. IPTV sources arrive in bursts, so a shallow buffer drains to nothing between
-        // bursts and the picture stalls every second or two — worst over SMB to a NAS, where every
-        // read is a network round-trip. Waiting for ~8s of reservoir before playback (and rebuilding
-        // it after any stall) rides straight over those gaps; because playback and the recorder both
-        // advance at 1x, that cushion holds without ever catching the edge again.
-        const val LIVE_REC_MAX_BUFFER_MILLIS = 60_000
-        const val LIVE_REC_BUFFER_FOR_PLAYBACK_MILLIS = 8_000
-        const val LIVE_REC_BUFFER_AFTER_REBUFFER_MILLIS = 8_000
-
-        // Guide-preview tuning: start fast and don't hoard buffer (the preview is muted and
-        // low-stakes), and debounce channel-surfing harder so scrolling the list doesn't tune to
-        // every channel in passing. Kept within DefaultLoadControl's constraints: min >= both
-        // playback thresholds, max >= min.
-        const val PREVIEW_MIN_BUFFER_MILLIS = 5_000
-        const val PREVIEW_MAX_BUFFER_MILLIS = 15_000
-        const val PREVIEW_BUFFER_FOR_PLAYBACK_MILLIS = 1_000
-        const val PREVIEW_BUFFER_AFTER_REBUFFER_MILLIS = 1_500
         const val PREVIEW_SWITCH_DEBOUNCE_MILLIS = 700L
 
         const val LIVE_TARGET_OFFSET_MILLIS = 10_000L

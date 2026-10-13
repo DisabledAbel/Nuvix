@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -25,6 +26,12 @@ class AppSettings private constructor(context: Context) {
 
     private val prefs =
         context.applicationContext.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE)
+
+    // Keep public settings/state APIs stable while moving credential-bearing strings out of
+    // legacy plaintext preferences. Migration verifies ciphertext before deleting old values.
+    private val privateSettings = PrivateSettingsVault(context).apply {
+        migrateFrom(prefs, setOf(KEY_SMB_PASS, KEY_TMDB_KEY, KEY_STREMIO_ADDONS))
+    }
 
     private val addonJson = Json { ignoreUnknownKeys = true }
 
@@ -311,13 +318,13 @@ class AppSettings private constructor(context: Context) {
     val smbShare: StateFlow<String> = _smbShare.asStateFlow()
 
     /** Sub-folder within the share, e.g. `Recordings`. Blank = share root. */
-    private val _smbFolder = MutableStateFlow(prefs.getString(KEY_SMB_FOLDER, "OpenTV").orEmpty())
+    private val _smbFolder = MutableStateFlow(prefs.getString(KEY_SMB_FOLDER, "Nuvix").orEmpty())
     val smbFolder: StateFlow<String> = _smbFolder.asStateFlow()
 
     private val _smbUser = MutableStateFlow(prefs.getString(KEY_SMB_USER, "").orEmpty())
     val smbUser: StateFlow<String> = _smbUser.asStateFlow()
 
-    private val _smbPassword = MutableStateFlow(prefs.getString(KEY_SMB_PASS, "").orEmpty())
+    private val _smbPassword = MutableStateFlow(privateSettings.getString(KEY_SMB_PASS, "").orEmpty())
     val smbPassword: StateFlow<String> = _smbPassword.asStateFlow()
 
     fun setRecordingTarget(target: RecordingTarget) {
@@ -326,12 +333,12 @@ class AppSettings private constructor(context: Context) {
     }
 
     fun setSmbConfig(host: String, share: String, folder: String, user: String, password: String) {
+        privateSettings.putString(KEY_SMB_PASS, password)
         prefs.edit()
             .putString(KEY_SMB_HOST, host.trim())
             .putString(KEY_SMB_SHARE, share.trim())
             .putString(KEY_SMB_FOLDER, folder.trim())
             .putString(KEY_SMB_USER, user)
-            .putString(KEY_SMB_PASS, password)
             .apply()
         _smbHost.value = host.trim()
         _smbShare.value = share.trim()
@@ -382,12 +389,12 @@ class AppSettings private constructor(context: Context) {
      * credentials, used to fill in artwork/metadata a provider left blank. Blank = the TMDB
      * fallback is off. Each user brings their own key, so no single key carries everyone's traffic.
      */
-    private val _tmdbApiKey = MutableStateFlow(prefs.getString(KEY_TMDB_KEY, "").orEmpty())
+    private val _tmdbApiKey = MutableStateFlow(privateSettings.getString(KEY_TMDB_KEY, "").orEmpty())
     val tmdbApiKey: StateFlow<String> = _tmdbApiKey.asStateFlow()
 
     fun setTmdbApiKey(key: String) {
         val trimmed = key.trim()
-        prefs.edit().putString(KEY_TMDB_KEY, trimmed).apply()
+        privateSettings.putString(KEY_TMDB_KEY, trimmed)
         _tmdbApiKey.value = trimmed
     }
 
@@ -411,14 +418,16 @@ class AppSettings private constructor(context: Context) {
     }
 
     private fun persistStremioAddons(list: List<StremioAddon>) {
-        prefs.edit().putString(KEY_STREMIO_ADDONS, addonJson.encodeToString(list)).apply()
+        privateSettings.putString(KEY_STREMIO_ADDONS, addonJson.encodeToString(list))
         _stremioAddons.value = list
     }
 
-    private fun readStremioAddons(): List<StremioAddon> =
-        runCatching {
-            prefs.getString(KEY_STREMIO_ADDONS, null)?.let { addonJson.decodeFromString<List<StremioAddon>>(it) }
-        }.getOrNull() ?: emptyList()
+    private fun readStremioAddons(): List<StremioAddon> {
+        // A corrupt JSON value can be retained for recovery; authentication/key failures must
+        // propagate instead of silently replacing a user's encrypted add-ons with an empty list.
+        val serialized = privateSettings.getString(KEY_STREMIO_ADDONS, null) ?: return emptyList()
+        return runCatching { addonJson.decodeFromString<List<StremioAddon>>(serialized) }.getOrNull() ?: emptyList()
+    }
 
     companion object {
         private const val KEY_THEME = "theme_mode"

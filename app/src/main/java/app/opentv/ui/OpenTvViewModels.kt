@@ -1,7 +1,9 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13.
  */
 package app.opentv.ui
 
@@ -29,7 +31,7 @@ import app.opentv.data.repo.GenreGroup
 import app.opentv.data.repo.MovieVariantGroup
 import app.opentv.data.repo.PersonTitle
 import app.opentv.data.repo.distinctByQuality
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.pairing.ManagerServer
 import app.opentv.sync.NasSync
 import app.opentv.sync.SyncBundle
@@ -114,7 +116,15 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
     fun saveAndSync(draft: Source, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(syncing = true, syncMessage = "Saving source…")
-            val id = graph.sourceRepository.save(draft)
+            val id = try {
+                graph.sourceRepository.save(draft)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _ui.value = _ui.value.copy(syncing = false, syncMessage = app.opentv.core.ProviderDiagnostics.describe(error))
+                onDone(false)
+                return@launch
+            }
             val saved = graph.sourceRepository.byId(id)
             if (saved == null) {
                 _ui.value = _ui.value.copy(syncing = false, syncMessage = "Could not save source.")
@@ -161,7 +171,7 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 // Book any new series-link airings the fresh guide just revealed.
                 runCatching { graph.recordingEngine.rescanSeriesRules() }
-            }.onFailure { Log.w("OpenTV", "Background VOD/guide load failed", it) }
+            }.onFailure { Log.w("Nuvix", "Background VOD/guide load failed") }
         }
     }
 
@@ -1063,7 +1073,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The user-agent to play a movie/episode with (per source). */
     suspend fun userAgentForSource(sourceId: Long): String =
-        graph.sourceRepository.byId(sourceId)?.userAgent ?: "OpenTV/0.1 (Android)"
+        graph.sourceRepository.byId(sourceId)?.userAgent ?: "Nuvix/0.1 (Android)"
 }
 
 /**

@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -43,10 +44,10 @@ class SyncWorker(
         for (source in sources) {
             when (val result = graph.catalogRepository.sync(source, now)) {
                 is CatalogRepository.SyncResult.Success ->
-                    Log.i(TAG, "Catalogue for ${source.name}: ${result.channelCount} channels")
+                    Log.i(TAG, "Catalogue for source ${source.id}: ${result.channelCount} channels")
                 is CatalogRepository.SyncResult.Failed -> {
                     anyFailed = true
-                    Log.w(TAG, "Catalogue for ${source.name} failed: ${result.reason}")
+                    Log.w(TAG, "Catalogue for source ${source.id} failed: ${result.reason}")
                 }
             }
 

@@ -1,7 +1,9 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13.
  */
 package app.opentv.core
 
@@ -111,6 +113,8 @@ object ServiceLocator {
                 sourceDao = database.sources(),
                 api = xtreamApi,
                 http = httpClient,
+                database = database,
+                cacheDirectory = appContext.cacheDir,
             )
         }
 

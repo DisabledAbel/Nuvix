@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -16,7 +17,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -143,7 +144,7 @@ class RecordingService : Service() {
                     throw t
                 } catch (t: java.io.IOException) {
                     // A dropped connection isn't a failure — reconnect and carry on.
-                    Log.i(TAG, "Recording $id connection dropped (${t.message}); reconnecting")
+                    Log.i(TAG, "Recording $id connection dropped; reconnecting")
                     0L
                 }
 
@@ -165,7 +166,7 @@ class RecordingService : Service() {
                 Log.i(TAG, "Recording $id stopped by user")
             } else {
                 error = t.message ?: t.javaClass.simpleName
-                Log.w(TAG, "Recording $id failed", t)
+                Log.w(TAG, "Recording $id failed")
             }
         } finally {
             // The file is now at its final size — anyone watching it should see the true end.
@@ -263,9 +264,9 @@ class RecordingService : Service() {
             else -> getString(R.string.rec_notification_many, count)
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("OpenTV")
+            .setContentTitle("Nuvix")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_opentv_logo)
+            .setSmallIcon(R.drawable.ic_nuvix_logo)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
@@ -287,7 +288,7 @@ class RecordingService : Service() {
     }
 
     companion object {
-        private const val TAG = "OpenTV"
+        private const val TAG = "Nuvix"
         private const val CHANNEL_ID = "recordings"
         private const val NOTIFICATION_ID = 4210
         private const val BUFFER_BYTES = 64 * 1024

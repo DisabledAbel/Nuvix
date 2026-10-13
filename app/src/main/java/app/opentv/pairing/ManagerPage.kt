@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -148,7 +149,7 @@ object ManagerPage {
                 <label class="field"><span>Server (IP address)</span>
                   <input id="recHost" placeholder="192.168.0.214" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
                 <label class="field"><span>Share</span>
-                  <input id="recShare" placeholder="OpenTV" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+                  <input id="recShare" placeholder="Nuvix" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
                 <label class="field"><span>Folder (optional)</span>
                   <input id="recFolder" placeholder="(leave blank)" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
                 <label class="field"><span>Username</span>

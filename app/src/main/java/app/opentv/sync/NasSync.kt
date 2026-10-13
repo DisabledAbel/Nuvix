@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -84,6 +85,6 @@ class NasSync(private val graph: ServiceLocator.Graph) {
         "smb://${config.host}/${config.share}/${syncFolderPath(config)}/$fileName"
 
     private companion object {
-        const val SYNC_DIR = "OpenTV"
+        const val SYNC_DIR = "Nuvix"
     }
 }

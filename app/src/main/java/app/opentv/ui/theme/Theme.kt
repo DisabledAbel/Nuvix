@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -24,8 +25,8 @@ import androidx.compose.ui.unit.sp
  * actively unpleasant on a 55" panel at night, so everything here is anchored near-black with
  * a single restrained accent used only for focus and selection.
  */
-private val Accent = Color(0xFF7C93FF)
-private val AccentDim = Color(0xFF4B5DB8)
+private val Accent = Color(0xFF58A6FF)
+private val AccentDim = Color(0xFF173E77)
 
 private val DarkScheme = darkColorScheme(
     primary = Accent,
@@ -33,13 +34,13 @@ private val DarkScheme = darkColorScheme(
     primaryContainer = AccentDim,
     onPrimaryContainer = Color(0xFFE6EAFF),
     secondary = Color(0xFF9AA3C0),
-    background = Color(0xFF07080C),
+    background = Color(0xFF06101F),
     onBackground = Color(0xFFE8EAF0),
-    surface = Color(0xFF0D0F16),
+    surface = Color(0xFF0A172A),
     onSurface = Color(0xFFE8EAF0),
-    surfaceVariant = Color(0xFF171A24),
-    onSurfaceVariant = Color(0xFFA8AEC0),
-    outline = Color(0xFF2A2F3D),
+    surfaceVariant = Color(0xFF12233B),
+    onSurfaceVariant = Color(0xFFB4C4D9),
+    outline = Color(0xFF29415F),
     error = Color(0xFFFF6B6B),
     onError = Color(0xFF1A0505),
 )

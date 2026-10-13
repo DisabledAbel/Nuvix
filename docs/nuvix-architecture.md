@@ -1,0 +1,13 @@
+# Nuvix architecture
+
+Nuvix keeps OpenTV's native Kotlin/Compose/Media3/Room structure. The upstream commit and original-file digests are recorded in `upstream-source.json`. `MainActivity` owns navigation, the sidebar/home screens present local provider catalogs, `ServiceLocator` retains the dependency graph, and existing catalog, EPG, player, recording, reminder, LAN pairing, and NAS components remain in place. The Kotlin source namespace `app.opentv` preserves upstream structure; generated Android resources and installed identity use `com.disabledabel.nuvix`.
+
+New code has explicit boundaries: `launcher/` wraps PackageManager, optional HOME alias activation, app favorites, and startup preferences; `cloud/` implements optional email OTP, an encrypted allowlisted outbox, REST/RPC sync and WorkManager retry; `update/` validates fixed-origin release metadata, hashes, Android package/version/signers and uses interactive PackageInstaller sessions. `player/BufferSettings` and `ConfigurableLoadControl` expose bounded, live-applied buffering. `core/RecentChannels` persists local channel identifiers only.
+
+The guide downloads and validates an XML feed off the main thread before replacing a feed inside a Room transaction. Parsing or database failure rolls back previous programs/aliases. Catalog and VOD loading continue through the original repositories. Home channel/sports shelves use bounded database queries instead of loading full playlists.
+
+Cloud sync deliberately does not serialize the legacy LAN/NAS `SyncBundle`: that bundle contains stream URLs, which can contain provider credentials. Cloud records use hashed content/profile metadata identities and typed favorites/progress fields. Tokens and queued cloud edits use an Android Keystore-backed vault. Owner-scoped database policies and an invoker RPC guard cloud access; see cloud-sync.md for merge behavior and limitations.
+
+Player playback behavior remains derived from OpenTV. Changes to buffer settings do not recreate the player. Automatic updates perform background work and show notifications only with permission. Seamless uninterrupted live playback across all navigational surfaces remains further work; no global persistent playback service replacement is claimed.
+
+See the separate original `ARCHITECTURE.md` for historical upstream implementation notes; this document and feature-specific documents describe Nuvix changes.

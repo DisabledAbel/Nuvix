@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Færdig</string>
     <string name="common_cancel">Annuller</string>
     <string name="common_back">Tilbage</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Optager 1 program</string>
     <string name="rec_notification_many">Optager %1$d programmer</string>
     <string name="rec_channel_name">Optagelse</string>
-    <string name="rec_channel_desc">Vises, mens OpenTV optager</string>
+    <string name="rec_channel_desc">Vises, mens Nuvix optager</string>
     <string name="rec_error_nothing">Der blev ikke optaget noget</string>
     <string name="rec_error_usb_no_folder">Ingen USB-mappe valgt. Åbn optageindstillinger, og vælg en mappe på dit drev.</string>
     <string name="rec_error_usb_unavailable">USB-drevet er ikke tilgængeligt. Sæt drevet i igen, og vælg mappen igen i optageindstillinger.</string>
     <string name="rec_background_prompt_title">Fortsæt optagelse, når du forlader appen?</string>
-    <string name="rec_background_prompt_body">Android kan stoppe denne optagelse, når skærmen går i dvale, eller du forlader OpenTV. Tillad, at OpenTV ignorerer batterioptimering, så optagelser fortsætter, selv i standby – ligesom en set-top-boks gør.</string>
+    <string name="rec_background_prompt_body">Android kan stoppe denne optagelse, når skærmen går i dvale, eller du forlader Nuvix. Tillad, at Nuvix ignorerer batterioptimering, så optagelser fortsætter, selv i standby – ligesom en set-top-boks gør.</string>
     <string name="rec_background_prompt_allow">Tillad</string>
     <string name="rec_background_prompt_not_now">Ikke nu</string>
     <string name="player_rewind">Spol tilbage</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Tilføj, fjern og gentest dine IPTV-kilder</string>
     <string name="settings_addons_title">Tilføjelser (Stremio)</string>
     <string name="settings_addons_subtitle">Afspil fra Stremio-tilføjelser, du selv har sat op</string>
-    <string name="addons_note">Tilføj en Stremio-tilføjelse ved at indsætte dens manifest-URL. OpenTV leveres uden nogen – du medbringer dine egne. Hvis tilføjelsen er debrid-baseret, skal du oprette din debrid-nøgle på tilføjelsens egen side og indsætte den personlige URL, den giver dig; din nøgle bliver der, aldrig i OpenTV.</string>
+    <string name="addons_note">Tilføj en Stremio-tilføjelse ved at indsætte dens manifest-URL. Nuvix leveres uden nogen – du medbringer dine egne. Hvis tilføjelsen er debrid-baseret, skal du oprette din debrid-nøgle på tilføjelsens egen side og indsætte den personlige URL, den giver dig; din nøgle bliver der, aldrig i Nuvix.</string>
     <string name="addons_url_label">Manifest-URL for tilføjelse</string>
     <string name="addons_add">Tilføj</string>
     <string name="addons_checking">Kontrollerer…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Skift mappe</string>
     <string name="recset_usb_saving_to">Gemmer til: %1$s</string>
     <string name="recset_usb_none">Ingen mappe valgt endnu</string>
-    <string name="recset_usb_hint">Tilslut et USB-drev eller ekstern lagerplads formateret som exFAT eller FAT32, og vælg derefter en mappe på det. Optagelser skrives direkte til den mappe og kan stadig afspilles og slettes inde i OpenTV.</string>
+    <string name="recset_usb_hint">Tilslut et USB-drev eller ekstern lagerplads formateret som exFAT eller FAT32, og vælg derefter en mappe på det. Optagelser skrives direkte til den mappe og kan stadig afspilles og slettes inde i Nuvix.</string>
     <string name="recset_usb_need_folder">Vælg en mappe, før du gemmer til USB.</string>
     <string name="recset_usb_no_picker">Der er ingen mappevælger tilgængelig på denne enhed.</string>
     <string name="recset_nas_connection">NAS-forbindelse</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Tilladt</string>
     <string name="recset_background_not_allowed">Ikke tilladt</string>
     <string name="recset_background_fix">Ret</string>
-    <string name="recset_background_desc">Android kan stoppe optagelser, når enheden går i dvale, eller du forlader OpenTV, medmindre OpenTV får lov til at ignorere batterioptimering. Tillader du det, fortsætter optagelser selv i standby, ligesom en set-top-boks.</string>
+    <string name="recset_background_desc">Android kan stoppe optagelser, når enheden går i dvale, eller du forlader Nuvix, medmindre Nuvix får lov til at ignorere batterioptimering. Tillader du det, fortsætter optagelser selv i standby, ligesom en set-top-boks.</string>
     <string name="recset_background_on_title">Baggrundsoptagelse er slået til</string>
-    <string name="recset_background_on_desc">Optagelser fortsætter, når du forlader OpenTV, eller TV\'et går i dvale.</string>
+    <string name="recset_background_on_desc">Optagelser fortsætter, når du forlader Nuvix, eller TV\'et går i dvale.</string>
     <string name="recset_background_toast">Baggrundsoptagelse aktiveret – optagelser fortsætter i baggrunden.</string>
     <string name="epg_updating">Opdaterer…</string>
     <string name="epg_update_now">Opdater guiden nu</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Navn (valgfrit)</string>
     <string name="epg_xmltv_url">XMLTV-URL (.xml eller .xml.gz)</string>
     <string name="epg_add_guide">Tilføj guide</string>
-    <string name="sync_desc">Kopiér Fortsæt visning mellem to OpenTV-enheder via dit eget wifi – intet forlader hjemmet, og der kræves ingen konto.</string>
+    <string name="sync_desc">Kopiér Fortsæt visning mellem to Nuvix-enheder via dit eget wifi – intet forlader hjemmet, og der kræves ingen konto.</string>
     <string name="sync_share_from_here">Del herfra</string>
     <string name="sync_receive">Modtag</string>
     <string name="sync_ready_to_share">Klar til at dele</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Gemte denne enhed til NAS\'et. Ingen andre enheder har synkroniseret hertil endnu.</string>
     <string name="sync_nas_failed">Kunne ikke få forbindelse til dit NAS. Tjek, at det er tændt, og at oplysningerne i optageindstillinger er korrekte.</string>
     <string name="sync_nas_auto">Synkroniser automatisk, når appen åbnes</string>
-    <string name="about_title">Om OpenTV</string>
+    <string name="about_title">Om Nuvix</string>
     <string name="about_version">Version</string>
     <string name="about_update_available">Opdatering tilgængelig: %1$s – se prompten for at installere.</string>
     <string name="about_up_to_date">Du har den nyeste version.</string>
     <string name="about_checking">Kontrollerer…</string>
     <string name="about_check_updates">Søg efter opdateringer</string>
     <string name="about_what_is_title">Hvad det er</string>
-    <string name="about_what_is_body">En gratis IPTV-afspiller med åben kildekode til Android TV, Fire TV og telefoner. Det er kun en afspiller – den leverer ikke kanaler; du forbinder den tjeneste, du allerede betaler for. Intet, du indtaster, forlader din enhed, bortset fra for at kommunikere med din egen udbyder.</string>
     <string name="about_built_open_title">Bygget i åbenhed</string>
-    <string name="about_built_open_body">OpenTV udvikles åbent, hvor AI står for en stor del af kodningen under menneskelig ledelse – det bliver sagt ligeud, ikke skjult. Fordi det er open source, kan én enkelt person, der forsvinder, ikke lukke det ned: alle kan læse hver linje, bygge det og føre det videre.</string>
+    <string name="about_built_open_body">Nuvix udvikles åbent, hvor AI står for en stor del af kodningen under menneskelig ledelse – det bliver sagt ligeud, ikke skjult. Fordi det er open source, kan én enkelt person, der forsvinder, ikke lukke det ned: alle kan læse hver linje, bygge det og føre det videre.</string>
     <string name="about_support_title">Støt projektet</string>
     <string name="about_scan_to_donate">Scan for at donere</string>
     <string name="about_licence_links_title">Licens &amp; links</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Min udbyder</string>
     <string name="onboarding_default_playlist_name">Min playliste</string>
     <string name="onboarding_add_provider_title">Tilføj din udbyder</string>
-    <string name="onboarding_add_provider_desc">OpenTV er en afspiller. Den leverer ikke kanaler – du forbinder den tjeneste, du allerede betaler for.</string>
+    <string name="onboarding_add_provider_desc">Nuvix er en afspiller. Den leverer ikke kanaler – du forbinder den tjeneste, du allerede betaler for.</string>
     <string name="onboarding_xtream_login">Xtream Codes-login</string>
     <string name="onboarding_m3u_url">M3U-playliste-URL</string>
     <string name="onboarding_stalker_portal">Stalker-portal</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Arbejder…</string>
     <string name="onboarding_save_load">Gem og indlæs</string>
     <string name="onboarding_use_phone">Brug min telefon i stedet</string>
-    <string name="onboarding_privacy_note">Dine udbyderoplysninger gemmes kun på denne enhed. OpenTV har ikke noget kontosystem og ingen egen server – intet, du skriver her, sendes nogen steder hen bortset fra til din udbyder.</string>
+    <string name="onboarding_privacy_note">Dine udbyderoplysninger gemmes kun på denne enhed. Nuvix har ikke noget kontosystem og ingen egen server – intet, du skriver her, sendes nogen steder hen bortset fra til din udbyder.</string>
     <string name="pairing_stopped">Parring stoppet</string>
     <string name="pairing_type_here">Indtast det her i stedet</string>
     <string name="pairing_got_it">Modtaget – opretter forbindelse til din udbyder…</string>

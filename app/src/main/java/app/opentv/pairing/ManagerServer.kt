@@ -1,7 +1,9 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13.
  */
 package app.opentv.pairing
 
@@ -117,7 +119,7 @@ class ManagerServer(
             // clash with whatever else the user runs at home.
             ServerSocket(0)
         } catch (e: Exception) {
-            Log.w(TAG, "Could not open a socket", e)
+            Log.w(TAG, "Could not open a socket")
             _state.value = State.Failed("Could not start the channel manager on this device.")
             return
         }
@@ -144,7 +146,7 @@ class ManagerServer(
                     break // socket closed, which is how we stop
                 }
                 runCatching { handle(client) }
-                    .onFailure { Log.w(TAG, "Manager request failed", it) }
+                    .onFailure { Log.w(TAG, "Manager request failed") }
                 runCatching { client.close() }
             }
         }
@@ -386,7 +388,13 @@ class ManagerServer(
             return
         }
         val result = runBlocking {
-            val id = sourceRepository.save(draft)
+            val id = try {
+                sourceRepository.save(draft)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                return@runBlocking AddResultDto(ok = false, error = app.opentv.core.ProviderDiagnostics.describe(error))
+            }
             val saved = sourceRepository.byId(id)
                 ?: return@runBlocking AddResultDto(ok = false, error = "Could not save the source.")
             when (val r = catalog.syncLive(saved, System.currentTimeMillis())) {
@@ -469,7 +477,7 @@ class ManagerServer(
                     if (PairingHttp.isPrivateAddress(address.hostAddress)) candidates += address
                 }
             }
-        }.onFailure { Log.w(TAG, "Could not enumerate interfaces", it) }
+        }.onFailure { Log.w(TAG, "Could not enumerate interfaces") }
 
         // Prefer a real private range over a 169.254 self-assigned address, which means DHCP
         // failed and nothing will be able to reach us anyway.

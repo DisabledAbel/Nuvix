@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Gotowe</string>
     <string name="common_cancel">Anuluj</string>
     <string name="common_back">Wstecz</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Nagrywanie 1 programu</string>
     <string name="rec_notification_many">Nagrywanie %1$d programów</string>
     <string name="rec_channel_name">Nagrywanie</string>
-    <string name="rec_channel_desc">Wyświetlane, gdy OpenTV nagrywa</string>
+    <string name="rec_channel_desc">Wyświetlane, gdy Nuvix nagrywa</string>
     <string name="rec_error_nothing">Nic nie zostało nagrane</string>
     <string name="rec_error_usb_no_folder">Nie wybrano folderu USB. Otwórz ustawienia nagrywania i wybierz folder na dysku.</string>
     <string name="rec_error_usb_unavailable">Dysk USB niedostępny. Podłącz dysk ponownie i wybierz folder ponownie w ustawieniach nagrywania.</string>
     <string name="rec_background_prompt_title">Kontynuować nagrywanie po wyjściu?</string>
-    <string name="rec_background_prompt_body">Android może zatrzymać to nagrywanie, gdy ekran przejdzie w tryb uśpienia lub opuścisz OpenTV. Zezwól OpenTV na ignorowanie optymalizacji baterii, aby nagrywanie trwało nadal, nawet w trybie gotowości — tak jak w dekoderze telewizyjnym.</string>
+    <string name="rec_background_prompt_body">Android może zatrzymać to nagrywanie, gdy ekran przejdzie w tryb uśpienia lub opuścisz Nuvix. Zezwól Nuvix na ignorowanie optymalizacji baterii, aby nagrywanie trwało nadal, nawet w trybie gotowości — tak jak w dekoderze telewizyjnym.</string>
     <string name="rec_background_prompt_allow">Zezwól</string>
     <string name="rec_background_prompt_not_now">Nie teraz</string>
     <string name="player_rewind">Przewiń do tyłu</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Dodawaj, usuwaj i testuj ponownie swoje źródła IPTV</string>
     <string name="settings_addons_title">Dodatki (Stremio)</string>
     <string name="settings_addons_subtitle">Odtwarzaj z dodatków Stremio skonfigurowanych samodzielnie</string>
-    <string name="addons_note">Dodaj dodatek Stremio, wklejając adres URL jego manifestu. OpenTV nie zawiera żadnych — musisz dodać własne. Jeśli dodatek korzysta z usługi debrid, skonfiguruj swój klucz debrid na stronie samego dodatku i wklej spersonalizowany adres URL, który tam otrzymasz; Twój klucz pozostaje tam, nigdy w OpenTV.</string>
+    <string name="addons_note">Dodaj dodatek Stremio, wklejając adres URL jego manifestu. Nuvix nie zawiera żadnych — musisz dodać własne. Jeśli dodatek korzysta z usługi debrid, skonfiguruj swój klucz debrid na stronie samego dodatku i wklej spersonalizowany adres URL, który tam otrzymasz; Twój klucz pozostaje tam, nigdy w Nuvix.</string>
     <string name="addons_url_label">Adres URL manifestu dodatku</string>
     <string name="addons_add">Dodaj</string>
     <string name="addons_checking">Sprawdzanie…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Zmień folder</string>
     <string name="recset_usb_saving_to">Zapisywanie w: %1$s</string>
     <string name="recset_usb_none">Nie wybrano jeszcze folderu</string>
-    <string name="recset_usb_hint">Podłącz dysk USB lub nośnik zewnętrzny sformatowany w exFAT lub FAT32, a następnie wybierz na nim folder. Nagrania są zapisywane bezpośrednio w tym folderze i nadal można je odtwarzać oraz usuwać w OpenTV.</string>
+    <string name="recset_usb_hint">Podłącz dysk USB lub nośnik zewnętrzny sformatowany w exFAT lub FAT32, a następnie wybierz na nim folder. Nagrania są zapisywane bezpośrednio w tym folderze i nadal można je odtwarzać oraz usuwać w Nuvix.</string>
     <string name="recset_usb_need_folder">Wybierz folder przed zapisaniem na USB.</string>
     <string name="recset_usb_no_picker">Na tym urządzeniu nie jest dostępny wybór folderu.</string>
     <string name="recset_nas_connection">Połączenie z NAS</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Dozwolone</string>
     <string name="recset_background_not_allowed">Niedozwolone</string>
     <string name="recset_background_fix">Napraw</string>
-    <string name="recset_background_desc">Android może zatrzymać nagrywanie, gdy urządzenie przejdzie w tryb uśpienia lub opuścisz OpenTV, chyba że OpenTV będzie mógł ignorować optymalizację baterii. Zezwolenie na to sprawia, że nagrywanie trwa nadal nawet w trybie gotowości, podobnie jak w dekoderze telewizyjnym.</string>
+    <string name="recset_background_desc">Android może zatrzymać nagrywanie, gdy urządzenie przejdzie w tryb uśpienia lub opuścisz Nuvix, chyba że Nuvix będzie mógł ignorować optymalizację baterii. Zezwolenie na to sprawia, że nagrywanie trwa nadal nawet w trybie gotowości, podobnie jak w dekoderze telewizyjnym.</string>
     <string name="recset_background_on_title">Nagrywanie w tle jest włączone</string>
-    <string name="recset_background_on_desc">Nagrywanie będzie kontynuowane po opuszczeniu OpenTV lub przejściu telewizora w tryb uśpienia.</string>
+    <string name="recset_background_on_desc">Nagrywanie będzie kontynuowane po opuszczeniu Nuvix lub przejściu telewizora w tryb uśpienia.</string>
     <string name="recset_background_toast">Włączono nagrywanie w tle — nagrywanie będzie kontynuowane w tle.</string>
     <string name="epg_updating">Aktualizowanie…</string>
     <string name="epg_update_now">Zaktualizuj przewodnik teraz</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Nazwa (opcjonalnie)</string>
     <string name="epg_xmltv_url">Adres URL XMLTV (.xml lub .xml.gz)</string>
     <string name="epg_add_guide">Dodaj przewodnik</string>
-    <string name="sync_desc">Skopiuj listę kontynuacji oglądania między dwoma urządzeniami OpenTV przez własną sieć wifi — nic nie opuszcza domu i nie jest wymagane żadne konto.</string>
+    <string name="sync_desc">Skopiuj listę kontynuacji oglądania między dwoma urządzeniami Nuvix przez własną sieć wifi — nic nie opuszcza domu i nie jest wymagane żadne konto.</string>
     <string name="sync_share_from_here">Udostępnij stąd</string>
     <string name="sync_receive">Odbierz</string>
     <string name="sync_ready_to_share">Gotowe do udostępnienia</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Zapisano to urządzenie na NAS. Żadne inne urządzenie jeszcze się tu nie zsynchronizowało.</string>
     <string name="sync_nas_failed">Nie udało się połączyć z NAS. Sprawdź, czy jest włączony i czy dane w ustawieniach nagrywania są poprawne.</string>
     <string name="sync_nas_auto">Automatyczna synchronizacja przy otwarciu aplikacji</string>
-    <string name="about_title">Informacje o OpenTV</string>
+    <string name="about_title">Informacje o Nuvix</string>
     <string name="about_version">Wersja</string>
     <string name="about_update_available">Dostępna aktualizacja: %1$s — zobacz komunikat, aby zainstalować.</string>
     <string name="about_up_to_date">Masz najnowszą wersję.</string>
     <string name="about_checking">Sprawdzanie…</string>
     <string name="about_check_updates">Sprawdź aktualizacje</string>
     <string name="about_what_is_title">Czym jest</string>
-    <string name="about_what_is_body">Bezpłatny odtwarzacz IPTV o otwartym kodzie źródłowym dla Android TV, Fire TV i telefonów. To tylko odtwarzacz — nie dostarcza kanałów; łączysz się z usługą, za którą już płacisz. Nic, co wprowadzisz, nie opuszcza Twojego urządzenia, poza komunikacją z Twoim dostawcą.</string>
     <string name="about_built_open_title">Tworzone w otwarty sposób</string>
-    <string name="about_built_open_body">OpenTV jest rozwijane w sposób otwarty, a AI wykonuje dużą część kodowania pod kierunkiem człowieka — mówimy o tym wprost, niczego nie ukrywając. Ponieważ jest to oprogramowanie open source, odejście jednej osoby nie może go pogrzebać: każdy może przeczytać każdą linię kodu, zbudować go i kontynuować rozwój.</string>
+    <string name="about_built_open_body">Nuvix jest rozwijane w sposób otwarty, a AI wykonuje dużą część kodowania pod kierunkiem człowieka — mówimy o tym wprost, niczego nie ukrywając. Ponieważ jest to oprogramowanie open source, odejście jednej osoby nie może go pogrzebać: każdy może przeczytać każdą linię kodu, zbudować go i kontynuować rozwój.</string>
     <string name="about_support_title">Wesprzyj projekt</string>
     <string name="about_scan_to_donate">Zeskanuj, aby wesprzeć</string>
     <string name="about_licence_links_title">Licencja i linki</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Mój dostawca</string>
     <string name="onboarding_default_playlist_name">Moja playlista</string>
     <string name="onboarding_add_provider_title">Dodaj swojego dostawcę</string>
-    <string name="onboarding_add_provider_desc">OpenTV to odtwarzacz. Nie dostarcza kanałów — łączysz się z usługą, za którą już płacisz.</string>
+    <string name="onboarding_add_provider_desc">Nuvix to odtwarzacz. Nie dostarcza kanałów — łączysz się z usługą, za którą już płacisz.</string>
     <string name="onboarding_xtream_login">Logowanie Xtream Codes</string>
     <string name="onboarding_m3u_url">Adres URL playlisty M3U</string>
     <string name="onboarding_stalker_portal">Portal Stalker</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Przetwarzanie…</string>
     <string name="onboarding_save_load">Zapisz i wczytaj</string>
     <string name="onboarding_use_phone">Użyj telefonu zamiast tego</string>
-    <string name="onboarding_privacy_note">Dane Twojego dostawcy są przechowywane wyłącznie na tym urządzeniu. OpenTV nie ma systemu kont ani własnego serwera — nic, co tu wpiszesz, nie jest wysyłane nigdzie poza Twoim dostawcą.</string>
+    <string name="onboarding_privacy_note">Dane Twojego dostawcy są przechowywane wyłącznie na tym urządzeniu. Nuvix nie ma systemu kont ani własnego serwera — nic, co tu wpiszesz, nie jest wysyłane nigdzie poza Twoim dostawcą.</string>
     <string name="pairing_stopped">Parowanie zatrzymane</string>
     <string name="pairing_type_here">Wpisz to tutaj zamiast tego</string>
     <string name="pairing_got_it">Gotowe — łączenie z dostawcą…</string>

@@ -14,7 +14,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Downloading OpenTV…</title>
+<title>Downloading Nuvix…</title>
 <style>
   body {
     margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -69,7 +69,7 @@
       if (!apk) { fail("The latest release has no APK attached."); return; }
 
       document.getElementById("detail").textContent =
-        "OpenTV " + (release.tag_name || "") + " — if nothing happens, use the link below.";
+        "Nuvix " + (release.tag_name || "") + " — if nothing happens, use the link below.";
       document.getElementById("fallback").textContent = "Download manually";
       document.getElementById("fallback").href = apk.browser_download_url;
       location.replace(apk.browser_download_url);

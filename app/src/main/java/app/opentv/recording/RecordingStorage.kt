@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -8,7 +9,7 @@ package app.opentv.recording
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.AppSettings
 import java.io.File
 import java.io.FileOutputStream

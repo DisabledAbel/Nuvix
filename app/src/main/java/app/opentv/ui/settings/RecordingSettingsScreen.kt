@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -68,7 +69,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.AppSettings
 import app.opentv.core.ServiceLocator
 import app.opentv.core.isIgnoringBatteryOptimizations
@@ -216,7 +217,7 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
             SectionCard(stringResource(R.string.recset_nas_connection)) {
                 Field(stringResource(R.string.recset_field_server), host, "192.168.1.10") { host = it }
                 Field(stringResource(R.string.recset_field_share), share, "video") { share = it }
-                Field(stringResource(R.string.recset_field_folder), folder, "OpenTV") { folder = it }
+                Field(stringResource(R.string.recset_field_folder), folder, "Nuvix") { folder = it }
                 Field(stringResource(R.string.recset_field_username), user, "") { user = it }
                 Field(stringResource(R.string.recset_field_password), password, "", isPassword = true) { password = it }
 

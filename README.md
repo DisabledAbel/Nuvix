@@ -1,164 +1,70 @@
-# OpenTV
+# Nuvix
 
-**A free, open-source IPTV player for Android TV, Fire TV, phones and tablets.**
+**Your television. Your way.** Nuvix is a free, open-source IPTV player and optional Android TV home launcher for Android TV, Google TV, and compatible Fire TV devices. Users supply their own authorized providers. Nuvix includes no channels, IPTV accounts, playlists, or media.
 
-No account. No subscription. No server of ours between you and your provider.
+Nuvix is an **independent modified version of [OpenTV](https://github.com/opentvproject/opentv)**, based on commit `43b95c05d8f6a042f51c0cff662ef80789ee7528`. It is not affiliated with OpenTV or DIRECTV. Its original navy/blue identity and television navigation use no DIRECTV assets. This repository is independent; GitHub's Fork feature was not used.
 
-[![Build](https://github.com/opentvproject/opentv/actions/workflows/build.yml/badge.svg)](https://github.com/opentvproject/opentv/actions/workflows/build.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsors-ea4aaa.svg)](https://github.com/sponsors/legionnaireneyland)
+## Implemented
 
----
+- Native Kotlin/Jetpack Compose app with Media3 ExoPlayer, Room local storage, and lazy guide/poster rendering. Existing OpenTV playback, source setup, recordings, reminders, profiles, and LAN/NAS sync are retained.
+- Keystore-wrapped SQLCipher protection for the complete local provider/catalog database, encrypted NAS/API/add-on secret preferences, and explicit backup exclusions. Key loss retains data and shows recovery controls.
+- Nuvix identity, application ID `com.disabledabel.nuvix`, version `0.1.0` / version code `21`, original icon/banner/splash, and About attribution. Kotlin source packages remain `app.opentv` to keep the upstream port reviewable; Android namespace and installed identity are Nuvix.
+- Expandable, scrolling remote navigation: **Home, Live TV, Guide, Movies, TV Shows, Sports, Apps, Library, Settings**. Visible focus indicators, D-pad/Back support, and existing player remote controls.
+- Home shelves for recently watched/favorite channels, continue watching, provider movie recommendations, recently added shows, and actually installed pinned apps. Empty states work without a provider. A guide preview is available when enabled; home artwork is not represented as a playing video.
+- M3U/M3U8, Xtream Codes, XMLTV, multiple sources, channel search/groups/favorites, existing authorized Stalker/MAC support, catch-up where available, PiP, aspect ratio and external playback controls.
+- Separate Live TV list and horizontal time-grid Guide. Atomic EPG replacement preserves valid cached guide data after a failed refresh. Recording/reminder features remain subject to device capabilities and provider authorization.
+- Automatic/small/medium/large/custom buffering with validated ranges. Buffer policy changes update the running player without rebuilding it.
+- Reversible, disabled-by-default HOME activity alias. Default-home selection and device compatibility/status controls, startup destinations, device-settings access, and normal app mode on restricted devices.
+- Actual installed-app discovery via narrow package queries; icons, launch, favorites, ordering, long-press menus, and app-information shortcuts. No streaming services are hardcoded as installed.
+- Optional Supabase email-code authentication and local-first favorites/resume sync. Owner-only RLS, encrypted session/outbox storage, offline retry, and guarded record merging. Cloud sync starts disabled and excludes provider credentials and stream URLs.
+- Trusted GitHub release discovery with numeric version codes, release notes, optional automatic checks/notifications/background downloads, progress/cancellation, package/hash/signer/downgrade checks, and interactive Android PackageInstaller installation.
+- CI with Kotlin compilation, unit tests, lint, debug APK artifacts; manually triggered builds; signed tag releases with verified APK identity, pinned signing fingerprint, `update.json`, checksums, and corresponding GPL source.
 
-> **Support OpenTV** — it's free and always will be. If it saved you from a dead "lifetime"
-> app, you can chip in via **[GitHub Sponsors](https://github.com/sponsors/legionnaireneyland)**
-> or **[PayPal](https://www.paypal.com/donate/?business=leetobin1982@gmail.com&item_name=Support+OpenTV&no_recurring=0&currency_code=GBP)**.
-> Entirely optional; the app is never paywalled.
+## Install and build
 
-## Why this exists
+The current development APK is a **debug build**, identified as `com.disabledabel.nuvix.debug`; it is not a production signed release. Production updates target the stable application ID and require the maintainer's consistent signing certificate. There is no published production release until signing and release configuration are supplied.
 
-There is a recurring pattern in this corner of the app world. A promising IPTV player appears.
-It looks good. It sells a "lifetime" subscription. The lifetime turns out to be shorter than
-the buyer's — the developer burns out, or moves on, or simply stops replying, and everyone who
-paid is left with an app that no longer works and no way to fix it.
+Open the project in Android Studio with JDK 17 and Android SDK 35, or run:
 
-The people affected are not helpless. They are often technical. What they lack is not skill
-but *access*: the code is closed, so nobody else can pick it up.
-
-OpenTV is the same category of app built so that cannot happen. The source is public and
-GPL-licensed. If the current maintainers vanish tomorrow, anyone can fork it, build it and
-keep it alive. That is the entire point.
-
-**OpenTV is not a fork or a decompilation of any existing app.** It is written from scratch.
-
-## What it does
-
-- **Live TV** from Xtream Codes logins and plain M3U/M3U8 playlists
-- **A guide that stays put** — XMLTV EPG that survives restarts, refreshes incrementally, and
-  never wipes itself
-- **Recording (DVR)** — record to the box, a USB drive or your NAS (SMB); schedule from the
-  guide; series-link a whole show; play back in-app with full seeking
-- **Catch-up / archive** where your provider offers it, plus **programme reminders**
-- **Movies and series** with resume and per-profile watch history
-- **Favourites, categories, hide channels, search**, picture-in-picture, aspect control, and
-  hand-off to an external player
-- **Free sync between your own devices** — favourites, watch history and NAS recordings, over
-  your wifi or Tailscale, with no server of ours
-- **Multiple languages** (fully translated to Spanish), a parental PIN, profiles, and self-updates
-- **D-pad first** — designed for a remote, works with a touchscreen
-- **One APK** for Android TV, Fire TV, phones and tablets
-
-## Screenshots
-
-The live TV guide — programme grid, favourites, and a live preview:
-
-![OpenTV live TV guide](docs/screenshots/01-guide.png)
-
-| Recordings &amp; reminders | Free cloud sync — your own NAS, no server |
-| :---: | :---: |
-| ![Recordings and reminders](docs/screenshots/02-recordings.png) | ![NAS cloud sync](docs/screenshots/03-cloud-sync.png) |
-| Movies &amp; series | Settings |
-| ![Movies](docs/screenshots/04-movies.png) | ![Settings](docs/screenshots/05-settings.png) |
-
-Open-source through and through — the About screen carries the licence, the links, and a donation QR:
-
-![About](docs/screenshots/06-about.png)
-
-## What it deliberately does not do
-
-- **No servers of ours, no web dashboard, no account.** Your provider credentials never leave
-  your device, and syncing happens directly between your devices — or through your own NAS —
-  never through a machine we run. This is a feature, not a gap — see
-  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the reasoning, and note that "sync your
-  channel list to *our* servers" is precisely the feature whose hosting bill makes a one-off
-  payment unsustainable.
-- **No content.** OpenTV is a player. You bring a service you already pay for. The project has
-  no affiliation with any provider and does not help you find one.
-
-## Install
-
-**→ [Install page](https://opentvproject.github.io/opentv/)** — step-by-step for Chromecast with
-Google TV, Android TV boxes, Fire TV Sticks, and phones.
-
-On a TV, the quickest route is the **[Downloader app](https://www.aftvnews.com/downloader/)** —
-enter the code:
-
-```
-6398449
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-That code (or `aftv.news/6398449` in a browser) always points at the newest APK, so it never
-goes stale. On a phone, the [install page](https://opentvproject.github.io/opentv/) is a
-one-tap download. Or grab the APK straight from [Releases](../../releases).
+See [building](docs/building.md), [release signing](docs/signing.md), and [release publication](docs/RELEASING.md). Debug and release installations have separate data. Do not publish debug-signed APKs as production updates.
 
-Every release is built by GitHub Actions from a tagged commit, and the workflow that built it
-is public — you can check the APK against the source, or rebuild it yourself, rather than
-trusting anyone's word.
+## Provider setup
 
-New to this? [SETUP.md](SETUP.md) walks through getting the repo, the install page and the
-first build running.
+Open **Settings → Providers** or select **Add provider** on Home. Supply an authorized M3U/M3U8 playlist URL, Xtream host/user/password, or your legitimately assigned Stalker portal/MAC. Test the source and save it. Configure the provider's XMLTV address in source/guide settings where needed.
 
-## Build it yourself
+Prefer HTTPS. Legacy HTTP is supported, but it sends provider authentication unencrypted on the network. Nuvix does not bypass authentication, DRM, subscriptions, or geographic/provider restrictions. Optional third-party metadata and guide sources are separate from IPTV playback.
 
-```bash
-git clone https://github.com/opentvproject/opentv.git
-cd opentv
-./gradlew assembleDebug
-```
+## Launcher setup
 
-You need JDK 17+ and the Android SDK (API 35). Android Studio will fetch it for you. The debug
-APK lands in `app/build/outputs/apk/debug/`.
+Open **Settings → Home launcher**, enable the Nuvix HOME entry, and use the supported system default-home selector if available. Check status before expecting the Home button to change. Select Home, Live TV, Guide, Last Watched Channel, or Apps as the startup destination. Device settings remain reachable.
 
-Run the tests:
+Google TV and Fire TV firmware may prohibit third-party default launchers. Normal-app functionality remains available. Nuvix never disables the original launcher, requires root, or uses accessibility services to capture Home. Restore the original default launcher in system settings before disabling Nuvix's HOME entry. See [device compatibility](docs/launcher-compatibility.md).
 
-```bash
-./gradlew test
-```
+## Optional cloud sync
 
-## How it was built
+Cloud sync requires your Supabase project. Apply the migration in `supabase/migrations`, enable email OTP with a template containing `{{ .Token }}`, and enter the project HTTPS URL and **publishable/anon client key** in **Settings → Supabase cloud sync**. Enter the email verification code on the TV, then explicitly enable sync.
 
-OpenTV was written with **Claude**, Anthropic's AI assistant, working from a human's
-direction — the design decisions, the priorities, the "no server, ever" rule, and every
-review of what shipped were the maintainer's; Claude did the bulk of the drafting, wiring and
-debugging against that direction.
+No service-role key belongs in the app. Favorites merge additively; local removals remain local and are not pushed as destructive deletions. Resume positions use guarded timestamps. The first version synchronizes channel/movie/series favorites and movie/episode progress; app settings, custom groups, installed-app favorites, and launcher preferences are currently local. Existing LAN/NAS sync is preserved. See [cloud setup and conflict semantics](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 
-That is relevant here for one specific reason: **it kept the project genuinely clean-room.**
-Nothing was decompiled or copied from any existing IPTV app. The code was written from public
-specifications (the Xtream Codes request format, the XMLTV and M3U formats, the Kodi catch-up
-tags) and from describing how other apps *behave* as a user — never from their source. That is
-the legal footing that lets anyone fork this and keep it alive, which is the whole point.
+## Updates and releases
 
-## Contributing
+**Settings → Nuvix updates** provides manual checks and optional background preferences. Only stable releases from `DisabledAbel/Nuvix` with valid `update.json` metadata are accepted. The installed signing certificate is the trust anchor. Android controls install approval and installation permission; Nuvix never promises silent updates. Downloads and checks do not retune the player.
 
-Please do. See [CONTRIBUTING.md](CONTRIBUTING.md).
+A production release requires four signing secrets and the pinned public `SIGNING_CERT_SHA256` repository variable. Losing the key prevents normal upgrades; retain a secure backup. See [signing](docs/signing.md) and [update troubleshooting](docs/update-troubleshooting.md).
 
-The project is explicitly looking for people who own devices the maintainers do not. Most
-"works for me" bugs in this category are device-specific — an Ugoos box, a first-gen ONN, a
-Fire Stick Lite — and a bug report from someone who owns one is worth more than a week of
-guessing. If a channel fails on your setup, [open an issue](../../issues/new/choose).
+## Validation and remaining work
 
-## Supporting the project
+See [implementation report](docs/implementation-report.md) for exact executed checks and build results. Source-level tests do not establish compatibility with every TV firmware. Real Android TV/Google TV/Fire TV testing is still required for default-home selection, D-pad focus flows, authorized live playback, PiP, process-death behavior, encrypted database migration, and interactive APK installation. Supabase needs a configured real project for device-to-device acceptance testing.
 
-OpenTV is free and always will be. There is nothing to buy, no premium tier, and no lifetime
-subscription — the failure mode this project was built in response to is a promise nobody
-could keep, so we are not making one.
+Further work includes translating the new English Nuvix surfaces and remaining inherited English fallback strings, richer provider-supplied sports event metadata, broader cloud preference sync, resume-capable update transfers, continuous live-preview playback between screens, and a larger TV-device test matrix. No unfinished feature is presented as complete. Historical screenshots under `docs/screenshots` are preserved OpenTV assets, not screenshots of the new Nuvix interface.
 
-If it saves you money or annoyance and you want to say thanks, you can sponsor the project via
-[GitHub Sponsors](https://github.com/sponsors/legionnaireneyland) or
-[PayPal](https://www.paypal.com/donate/?business=leetobin1982@gmail.com&item_name=Support+OpenTV&no_recurring=0&currency_code=GBP)
-— see [.github/FUNDING.yml](.github/FUNDING.yml). Tips fund nothing except spare-evening development;
-nobody is owed a feature for one, and nothing is gated behind one.
+## Contributing and license
 
-## Licence
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [architecture](docs/nuvix-architecture.md), [upstream audit](docs/upstream-audit.md), and [roadmap](docs/ROADMAP.md).
 
-[GPL-3.0-or-later](LICENSE).
-
-Chosen deliberately. GPL means anyone can take this code, but if they ship it they must ship
-their source too. Nobody gets to close it, rebrand it, and sell a lifetime subscription on top
-of work the community did for free.
-
-## Legal
-
-OpenTV is a media player, comparable to VLC. It ships with no channels, no playlists, and no
-links to any. What you point it at, and whether you are entitled to, is between you and your
-provider.
+Nuvix and its OpenTV-derived source are licensed **GPL-3.0-or-later**. Copyright (C) 2026 The OpenTV Contributors; Nuvix modifications Copyright (C) 2026 Nuvix Contributors. The original [LICENSE](LICENSE) and source copyright notices are preserved. [COPYING.md](COPYING.md) explains corresponding-source distribution; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists dependency licenses. Release APKs are accompanied by the exact tagged source archive, build scripts, and migrations.

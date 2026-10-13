@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -66,7 +67,7 @@ class SyncServer(private val scope: CoroutineScope) {
         val socket = try {
             ServerSocket(0)
         } catch (e: Exception) {
-            Log.w(TAG, "Could not open a socket", e)
+            Log.w(TAG, "Could not open a socket")
             _state.value = State.Failed("Could not start sharing on this device.")
             return
         }
@@ -81,7 +82,7 @@ class SyncServer(private val scope: CoroutineScope) {
                 } catch (_: Exception) {
                     break
                 }
-                runCatching { handle(client) }.onFailure { Log.w(TAG, "Sync request failed", it) }
+                runCatching { handle(client) }.onFailure { Log.w(TAG, "Sync request failed") }
                 runCatching { client.close() }
             }
         }
@@ -161,7 +162,7 @@ class SyncServer(private val scope: CoroutineScope) {
     }
 
     private companion object {
-        const val TAG = "OpenTV"
+        const val TAG = "Nuvix"
         const val TIMEOUT_MINUTES = 5L
         const val SOCKET_TIMEOUT_MILLIS = 10_000
         const val MAX_ATTEMPTS = 5

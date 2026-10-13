@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -69,7 +70,7 @@ import android.content.Intent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.ui.window.Dialog
-import app.opentv.R
+import com.disabledabel.nuvix.R
 import app.opentv.core.AppSettings
 import app.opentv.core.ServiceLocator
 import app.opentv.core.findActivity
@@ -116,12 +117,14 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onPlayCatchup: (mediaKey: String, url: String, title: String, ua: String) -> Unit = { _, _, _, _ -> },
     viewModel: ChannelsViewModel = viewModel(),
+    layoutOverride: AppSettings.ChannelLayout? = null,
 ) {
     val context = LocalContext.current
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
     val previewEnabled by settings.guidePreviewVideo.collectAsState()
-    val channelLayout by settings.channelLayout.collectAsState()
+    val preferredChannelLayout by settings.channelLayout.collectAsState()
+    val channelLayout = layoutOverride ?: preferredChannelLayout
 
     val categories by viewModel.visibleCategoryGroups.collectAsState()
     val rows by viewModel.rows.collectAsState()
@@ -284,7 +287,7 @@ fun HomeScreen(
             PlayerController.Request(
                 url = channel.streamUrl,
                 title = channel.shownName,
-                userAgent = source?.userAgent ?: "OpenTV/0.1 (Android)",
+                userAgent = source?.userAgent ?: "Nuvix/0.1 (Android)",
                 isLive = true,
             ),
             debounce = true,
@@ -727,7 +730,7 @@ fun HomeScreen(
                     RecordActionRow(stringResource(R.string.guide_open_external)) {
                         channelMenu = null
                         recordScope.launch {
-                            val ua = graph.sourceRepository.byId(channel.sourceId)?.userAgent ?: "OpenTV/0.1 (Android)"
+                            val ua = graph.sourceRepository.byId(channel.sourceId)?.userAgent ?: "Nuvix/0.1 (Android)"
                             val intent = Intent(Intent.ACTION_VIEW).apply {
                                 setDataAndType(android.net.Uri.parse(channel.streamUrl), "video/*")
                                 putExtra("title", channel.shownName)

@@ -1,12 +1,15 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
  * Licensed under the GNU General Public License v3.0 or later.
+ * Modified for Nuvix on 2026-10-13: credential-free provider diagnostics.
  */
 package app.opentv.data.repo
 
 import android.util.Log
 import app.opentv.core.AppSettings
+import app.opentv.core.ProviderDiagnostics
 import app.opentv.data.db.CategoryDao
 import app.opentv.data.db.ChannelDao
 import app.opentv.data.db.EpisodeDao
@@ -604,7 +607,10 @@ class CatalogRepository(
         if (source.kind != SourceKind.XTREAM) return
         runCatching { api.episodes(source, seriesId) }
             .onSuccess { if (it.isNotEmpty()) episodeDao.upsertAll(it) }
-            .onFailure { Log.w(TAG, "Episode fetch failed for series $seriesId", it) }
+            .onFailure {
+                if (it is CancellationException) throw it
+                Log.w(TAG, "Episode fetch failed: ${ProviderDiagnostics.describe(it)}")
+            }
     }
 
     /**
@@ -622,7 +628,10 @@ class CatalogRepository(
             else SyncResult.Success(0, 0, 0)
         if (live is SyncResult.Success && source.kind == SourceKind.XTREAM) {
             runCatching { syncXtreamVod(source, nowUtcMillis) }
-                .onFailure { Log.w(TAG, "VOD sync failed for source ${source.id}", it) }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    Log.w(TAG, "VOD sync failed for source ${source.id}: ${ProviderDiagnostics.describe(it)}")
+                }
         }
         live
     }
@@ -638,8 +647,9 @@ class CatalogRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Catalogue sync failed for source ${source.id}", e)
-            SyncResult.Failed(e.message ?: "The catalogue could not be downloaded.", e)
+            val reason = ProviderDiagnostics.describe(e)
+            Log.w(TAG, "Catalogue sync failed for source ${source.id}: $reason")
+            SyncResult.Failed(reason, null)
         }
     }
 
@@ -647,7 +657,10 @@ class CatalogRepository(
      * blocks live TV. Silent on failure: an account with no VOD is normal, not an error. */
     suspend fun syncVod(source: Source, nowUtcMillis: Long) = withContext(Dispatchers.IO) {
         runCatching { if (source.kind == SourceKind.XTREAM) syncXtreamVod(source, nowUtcMillis) }
-            .onFailure { Log.w(TAG, "VOD sync failed for source ${source.id}", it) }
+            .onFailure {
+                    if (it is CancellationException) throw it
+                    Log.w(TAG, "VOD sync failed for source ${source.id}: ${ProviderDiagnostics.describe(it)}")
+                }
     }
 
     private suspend fun syncXtreamLive(source: Source, nowUtcMillis: Long): SyncResult {

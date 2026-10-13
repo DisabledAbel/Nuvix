@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenTV UI translation. Auto-assembled; English fallback for any gap. -->
+<!-- Nuvix UI translation. Auto-assembled; English fallback for any gap. -->
 <resources>
-    <string name="app_name">OpenTV</string>
+    <string name="app_name">Nuvix</string>
     <string name="common_done">Valmis</string>
     <string name="common_cancel">Peruuta</string>
     <string name="common_back">Takaisin</string>
@@ -93,12 +93,12 @@
     <string name="rec_notification_one">Tallennetaan 1 ohjelma</string>
     <string name="rec_notification_many">Tallennetaan %1$d ohjelmaa</string>
     <string name="rec_channel_name">Tallennus</string>
-    <string name="rec_channel_desc">Näytetään, kun OpenTV tallentaa</string>
+    <string name="rec_channel_desc">Näytetään, kun Nuvix tallentaa</string>
     <string name="rec_error_nothing">Mitään ei tallennettu</string>
     <string name="rec_error_usb_no_folder">USB-kansiota ei ole valittu. Avaa tallennusasetukset ja valitse kansio asemaltasi.</string>
     <string name="rec_error_usb_unavailable">USB-asema ei ole käytettävissä. Kytke asema uudelleen ja valitse kansio uudelleen tallennusasetuksista.</string>
     <string name="rec_background_prompt_title">Jatka tallennusta poistuessasi?</string>
-    <string name="rec_background_prompt_body">Android saattaa pysäyttää tämän tallennuksen, kun näyttö sammuu tai poistut OpenTV:stä. Salli OpenTV:n ohittaa akun optimointi, jotta tallennukset jatkuvat myös valmiustilassa — samaan tapaan kuin digiboksissa.</string>
+    <string name="rec_background_prompt_body">Android saattaa pysäyttää tämän tallennuksen, kun näyttö sammuu tai poistut Nuvix:stä. Salli Nuvix:n ohittaa akun optimointi, jotta tallennukset jatkuvat myös valmiustilassa — samaan tapaan kuin digiboksissa.</string>
     <string name="rec_background_prompt_allow">Salli</string>
     <string name="rec_background_prompt_not_now">Ei nyt</string>
     <string name="player_rewind">Kelaa taakse</string>
@@ -122,7 +122,7 @@
     <string name="settings_providers_subtitle">Lisää, poista ja testaa IPTV-lähteitäsi uudelleen</string>
     <string name="settings_addons_title">Lisäosat (Stremio)</string>
     <string name="settings_addons_subtitle">Toista itse määrittämiesi Stremio-lisäosien sisältöä</string>
-    <string name="addons_note">Lisää Stremio-lisäosa liittämällä sen manifestin URL-osoite. OpenTV ei sisällä yhtään lisäosaa valmiiksi — tuot omasi. Jos lisäosa käyttää debrid-palvelua, määritä debrid-avaimesi lisäosan omalla sivustolla ja liitä sieltä saamasi henkilökohtainen URL-osoite; avaimesi pysyy siellä, ei koskaan OpenTV:ssä.</string>
+    <string name="addons_note">Lisää Stremio-lisäosa liittämällä sen manifestin URL-osoite. Nuvix ei sisällä yhtään lisäosaa valmiiksi — tuot omasi. Jos lisäosa käyttää debrid-palvelua, määritä debrid-avaimesi lisäosan omalla sivustolla ja liitä sieltä saamasi henkilökohtainen URL-osoite; avaimesi pysyy siellä, ei koskaan Nuvix:ssä.</string>
     <string name="addons_url_label">Lisäosan manifestin URL-osoite</string>
     <string name="addons_add">Lisää</string>
     <string name="addons_checking">Tarkistetaan…</string>
@@ -225,7 +225,7 @@
     <string name="recset_usb_change">Vaihda kansiota</string>
     <string name="recset_usb_saving_to">Tallennetaan kohteeseen: %1$s</string>
     <string name="recset_usb_none">Kansiota ei ole vielä valittu</string>
-    <string name="recset_usb_hint">Kytke USB-asema tai ulkoinen tallennusväline, joka on alustettu exFAT- tai FAT32-muotoon, ja valitse siitä kansio. Tallenteet kirjoitetaan suoraan kyseiseen kansioon, ja ne toistetaan ja poistetaan silti OpenTV:n sisällä.</string>
+    <string name="recset_usb_hint">Kytke USB-asema tai ulkoinen tallennusväline, joka on alustettu exFAT- tai FAT32-muotoon, ja valitse siitä kansio. Tallenteet kirjoitetaan suoraan kyseiseen kansioon, ja ne toistetaan ja poistetaan silti Nuvix:n sisällä.</string>
     <string name="recset_usb_need_folder">Valitse kansio ennen USB:lle tallentamista.</string>
     <string name="recset_usb_no_picker">Kansion valitsin ei ole käytettävissä tällä laitteella.</string>
     <string name="recset_nas_connection">NAS-yhteys</string>
@@ -257,9 +257,9 @@
     <string name="recset_background_allowed">Sallittu</string>
     <string name="recset_background_not_allowed">Ei sallittu</string>
     <string name="recset_background_fix">Korjaa</string>
-    <string name="recset_background_desc">Android saattaa pysäyttää tallennukset, kun laite siirtyy lepotilaan tai poistut OpenTV:stä, ellei OpenTV:n sallita ohittaa akun optimointia. Salliminen pitää tallennukset käynnissä myös valmiustilassa, kuten digiboksissa.</string>
+    <string name="recset_background_desc">Android saattaa pysäyttää tallennukset, kun laite siirtyy lepotilaan tai poistut Nuvix:stä, ellei Nuvix:n sallita ohittaa akun optimointia. Salliminen pitää tallennukset käynnissä myös valmiustilassa, kuten digiboksissa.</string>
     <string name="recset_background_on_title">Taustalla tallentaminen on päällä</string>
-    <string name="recset_background_on_desc">Tallenteet jatkuvat, kun poistut OpenTV:stä tai TV siirtyy lepotilaan.</string>
+    <string name="recset_background_on_desc">Tallenteet jatkuvat, kun poistut Nuvix:stä tai TV siirtyy lepotilaan.</string>
     <string name="recset_background_toast">Taustalla tallentaminen otettu käyttöön — tallenteet jatkuvat taustalla.</string>
     <string name="epg_updating">Päivitetään…</string>
     <string name="epg_update_now">Päivitä opas nyt</string>
@@ -268,7 +268,7 @@
     <string name="epg_name_optional">Nimi (valinnainen)</string>
     <string name="epg_xmltv_url">XMLTV-URL (.xml tai .xml.gz)</string>
     <string name="epg_add_guide">Lisää opas</string>
-    <string name="sync_desc">Kopioi jatka katselua -tiedot kahden OpenTV-laitteen välillä omaa wifiäsi käyttäen — mikään ei poistu kotoasi, eikä tiliä tarvita.</string>
+    <string name="sync_desc">Kopioi jatka katselua -tiedot kahden Nuvix-laitteen välillä omaa wifiäsi käyttäen — mikään ei poistu kotoasi, eikä tiliä tarvita.</string>
     <string name="sync_share_from_here">Jaa täältä</string>
     <string name="sync_receive">Vastaanota</string>
     <string name="sync_ready_to_share">Valmiina jakamaan</string>
@@ -293,16 +293,15 @@
     <string name="sync_nas_uploaded">Tämä laite tallennettu NAS-laitteeseen. Yksikään muu laite ei ole vielä synkronoinut tänne.</string>
     <string name="sync_nas_failed">NAS-laitetta ei tavoitettu. Tarkista, että se on päällä ja että tallennusasetusten tiedot ovat oikein.</string>
     <string name="sync_nas_auto">Synkronoi automaattisesti, kun sovellus avataan</string>
-    <string name="about_title">Tietoja OpenTV:stä</string>
+    <string name="about_title">Tietoja Nuvix:stä</string>
     <string name="about_version">Versio</string>
     <string name="about_update_available">Päivitys saatavilla: %1$s — katso asennuskehote.</string>
     <string name="about_up_to_date">Sinulla on uusin versio.</string>
     <string name="about_checking">Tarkistetaan…</string>
     <string name="about_check_updates">Tarkista päivitykset</string>
     <string name="about_what_is_title">Mikä tämä on</string>
-    <string name="about_what_is_body">Ilmainen, avoimen lähdekoodin IPTV-soitin Android TV:lle, Fire TV:lle ja puhelimille. Se on vain soitin — se ei tarjoa kanavia; yhdistät palvelun, josta jo maksat. Mikään syöttämäsi ei poistu laitteeltasi paitsi kommunikoidessaan omaan palveluntarjoajaasi.</string>
     <string name="about_built_open_title">Kehitetty avoimesti</string>
-    <string name="about_built_open_body">OpenTV kehitetään avoimesti, ja tekoäly tekee suuren osan koodauksesta ihmisen ohjauksessa — tämä kerrotaan suoraan, eikä sitä salata. Koska se on avointa lähdekoodia, yhdenkään henkilön poistuminen ei voi lopettaa sitä: kuka tahansa voi lukea jokaisen rivin, koota sen ja jatkaa sitä.</string>
+    <string name="about_built_open_body">Nuvix kehitetään avoimesti, ja tekoäly tekee suuren osan koodauksesta ihmisen ohjauksessa — tämä kerrotaan suoraan, eikä sitä salata. Koska se on avointa lähdekoodia, yhdenkään henkilön poistuminen ei voi lopettaa sitä: kuka tahansa voi lukea jokaisen rivin, koota sen ja jatkaa sitä.</string>
     <string name="about_support_title">Tue projektia</string>
     <string name="about_scan_to_donate">Skannaa lahjoittaaksesi</string>
     <string name="about_licence_links_title">Lisenssi ja linkit</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_default_provider_name">Palveluntarjoajani</string>
     <string name="onboarding_default_playlist_name">Soittolistani</string>
     <string name="onboarding_add_provider_title">Lisää palveluntarjoajasi</string>
-    <string name="onboarding_add_provider_desc">OpenTV on soitin. Se ei tarjoa kanavia — yhdistät palvelun, josta jo maksat.</string>
+    <string name="onboarding_add_provider_desc">Nuvix on soitin. Se ei tarjoa kanavia — yhdistät palvelun, josta jo maksat.</string>
     <string name="onboarding_xtream_login">Xtream Codes -kirjautuminen</string>
     <string name="onboarding_m3u_url">M3U-soittolistan URL-osoite</string>
     <string name="onboarding_stalker_portal">Stalker-portaali</string>
@@ -333,7 +332,7 @@
     <string name="onboarding_working">Työskennellään…</string>
     <string name="onboarding_save_load">Tallenna ja lataa</string>
     <string name="onboarding_use_phone">Käytä puhelintani sen sijaan</string>
-    <string name="onboarding_privacy_note">Palveluntarjoajasi tiedot tallennetaan vain tähän laitteeseen. OpenTV:llä ei ole omaa tilijärjestelmää eikä omaa palvelinta — mikään tähän kirjoittamasi ei lähde minnekään muualle kuin palveluntarjoajallesi.</string>
+    <string name="onboarding_privacy_note">Palveluntarjoajasi tiedot tallennetaan vain tähän laitteeseen. Nuvix:llä ei ole omaa tilijärjestelmää eikä omaa palvelinta — mikään tähän kirjoittamasi ei lähde minnekään muualle kuin palveluntarjoajallesi.</string>
     <string name="pairing_stopped">Pariliitos pysäytetty</string>
     <string name="pairing_type_here">Kirjoita se sen sijaan tähän</string>
     <string name="pairing_got_it">Selvä — yhdistetään palveluntarjoajaasi…</string>

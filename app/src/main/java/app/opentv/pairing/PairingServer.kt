@@ -1,3 +1,4 @@
+/* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 /*
  * This file is part of OpenTV.
  * Copyright (C) 2026 The OpenTV Contributors
@@ -103,7 +104,7 @@ class PairingServer(private val scope: CoroutineScope) {
             // clash with whatever else the user runs at home.
             ServerSocket(0)
         } catch (e: Exception) {
-            Log.w(TAG, "Could not open a socket", e)
+            Log.w(TAG, "Could not open a socket")
             _state.value = State.Failed("Could not start the pairing server on this device.")
             return
         }
@@ -129,7 +130,7 @@ class PairingServer(private val scope: CoroutineScope) {
                     break // socket closed, which is how we stop
                 }
                 runCatching { handle(client) }
-                    .onFailure { Log.w(TAG, "Pairing request failed", it) }
+                    .onFailure { Log.w(TAG, "Pairing request failed") }
                 runCatching { client.close() }
             }
         }
@@ -307,7 +308,7 @@ class PairingServer(private val scope: CoroutineScope) {
                     if (PairingHttp.isPrivateAddress(address.hostAddress)) candidates += address
                 }
             }
-        }.onFailure { Log.w(TAG, "Could not enumerate interfaces", it) }
+        }.onFailure { Log.w(TAG, "Could not enumerate interfaces") }
 
         // Prefer a real private range over a 169.254 self-assigned address, which means
         // DHCP failed and nothing will be able to reach us anyway.
