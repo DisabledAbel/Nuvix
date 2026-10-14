@@ -268,6 +268,7 @@ class XtreamApi(
             plot = info["plot"].asStringOrNull ?: info["description"].asStringOrNull,
             rating = info["rating"].asDoubleOrNull,
             year = info["year"].asIntOrNull ?: info["releaseDate"].asStringOrNull?.take(4)?.toIntOrNull(),
+            imdbId = info["imdb_id"].asStringOrNull ?: info["imdb"].asStringOrNull,
         )
     }
 
@@ -405,6 +406,7 @@ class XtreamApi(
         val plot: String?,
         val rating: Double?,
         val year: Int?,
+        val imdbId: String? = null,
     )
 }
 

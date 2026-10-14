@@ -511,4 +511,19 @@
     <string name="nav_apps" tools:ignore="MissingTranslation">Apps</string>
     <string name="nav_library" tools:ignore="MissingTranslation">Library</string>
     <!-- Scoped English fallbacks above are intentional until these strings are translated. -->
+    <!-- TV metadata strings intentionally use English fallbacks until translated. -->
+    <string name="tvmaze_source" tools:ignore="MissingTranslation">TV metadata by TVmaze</string>
+    <string name="tvmaze_license" tools:ignore="MissingTranslation">TVmaze data: CC BY-SA 4.0</string>
+    <string name="tvmaze_changes" tools:ignore="MissingTranslation">TVmaze data is combined with provider metadata; summaries are formatted as plain text. Adapted TVmaze data remains CC BY-SA 4.0.</string>
+    <string name="tv_crew" tools:ignore="MissingTranslation">Crew</string>
+    <string name="tv_born" tools:ignore="MissingTranslation">Born: %1$s</string>
+    <string name="tv_died" tools:ignore="MissingTranslation">Died: %1$s</string>
+    <string name="tv_credits" tools:ignore="MissingTranslation">Cast and crew credits</string>
+    <string name="tv_profile_unavailable" tools:ignore="MissingTranslation">Actor profile unavailable. Try again later.</string>
+    <string name="tv_imdb_source" tools:ignore="MissingTranslation">IMDb data via IMDbAPI.dev</string>
+    <string name="tv_airdate" tools:ignore="MissingTranslation">Air date: %1$s</string>
+    <string name="tv_episode_count" tools:ignore="MissingTranslation">Episodes ordered: %1$d</string>
+    <string name="tv_metadata_only" tools:ignore="MissingTranslation">Not available from your provider</string>
+    <string name="tv_no_episodes" tools:ignore="MissingTranslation">No episodes available.</string>
+    <string name="tvmaze_automatic" tools:ignore="MissingTranslation">TV show metadata is automatic via TVmaze, with IMDbAPI.dev secondary. No key or account is required. TMDb below is an optional fallback.</string>
 </resources>

@@ -9,6 +9,7 @@ package app.opentv.ui.vod
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -266,6 +267,9 @@ fun SeriesDetailScreen(
     viewModel: VodViewModel = viewModel(),
 ) {
     var series by remember(seriesId) { mutableStateOf<Series?>(null) }
+    var tvDetail by remember(seriesId) { mutableStateOf<app.opentv.data.repo.TvSeriesDetail?>(null) }
+    var metadataLoaded by remember(seriesId) { mutableStateOf(false) }
+    var episodesLoaded by remember(seriesId) { mutableStateOf(false) }
     var moreLike by remember(seriesId) { mutableStateOf<List<Series>>(emptyList()) }
     val favFocus = remember { FocusRequester() }
 
@@ -274,11 +278,18 @@ fun SeriesDetailScreen(
         series = loaded
         if (loaded != null) {
             viewModel.loadEpisodes(loaded)
+            episodesLoaded = true
             moreLike = viewModel.moreLikeThisSeries(loaded)
         }
     }
 
-    val s = series
+    LaunchedEffect(series?.id) {
+        val provider = series ?: return@LaunchedEffect
+        tvDetail = viewModel.tvSeriesDetail(provider)
+        metadataLoaded = true
+    }
+
+    val s = series?.let { tvDetail?.series?.copy(favourite = it.favourite) ?: it }
     val episodes by (s?.let { viewModel.episodes(it) } ?: viewModel.noEpisodes)
         .collectAsState(initial = emptyList())
 
@@ -291,15 +302,17 @@ fun SeriesDetailScreen(
 
     // Group episodes by season (seasons ascending, episodes ordered within each) — the classic
     // "episode-by-season" list.
-    val seasons = remember(episodes) {
-        episodes.groupBy { it.season }
-            .mapValues { (_, eps) -> eps.sortedBy { it.episodeNumber } }
-            .toSortedMap()
+    val listings = remember(episodes, tvDetail) {
+        app.opentv.data.repo.tvEpisodeListings(episodes, tvDetail?.tvmaze?.episodes.orEmpty())
+    }
+    val seasons = remember(listings, tvDetail) {
+        (listings.map { it.season } + tvDetail?.tvmaze?.seasons.orEmpty().map { it.number })
+            .distinct().sorted().associateWith { season -> listings.filter { it.season == season } }
     }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item(key = "header") {
-            DetailBackdrop(title = s.displayTitle, backdropUrl = s.backdropUrl, posterUrl = s.posterUrl, meta = seriesMeta(s)) {
+            DetailBackdrop(title = s.displayTitle, backdropUrl = s.backdropUrl, posterUrl = s.posterUrl, meta = seriesMeta(s, tvDetail)) {
                 DetailButton(
                     icon = if (s.favourite) Icons.Filled.Star else Icons.Outlined.StarOutline,
                     label = stringResource(if (s.favourite) R.string.common_remove_favourite else R.string.common_favourite),
@@ -313,32 +326,49 @@ fun SeriesDetailScreen(
         }
         item(key = "info") {
             DetailInfo(
-                plot = s.plot,
-                cast = s.cast,
+                plot = plainSummary(s.plot),
+                cast = if (tvDetail?.tvmaze?.cast.isNullOrEmpty()) s.cast else null,
                 director = null,
                 genre = s.genre,
                 onOpenPerson = onOpenPerson,
             )
         }
-
-        if (episodes.isEmpty()) {
+        tvDetail?.tvmaze?.let { tvmaze ->
+            item(key = "people") { TvPeople(tvmaze, onOpenPerson) }
+            item(key = "attribution") { TvmazeAttribution(tvmaze.show.url) }
+        }
+        tvDetail?.imdb?.let { imdb ->
+            item(key = "imdb") {
+                Column(Modifier.padding(horizontal = 24.dp)) {
+                    MetadataLink(stringResource(R.string.tv_imdb_source), "https://www.imdb.com/title/${imdb.id}/")
+                }
+            }
+        }
+        if (listings.isEmpty()) {
             item(key = "eploading") {
                 Text(
-                    stringResource(R.string.vod_loading_episodes),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    stringResource(if (metadataLoaded && episodesLoaded) R.string.tv_no_episodes else R.string.vod_loading_episodes),
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
-        } else {
-            seasons.forEach { (season, eps) ->
-                item(key = "season:$season") {
-                    Spacer(Modifier.height(8.dp))
-                    SectionHeader(stringResource(R.string.vod_season, season))
-                }
-                items(eps, key = { it.id }) { ep ->
-                    EpisodeRow(ep, onPlayEpisode)
+        }
+        seasons.forEach { (season, eps) ->
+            item(key = "season:$season") {
+                Spacer(Modifier.height(8.dp))
+                SectionHeader(stringResource(R.string.vod_season, season))
+                tvDetail?.tvmaze?.seasons?.firstOrNull { it.number == season }?.let { info ->
+                    Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        info.image?.let { AsyncImage(it, null, Modifier.width(80.dp).height(110.dp), contentScale = ContentScale.Crop) }
+                        Column {
+                            info.name?.let { Text(it) }
+                            Text(listOfNotNull(info.premiereDate, info.endDate).joinToString(" – "))
+                            info.episodeOrder?.let { Text(stringResource(R.string.tv_episode_count, it)) }
+                            info.summary?.let { Text(plainSummary(it)) }
+                        }
+                    }
                 }
             }
+            items(eps, key = { it.key }) { ep -> EpisodeRow(ep, onPlayEpisode) }
         }
 
         if (moreLike.isNotEmpty()) {
@@ -650,7 +680,7 @@ private fun DetailButton(
 
 /** One episode row: season/episode marker, title, and a focus highlight; plays on click. */
 @Composable
-private fun EpisodeRow(ep: Episode, onPlay: (mediaKey: String, url: String, title: String) -> Unit) {
+private fun EpisodeRow(ep: app.opentv.data.repo.TvEpisodeListing, onPlay: (mediaKey: String, url: String, title: String) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
@@ -666,24 +696,28 @@ private fun EpisodeRow(ep: Episode, onPlay: (mediaKey: String, url: String, titl
                 if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
                 else Modifier,
             )
-            .clickable {
-                onPlay("ep:${ep.id}", ep.streamUrl, "S${ep.season}E${ep.episodeNumber} · ${ep.title}")
+            .clickable(enabled = ep.provider != null) {
+                ep.provider?.let { provider ->
+                    onPlay("ep:${provider.id}", provider.streamUrl, "S${provider.season}E${provider.episodeNumber} · ${ep.title}")
+                }
             }
+            .focusable(enabled = ep.provider == null)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "S${ep.season}E${ep.episodeNumber}",
+            "S${ep.season}E${ep.number ?: "–"}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.width(72.dp),
         )
-        Text(
-            ep.title,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        AsyncImage(ep.image, null, Modifier.width(140.dp).height(80.dp).padding(end = 12.dp), contentScale = ContentScale.Crop)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(ep.title, style = MaterialTheme.typography.bodyLarge)
+            ep.metadata?.airdate?.let { Text(stringResource(R.string.tv_airdate, it), style = MaterialTheme.typography.bodySmall) }
+            ep.plot?.let { Text(plainSummary(it), style = MaterialTheme.typography.bodyMedium) }
+            if (ep.provider == null) Text(stringResource(R.string.tv_metadata_only), style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
@@ -708,10 +742,13 @@ private fun movieMeta(m: Movie): String = listOfNotNull(
     m.durationSeconds?.takeIf { it > 0 }?.let { formatRuntime(it) },
 ).joinToString("  ·  ")
 
-/** "2021  ·  ★ 8.1" — series carry no runtime; genre is its own chip row. */
-private fun seriesMeta(s: Series): String = listOfNotNull(
-    s.year?.toString(),
-    s.rating?.takeIf { it > 0.0 }?.let { "★ ${formatRating(it)}" },
+/** Keep rating provenance visible even when all services return different scores. */
+internal fun seriesMeta(s: Series, detail: app.opentv.data.repo.TvSeriesDetail?): String = listOfNotNull(
+    (s.year ?: detail?.tvmaze?.show?.year ?: detail?.imdb?.year)?.toString(),
+    s.rating?.takeIf { it > 0.0 }?.let { "Provider ★ ${formatRating(it)}" },
+    detail?.tvmaze?.show?.rating?.let { "TVmaze ★ ${formatRating(it)}" },
+    detail?.imdb?.rating?.let { "IMDb ★ ${formatRating(it)}" },
+    detail?.tmdbRating?.let { "TMDb ★ ${formatRating(it)}" },
 ).joinToString("  ·  ")
 
 /** Seconds to a compact "1h 52m" / "45m". */
