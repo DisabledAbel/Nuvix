@@ -231,6 +231,8 @@ private fun TmdbKeySection(settings: AppSettings) {
     val savedMessage = stringResource(R.string.settings_tmdb_saved)
 
     SettingsSection(stringResource(R.string.settings_section_metadata)) {
+        Text(stringResource(R.string.tvmaze_automatic), style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(8.dp))
         Text(
             stringResource(R.string.settings_tmdb_note),
             style = MaterialTheme.typography.bodyMedium,

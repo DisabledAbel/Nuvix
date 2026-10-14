@@ -40,3 +40,23 @@ SQLCipher is Copyright (c) 2025, ZETETIC LLC; the SQLCipher Android wrapper is C
 ## User-supplied content and optional guide feeds
 
 Nuvix includes no IPTV channels, provider accounts, playlists, or media. Logos, artwork, programme descriptions, and video from user-configured providers retain their owners' rights. The inherited optional XMLTV feed addresses do not bundle their remote data. Their providers' terms and licenses apply to downloaded data; the Freeview-EPG project identifies its feed as GPL-3.0. Nuvix contains no DIRECTV logos or proprietary DIRECTV assets.
+
+## TV metadata services
+
+TV show/season/episode/person metadata is provided by [TVmaze](https://www.tvmaze.com/)
+through its [free public API](https://www.tvmaze.com/api), under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Source links,
+license links, and change notices are available in show details, actor profiles,
+and About. Nuvix converts HTML summaries to plain text and combines selected
+fields with provider metadata. Adaptations of TVmaze data remain under CC BY-SA
+4.0; retain attribution, source/license links, and modification notices when
+redistributing that data. No endorsement by TVmaze is implied. The GPL license
+for application code does not supersede this data license.
+
+[IMDbAPI.dev](https://imdbapi.dev/) is a best-effort secondary public metadata
+service; IMDb ratings are explicitly labeled and are distinct from TVmaze ratings.
+The existing [TMDb](https://www.themoviedb.org/) integration remains an optional
+fallback using a user-supplied key. These services' data and provider content
+retain their applicable rights; they are not relicensed as TVmaze material.
+No live metadata, images, credentials, or API keys are bundled. Details and
+redistribution guidance: [TV metadata](docs/tv-metadata.md).

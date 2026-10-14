@@ -54,6 +54,23 @@ fun PersonScreen(
     onBack: () -> Unit,
     viewModel: VodViewModel = viewModel(),
 ) {
+    val tvmazeId = remember(name) { name.takeIf { it.startsWith("tvmaze:") }
+        ?.split(":", limit = 3)?.getOrNull(1)?.toIntOrNull() }
+    if (tvmazeId != null) {
+        var profile by remember(tvmazeId) { mutableStateOf<app.opentv.data.remote.TvProfile?>(null) }
+        var loaded by remember(tvmazeId) { mutableStateOf(false) }
+        LaunchedEffect(tvmazeId) {
+            profile = viewModel.tvPerson(tvmazeId)
+            loaded = true
+        }
+        BackHandler { onBack() }
+        when {
+            profile != null -> TvProfileContent(profile!!)
+            loaded -> Centered { Text(stringResource(R.string.tv_profile_unavailable)) }
+            else -> Centered { CircularProgressIndicator() }
+        }
+        return
+    }
     // null = still loading; empty = nothing matched. Keyed on name so a hop to another person reloads.
     var titles by remember(name) { mutableStateOf<List<PersonTitle>?>(null) }
     LaunchedEffect(name) { titles = viewModel.titlesWithPerson(name) }

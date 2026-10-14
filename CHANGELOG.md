@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add automatic keyless TVmaze TV metadata, full season/episode listings, cast and
+  crew photos/characters, clickable actor profiles and credits, and CC BY-SA attribution.
+- Prefer TVmaze, use IMDbAPI.dev secondarily, and retain optional TMDb fallback;
+  label external ratings separately and preserve provider playback/cloud identities.
+- Add bounded local metadata caches, throttling and HTTP 429 backoff plus regression tests.
+
 ## 0.1.0 — Nuvix development foundation
 
 - Independently import OpenTV Android source at `43b95c05d8f6a042f51c0cff662ef80789ee7528`, preserving GPL-3.0-or-later notices and working provider/playback/guide/recording/LAN/NAS systems.

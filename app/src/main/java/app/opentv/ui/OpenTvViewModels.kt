@@ -1029,11 +1029,9 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
      * Pulling every episode of every series up front is what makes a first sync take twenty
      * minutes on a large provider, and most of it is never looked at.
      */
-    fun loadEpisodes(series: Series) {
-        viewModelScope.launch {
-            val source = graph.sourceRepository.byId(series.sourceId) ?: return@launch
-            graph.catalogRepository.ensureEpisodes(source, series.seriesId)
-        }
+    suspend fun loadEpisodes(series: Series) {
+        val source = graph.sourceRepository.byId(series.sourceId) ?: return
+        graph.catalogRepository.ensureEpisodes(source, series.seriesId)
     }
 
     fun episodes(series: Series) =
@@ -1059,6 +1057,17 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Loads a series, lazily enriching backdrop/cast/genre on first open. See CatalogRepository.seriesDetail. */
     suspend fun seriesDetail(id: Long): Series? = graph.catalogRepository.seriesDetail(id)
+
+    suspend fun tvSeriesDetail(series: Series): app.opentv.data.repo.TvSeriesDetail {
+        val imdbId = try { graph.catalogRepository.providerImdbId(series) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { null }
+        return graph.tvMetadata.detail(series, app.opentv.data.parser.VodTitleCleaner.clean(series.name), imdbId) {
+            graph.catalogRepository.tmdbSeriesFallback(series)
+        }
+    }
+
+    suspend fun tvPerson(id: Int) = graph.tvMetadata.profile(id)
 
     /** "More like this" for the movie detail screen. */
     suspend fun moreLikeThis(movie: Movie): List<Movie> = graph.catalogRepository.moreLikeThis(movie)

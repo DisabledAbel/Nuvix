@@ -88,6 +88,18 @@ object ServiceLocator {
             SourceRepository(database.sources(), xtreamApi, stalkerApi)
         }
 
+        val tvMetadata: app.opentv.data.repo.TvMetadataRepository by lazy {
+            val client = httpClient.newBuilder()
+                .connectTimeout(8, TimeUnit.SECONDS).readTimeout(12, TimeUnit.SECONDS)
+                .callTimeout(15, TimeUnit.SECONDS).build()
+            app.opentv.data.repo.TvMetadataRepository(
+                app.opentv.data.remote.TvmazeClient(app.opentv.data.remote.MetadataHttp(
+                    client, java.io.File(appContext.cacheDir, "metadata/tvmaze"))),
+                app.opentv.data.remote.ImdbApiClient(app.opentv.data.remote.MetadataHttp(
+                    client, java.io.File(appContext.cacheDir, "metadata/imdbapi"))),
+            )
+        }
+
         val catalogRepository: CatalogRepository by lazy {
             CatalogRepository(
                 sourceDao = database.sources(),

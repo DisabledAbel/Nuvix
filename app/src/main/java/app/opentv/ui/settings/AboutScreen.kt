@@ -95,6 +95,13 @@ fun AboutScreen(onBack: () -> Unit) {
             LinkLine("Original project", "github.com/opentvproject/opentv")
         }
         Spacer(Modifier.height(16.dp))
+        Section("TV metadata") {
+            Text("TV metadata by TVmaze, licensed under CC BY-SA 4.0. Summaries are formatted and combined with provider metadata; adapted TVmaze data remains under CC BY-SA 4.0.")
+            LinkLine("TVmaze", "www.tvmaze.com")
+            LinkLine("Data license", "creativecommons.org/licenses/by-sa/4.0/")
+            Text("Secondary TV metadata and IMDb ratings via IMDbAPI.dev. TMDb remains an optional fallback using your own key.")
+        }
+        Spacer(Modifier.height(16.dp))
         Section("Updates") { app.opentv.update.UpdateSettingsControls() }
         Spacer(Modifier.height(16.dp))
         Section(stringResource(R.string.about_licence_links_title)) {

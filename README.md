@@ -13,6 +13,7 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.
 - Optional home launcher with installed-app shortcuts and customizable startup destinations.
+- Automatic TVmaze show, season, episode, and cast metadata with clickable actor profiles; no key required. See [TV metadata](docs/tv-metadata.md).
 - Optional Supabase sync for content favorites and movie/episode progress.
 - Encrypted local provider/catalog storage and protected credentials.
 - In-app release checks, downloads, and Android-approved updates.

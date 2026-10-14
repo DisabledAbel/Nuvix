@@ -477,28 +477,19 @@ class CatalogRepository(
             }
         }
 
-        // 2) TMDB fallback for anything still missing (see [movieDetail]); TMDB has no director for TV.
-        if (tmdb.isConfigured() && (result.backdropUrl == null || result.plot == null || result.cast == null)) {
-            val meta = runCatching {
-                tmdb.seriesMeta(VodTitleCleaner.clean(result.name), result.year, result.tmdbId)
-            }.getOrNull()
-            if (meta != null) {
-                result = result.copy(
-                    posterUrl = result.posterUrl ?: meta.posterUrl,
-                    backdropUrl = result.backdropUrl ?: meta.backdropUrl,
-                    plot = result.plot ?: meta.overview,
-                    cast = result.cast ?: meta.cast,
-                    genre = result.genre ?: meta.genre,
-                    tmdbId = result.tmdbId ?: meta.tmdbId,
-                    rating = result.rating ?: meta.rating,
-                    year = result.year ?: meta.year,
-                )
-            }
-        }
-
         if (result != series) seriesDao.upsertAll(listOf(result))
         result
     }
+
+    suspend fun providerImdbId(series: Series): String? {
+        val source = sourceDao.byId(series.sourceId) ?: return null
+        return if (source.kind == SourceKind.XTREAM) api.seriesInfo(source, series.seriesId)?.imdbId else null
+    }
+
+    suspend fun tmdbSeriesFallback(series: Series): app.opentv.data.remote.TmdbMeta? =
+        withContext(Dispatchers.IO) {
+            tmdb.seriesMeta(VodTitleCleaner.clean(series.name), series.year, series.tmdbId)
+        }
 
     /**
      * Collapses a list of movies (e.g. one category's titles) into logical films with switchable
