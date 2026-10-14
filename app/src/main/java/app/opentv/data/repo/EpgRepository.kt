@@ -15,6 +15,7 @@ import app.opentv.data.db.EpgChannelAliasDao
 import app.opentv.data.db.EpgFeedDao
 import app.opentv.data.db.ProgrammeDao
 import app.opentv.data.db.SourceDao
+import app.opentv.data.model.Channel
 import app.opentv.data.model.EpgChannelAlias
 import app.opentv.data.model.EpgFeed
 import app.opentv.data.model.Programme
@@ -73,6 +74,10 @@ class EpgRepository(
     private val http: OkHttpClient,
     private val database: OpenTvDatabase,
     private val cacheDirectory: File,
+    private val discovery: AutoEpgDiscovery? = null,
+    private val automaticEnabled: () -> Boolean = { true },
+    private val feedSuppressed: (String) -> Boolean = { false },
+    private val suppressFeed: (String, Boolean) -> Unit = { _, _ -> },
 ) {
 
     data class SyncSummary(
@@ -81,9 +86,13 @@ class EpgRepository(
         val programmesWritten: Int,
         val channelsMatched: Int,
         val channelsTotal: Int,
+        val discoverySourcesFailed: Int = 0,
     )
 
     private val refreshMutex = Mutex()
+    private var discoveryCache: DiscoveryResult? = null
+    private var discoveredAtMillis = 0L
+    private var discoveryChannelKeys: Set<String> = emptySet()
 
     // ---- Reads -----------------------------------------------------------------------------
 
@@ -108,7 +117,11 @@ class EpgRepository(
         )
     }
 
-    suspend fun setFeedEnabled(id: Long, enabled: Boolean) = feedDao.setEnabled(id, enabled)
+    suspend fun setFeedEnabled(id: Long, enabled: Boolean) = refreshMutex.withLock {
+        feedDao.all().firstOrNull { it.id == id }?.url?.let { suppressFeed(it, !enabled) }
+        feedDao.setEnabled(id, enabled)
+        matchCached(System.currentTimeMillis())
+    }
 
     suspend fun removeFeed(feed: EpgFeed) = refreshMutex.withLock {
         // Serialize deletion with in-flight downloads so a removed feed cannot reappear.
@@ -117,13 +130,17 @@ class EpgRepository(
             aliasDao.deleteForFeed(feed.id)
             feedDao.delete(feed.id)
         }
+        feed.url?.let { suppressFeed(it, true) }
+        matchCached(System.currentTimeMillis())
     }
 
     /**
      * Makes sure the standing feed rows exist: one per provider source, plus the curated
      * built-in list. Insert-if-absent, so user toggles survive every call.
      */
-    suspend fun ensureFeeds() {
+    suspend fun ensureFeeds() = refreshMutex.withLock { ensureFeedsLocked() }
+
+    private suspend fun ensureFeedsLocked() {
         for (source in sourceDao.enabled()) {
             if (feedDao.forProvider(source.id) == null) {
                 feedDao.insert(
@@ -137,9 +154,8 @@ class EpgRepository(
         }
         for ((name, url) in BUILT_IN_FEEDS) {
             if (feedDao.byUrl(url) == null) {
-                // Off by default: shipping a switched-on 20 MB download for a country the
-                // user may not live in would be rude. The EPG settings screen makes
-                // enabling one a single click.
+                // Discovery enables only regions represented in the playlist. Other feeds
+                // stay available for manual selection without downloading irrelevant guides.
                 feedDao.insert(EpgFeed(name = name, url = url, builtIn = true, enabled = false))
             }
         }
@@ -148,10 +164,15 @@ class EpgRepository(
     // ---- Sync ------------------------------------------------------------------------------
 
     /** Downloads every enabled feed, merges, prunes, and re-runs the matcher. */
-    suspend fun syncAll(nowUtcMillis: Long, force: Boolean = false): SyncSummary =
+    suspend fun syncAll(
+        nowUtcMillis: Long,
+        force: Boolean = false,
+        onProgress: (String) -> Unit = {},
+    ): SyncSummary =
         withContext(Dispatchers.IO) { refreshMutex.withLock {
-            ensureFeeds()
-            maybeAutoEnableRegionalFeed()
+            ensureFeedsLocked()
+            val initial = matchCached(nowUtcMillis)
+            onProgress("Scanning ${initial.second} channels — ${initial.first} have a working guide…")
 
             var succeeded = 0
             var failed = 0
@@ -166,6 +187,8 @@ class EpgRepository(
                     is FeedResult.Success -> {
                         succeeded++
                         written += result.programmes
+                        val progress = matchCached(nowUtcMillis)
+                        onProgress("Matched ${progress.first} of ${progress.second} channels…")
                     }
                     is FeedResult.Failed -> {
                         failed++
@@ -177,12 +200,57 @@ class EpgRepository(
                 }
             }
 
-            if (succeeded > 0) {
-                programmeDao.deleteEndedBefore(nowUtcMillis - RETENTION_PAST_MILLIS)
+            var discoveryFailures = 0
+            if (automaticEnabled() && discovery != null) {
+                val unresolved = unresolvedChannels(nowUtcMillis)
+                if (unresolved.isNotEmpty()) {
+                    val keys = unresolved.map { "${it.name}|${it.epgChannelId.orEmpty()}" }.toSet()
+                    if (force || discoveryCache == null || keys != discoveryChannelKeys ||
+                        nowUtcMillis - discoveredAtMillis >= REFRESH_INTERVAL_MILLIS) {
+                        onProgress("Searching public guides for ${unresolved.size} channels…")
+                        discoveryCache = discovery.discover(unresolved)
+                        discoveryChannelKeys = keys
+                        discoveredAtMillis = nowUtcMillis
+                    }
+                    val found = checkNotNull(discoveryCache)
+                    discoveryFailures = found.sourcesFailed
+                    var attempted = 0
+                    for (guide in found.guides) {
+                        currentCoroutineContext().ensureActive()
+                        if (!automaticEnabled() || attempted >= MAX_DISCOVERED_FEEDS_PER_PASS) break
+                        if (feedSuppressed(guide.url)) continue
+                        val existing = feedDao.byUrl(guide.url)
+                        // Enabled feeds were already handled above. Disabled feeds that the
+                        // user turned off are suppressed, including never-synced guides.
+                        if (existing?.enabled == true) continue
+                        if (unresolvedChannels(nowUtcMillis).isEmpty()) break
+                        val feed = if (existing != null) {
+                            feedDao.setEnabled(existing.id, true)
+                            existing.copy(enabled = true)
+                        } else {
+                            val row = EpgFeed(name = guide.name, url = guide.url, builtIn = true)
+                            val id = feedDao.insert(row)
+                            row.copy(id = id)
+                        }
+                        attempted++
+                        when (val result = syncFeed(feed, nowUtcMillis)) {
+                            is FeedResult.Success -> {
+                                succeeded++
+                                written += result.programmes
+                                val progress = matchCached(nowUtcMillis)
+                                onProgress("Matched ${progress.first} of ${progress.second} channels…")
+                            }
+                            is FeedResult.Failed -> {
+                                failed++
+                                feedDao.markSynced(feed.id, feed.lastSyncMillis, result.reason)
+                            }
+                        }
+                    }
+                }
             }
-
-            val (matched, total) = runMatcher()
-            SyncSummary(succeeded, failed, written, matched, total)
+            if (succeeded > 0) programmeDao.deleteEndedBefore(nowUtcMillis - RETENTION_PAST_MILLIS)
+            val (matched, total) = matchCached(nowUtcMillis)
+            SyncSummary(succeeded, failed, written, matched, total, discoveryFailures)
         } }
 
     private class GuideHttpException(val status: Int) : Exception()
@@ -314,70 +382,57 @@ class EpgRepository(
      * Joins every channel to the merged guide by normalised name.
      * Returns (channels with a working guide id, total channels).
      */
-    suspend fun runMatcher(): Pair<Int, Int> {
-        val aliases = aliasDao.all()
-        val index = EpgMatcher.buildIndex(aliases.map { it.epgId to it.displayName })
-        // Only ids that actually have programmes count as "working" — a match against a
-        // channel the guide lists but never fills is a guide that looks broken.
-        val populated = programmeDao.channelIdsWithProgrammes().toHashSet()
+    suspend fun runMatcher(nowUtcMillis: Long = System.currentTimeMillis()): Pair<Int, Int> =
+        withContext(Dispatchers.IO) { refreshMutex.withLock { matchCached(nowUtcMillis) } }
 
-        val channels = channelDao.allForMatching()
-        var matched = 0
-
-        for (channel in channels) {
-            val newMatch = index.match(channel.groupKey)
-            if (newMatch != channel.matchedEpgId) {
-                channelDao.setMatchedEpgId(channel.id, newMatch)
-            }
-            val works = channel.epgCandidates.any { it in populated } ||
-                (newMatch != null && newMatch in populated)
-            if (works) matched++
+    private suspend fun unresolvedChannels(nowUtcMillis: Long): List<Channel> {
+        val populated = programmeDao.activeChannelIds(nowUtcMillis).toHashSet()
+        return channelDao.allForMatching().filter { channel ->
+            channel.epgOverrideId.isNullOrBlank() && channel.epgCandidates.none { it in populated }
         }
+    }
 
-        Log.i(
-            TAG,
-            "Matcher: $matched of ${channels.size} channels have a working guide " +
-                "(${aliases.size} guide aliases, ${populated.size} populated guide channels)",
-        )
+    private suspend fun matchCached(nowUtcMillis: Long): Pair<Int, Int> {
+        val populated = programmeDao.activeChannelIds(nowUtcMillis).toHashSet()
+        val enabledFeeds = feedDao.enabled().map { it.id }.toHashSet()
+        val aliases = aliasDao.all().filter { it.feedId in enabledFeeds && it.epgId in populated }
+        val index = EpgMatcher.buildIndex(aliases.map { it.epgId to it.displayName })
+        fun regionOfId(id: String): String? = id.substringBefore('@').substringAfterLast('.', "")
+            .takeIf { it.length == 2 && it.all(Char::isLetter) }
+            ?.let { PublicEpgDiscovery.countryCode(it) }
+        val unscoped = aliases.filter { regionOfId(it.epgId) == null }
+        val unscopedIndex = EpgMatcher.buildIndex(unscoped.map { it.epgId to it.displayName })
+        val regional = aliases.mapNotNull { regionOfId(it.epgId) }.distinct().associateWith { region ->
+            EpgMatcher.buildIndex((aliases.filter { regionOfId(it.epgId) == region } + unscoped)
+                .map { it.epgId to it.displayName })
+        }
+        val channels = channelDao.allForMatching()
+        val matches = HashMap<Pair<String?, String>, String?>()
+        var matched = 0
+        for (channel in channels) {
+            currentCoroutineContext().ensureActive()
+            val newMatch = if (!channel.epgOverrideId.isNullOrBlank()) channel.matchedEpgId else {
+                channel.matchedEpgId?.takeIf { it in populated } ?: run {
+                    val region = PublicEpgDiscovery.regionOf(channel)
+                    val key = channel.groupKey.ifBlank { ChannelNameNormalizer.normalize(channel.name).groupKey }
+                    matches.getOrPut(region to key) {
+                        // A known country may use unscoped provider ids, but must never pick
+                        // a guide explicitly tagged for a different country.
+                        val scoped = if (region == null) index else regional[region]
+                            ?: unscopedIndex
+                        scoped.match(key)
+                    }
+                }
+            }
+            if (newMatch != channel.matchedEpgId) channelDao.setMatchedEpgId(channel.id, newMatch)
+            if (listOfNotNull(channel.epgOverrideId, channel.epgChannelId, newMatch).any { it in populated }) matched++
+        }
+        Log.i(TAG, "Matcher: $matched of ${channels.size} channels have a working guide")
         return matched to channels.size
     }
 
     suspend fun setManualOverride(channelId: Long, epgId: String?) =
         channelDao.setEpgOverride(channelId, epgId)
-
-    /**
-     * Turns on the free guide for the user's region, once, on a pristine install.
-     *
-     * The reasoning: a provider guide is usually empty, and "go and find Guide settings"
-     * is a hurdle most people meet as a blank guide and give up on. The app already knows
-     * the region — the normaliser reads it off the `UK|` prefixes the provider itself
-     * ships — so when a clear majority of channels agree, enable that region's built-in.
-     *
-     * Guard rails: only when every built-in is untouched (never enabled, never synced)
-     * and no custom feed exists. Switch it off and it stays off — a choice the user has
-     * made is never overridden.
-     */
-    private suspend fun maybeAutoEnableRegionalFeed() {
-        val all = feedDao.all()
-        val builtIns = all.filter { it.builtIn }
-        if (builtIns.isEmpty()) return
-        val pristine = builtIns.all { !it.enabled && it.lastSyncMillis == 0L } &&
-            all.none { !it.builtIn && it.providerSourceId == null }
-        if (!pristine) return
-
-        val regionCounts = HashMap<String, Int>()
-        for (channel in channelDao.allForMatching()) {
-            val region = ChannelNameNormalizer.normalize(channel.name).region ?: continue
-            regionCounts.merge(region, 1, Int::plus)
-        }
-        val top = regionCounts.maxByOrNull { it.value } ?: return
-        if (top.value < MIN_CHANNELS_FOR_AUTO_REGION) return
-
-        val feedName = REGION_TO_FEED[top.key] ?: return
-        val feed = builtIns.firstOrNull { it.name == feedName } ?: return
-        feedDao.setEnabled(feed.id, true)
-        Log.i(TAG, "Auto-enabled '${feed.name}' — ${top.value} channels tagged ${top.key}")
-    }
 
     companion object {
         private const val TAG = "EpgRepository"
@@ -392,28 +447,18 @@ class EpgRepository(
         /** Feeds publish rolling windows; refreshing more often than this is rude. */
         val REFRESH_INTERVAL_MILLIS: Long = TimeUnit.HOURS.toMillis(6)
 
-        /**
-         * The curated built-in list. Criteria for being here: free, no key or signup,
-         * openly licensed or explicitly public, and reachable as plain XMLTV(.gz).
-         * All ship disabled; the user turns on the one for where they live.
-         *
-         * The UK Freeview entry is GPL-3.0 (same licence as OpenTV), regenerated every
-         * 12 h, ~270 channels with logos — verified working before it earned this slot.
-         */
-        /** A region needs at least this many prefixed channels before we act on it. */
-        const val MIN_CHANNELS_FOR_AUTO_REGION = 5
+        /** Bound new downloads per pass; remaining candidates are picked up on later refreshes. */
+        private const val MAX_DISCOVERED_FEEDS_PER_PASS = 12
 
-        /** Region tag (as providers write it) → built-in feed name to auto-enable. */
-        val REGION_TO_FEED: Map<String, String> = mapOf(
-            "UK" to "UK — Freeview (free-to-air)",
-            "GB" to "UK — Freeview (free-to-air)",
-            "US" to "USA — epgshare01",
-            "USA" to "USA — epgshare01",
-            "CA" to "Canada — epgshare01",
-            "AU" to "Australia — epgshare01",
-            "AUS" to "Australia — epgshare01",
+        /** Every relevant regional fallback is tried, including mixed-country playlists. */
+        val REGION_TO_FEEDS: Map<String, List<String>> = mapOf(
+            "GB" to listOf("UK — Freeview (free-to-air)", "UK — epgshare01 (Sky lineup)"),
+            "US" to listOf("USA — epgshare01"),
+            "CA" to listOf("Canada — epgshare01"),
+            "AU" to listOf("Australia — epgshare01"),
         )
 
+        /** Public XMLTV sources, seeded disabled until discovery finds a relevant region. */
         val BUILT_IN_FEEDS: List<Pair<String, String>> = listOf(
             "UK — Freeview (free-to-air)" to
                 "https://raw.githubusercontent.com/dp247/Freeview-EPG/master/epg.xml",

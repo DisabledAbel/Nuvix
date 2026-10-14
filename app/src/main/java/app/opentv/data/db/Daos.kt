@@ -393,7 +393,8 @@ interface ProgrammeDao {
     @Query(
         """
         SELECT * FROM programmes
-        WHERE endUtcMillis > :fromUtcMillis
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND endUtcMillis > :fromUtcMillis
           AND startUtcMillis < :toUtcMillis
         ORDER BY epgChannelId, startUtcMillis
         """
@@ -404,7 +405,8 @@ interface ProgrammeDao {
     @Query(
         """
         SELECT * FROM programmes
-        WHERE startUtcMillis <= :nowUtcMillis AND endUtcMillis > :nowUtcMillis
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND startUtcMillis <= :nowUtcMillis AND endUtcMillis > :nowUtcMillis
         """
     )
     fun observeNow(nowUtcMillis: Long): Flow<List<Programme>>
@@ -412,7 +414,8 @@ interface ProgrammeDao {
     @Query(
         """
         SELECT * FROM programmes
-        WHERE epgChannelId = :channelId AND endUtcMillis > :nowUtcMillis
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND epgChannelId = :channelId AND endUtcMillis > :nowUtcMillis
         ORDER BY startUtcMillis LIMIT :limit
         """
     )
@@ -424,6 +427,10 @@ interface ProgrammeDao {
     /** Distinct guide channels that actually have programmes — the match report's baseline. */
     @Query("SELECT DISTINCT epgChannelId FROM programmes")
     suspend fun channelIdsWithProgrammes(): List<String>
+
+    /** An automatic TVG-id is valid only while an enabled feed has unexpired programmes. */
+    @Query("SELECT DISTINCT p.epgChannelId FROM programmes p INNER JOIN epg_feeds f ON f.id = p.feedId WHERE f.enabled = 1 AND p.endUtcMillis > :nowUtcMillis")
+    suspend fun activeChannelIds(nowUtcMillis: Long): List<String>
 
     @Upsert
     suspend fun upsertAll(programmes: List<Programme>)

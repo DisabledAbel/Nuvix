@@ -660,6 +660,12 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
 /** Backs the Guide settings screen: feed list, toggles, custom URLs, match report. */
 class EpgViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
+    val automaticEpg: StateFlow<Boolean> = graph.settings.automaticEpg
+
+    fun setAutomaticEpg(enabled: Boolean) {
+        graph.settings.setAutomaticEpg(enabled)
+        if (enabled) refresh()
+    }
 
     data class UiState(
         val feeds: List<EpgFeed> = emptyList(),
@@ -701,13 +707,22 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.syncing) return
         viewModelScope.launch {
             _ui.value = _ui.value.copy(syncing = true, statusLine = "Downloading guides…")
-            val summary = graph.epgRepository.syncAll(System.currentTimeMillis(), force = true)
-            _ui.value = _ui.value.copy(
-                syncing = false,
-                statusLine = "Guide matched ${summary.channelsMatched} of " +
-                    "${summary.channelsTotal} channels" +
-                    if (summary.feedsFailed > 0) " · ${summary.feedsFailed} feed(s) failed" else "",
-            )
+            try {
+                val summary = graph.epgRepository.syncAll(System.currentTimeMillis(), force = true,
+                    onProgress = { line -> _ui.value = _ui.value.copy(statusLine = line) })
+                _ui.value = _ui.value.copy(
+                    statusLine = "Guide matched ${summary.channelsMatched} of " +
+                        "${summary.channelsTotal} channels" +
+                        (if (summary.feedsFailed > 0) " · ${summary.feedsFailed} feed(s) failed" else "") +
+                        (if (summary.discoverySourcesFailed > 0) " · ${summary.discoverySourcesFailed} discovery source(s) unavailable" else ""),
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _ui.value = _ui.value.copy(statusLine = "Guide configuration failed. Saved guides kept; try again.")
+            } finally {
+                _ui.value = _ui.value.copy(syncing = false)
+            }
         }
     }
 }

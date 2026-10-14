@@ -295,7 +295,9 @@
     <!-- ============================ TV guide (EPG) settings ============================ -->
     <string name="epg_updating">Updating…</string>
     <string name="epg_update_now">Update guide now</string>
-    <string name="epg_desc">Your provider\'s guide is used automatically. If it\'s empty — many are — turn on a free guide for your country and channels are matched to it by name.</string>
+    <string name="epg_desc">Guides from your provider and enabled sources are combined. Automatic configuration searches public sources for missing guides and saves verified TVG-ids as each guide arrives.</string>
+    <string name="epg_automatic_title" tools:ignore="MissingTranslation">Automatic EPG configuration</string>
+    <string name="epg_automatic_desc" tools:ignore="MissingTranslation">Scan every channel using IPTV-EPG, IPTV-org and regional guides. Assign TVG-ids only when programme data is available. Manual matches and guides you turn off are preserved.</string>
     <string name="epg_add_own">Add your own guide (XMLTV URL)</string>
     <string name="epg_name_optional">Name (optional)</string>
     <string name="epg_xmltv_url">XMLTV URL (.xml or .xml.gz)</string>
