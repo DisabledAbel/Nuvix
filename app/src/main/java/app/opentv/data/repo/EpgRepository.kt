@@ -117,13 +117,13 @@ class EpgRepository(
         )
     }
 
-    suspend fun setFeedEnabled(id: Long, enabled: Boolean) = refreshMutex.withLock {
+    suspend fun setFeedEnabled(id: Long, enabled: Boolean) = withContext(Dispatchers.IO) { refreshMutex.withLock {
         feedDao.all().firstOrNull { it.id == id }?.url?.let { suppressFeed(it, !enabled) }
         feedDao.setEnabled(id, enabled)
         matchCached(System.currentTimeMillis())
-    }
+    } }
 
-    suspend fun removeFeed(feed: EpgFeed) = refreshMutex.withLock {
+    suspend fun removeFeed(feed: EpgFeed) = withContext(Dispatchers.IO) { refreshMutex.withLock {
         // Serialize deletion with in-flight downloads so a removed feed cannot reappear.
         database.withTransaction {
             programmeDao.deleteForFeed(feed.id)
@@ -132,7 +132,7 @@ class EpgRepository(
         }
         feed.url?.let { suppressFeed(it, true) }
         matchCached(System.currentTimeMillis())
-    }
+    } }
 
     /**
      * Makes sure the standing feed rows exist: one per provider source, plus the curated
