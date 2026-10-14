@@ -115,6 +115,11 @@ object ServiceLocator {
                 http = httpClient,
                 database = database,
                 cacheDirectory = appContext.cacheDir,
+                discovery = app.opentv.data.repo.PublicEpgDiscovery(httpClient.newBuilder()
+                    .callTimeout(60, TimeUnit.SECONDS).build()),
+                automaticEnabled = { settings.automaticEpg.value },
+                feedSuppressed = settings::isEpgFeedSuppressed,
+                suppressFeed = settings::suppressEpgFeed,
             )
         }
 

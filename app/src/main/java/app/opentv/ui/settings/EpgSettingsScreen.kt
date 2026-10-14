@@ -45,8 +45,8 @@ import app.opentv.ui.EpgViewModel
  * Guide settings: where guide data comes from.
  *
  * Three kinds of feed share the list — the provider's own guide, the curated free sources
- * shipped with the app (off by default; enabling one is one click), and any XMLTV URL the
- * user adds. Every enabled feed merges into a single guide, and each row shows its last
+ * shipped with the app, and any XMLTV URL the user adds. Automatic configuration also
+ * discovers relevant public guides for channels that still have no programme data. Every enabled feed merges into a single guide, and each row shows its last
  * sync outcome, because "the guide silently didn't update" is the failure this whole app
  * exists to avoid.
  */
@@ -56,6 +56,7 @@ fun EpgSettingsScreen(
     viewModel: EpgViewModel = viewModel(),
 ) {
     val ui by viewModel.ui.collectAsState()
+    val automatic by viewModel.automaticEpg.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newUrl by remember { mutableStateOf("") }
@@ -94,6 +95,17 @@ fun EpgSettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Card {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.epg_automatic_title), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.epg_automatic_desc), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Switch(checked = automatic, onCheckedChange = viewModel::setAutomaticEpg)
+                    }
+                }
+            }
             items(ui.feeds, key = { it.id }) { feed ->
                 FeedRow(
                     feed = feed,

@@ -101,4 +101,15 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK| CHANNEL 4 hevc"))).isEqualTo("channel4.uk")
         assertThat(idx.match(keyOf("UK| SKY ATLANTIC ᴴᴰ"))).isEqualTo("skyatlantic.uk")
     }
+
+    @Test
+    fun `prefix lookup considers aliases on both sides without accepting conflicting ids`() {
+        val unique = index("sports.uk" to "Sky Sports")
+        assertThat(unique.match(keyOf("Sky Sports Main Event"))).isEqualTo("sports.uk")
+        val conflict = index("short.uk" to "Sky", "long.uk" to "Sky Sports Main Event UK")
+        assertThat(conflict.match(keyOf("Sky Sports Main Event"))).isNull()
+        assertThat(unique.matchExact(keyOf("Sky Sports Main Event"))).isNull()
+        assertThat(unique.matchExact(keyOf("Sky Sports"))).isEqualTo("sports.uk")
+    }
+
 }

@@ -46,18 +46,40 @@ object EpgMatcher {
             // ("skysportsmainevent" vs "skysportsmainevt"; "bbcone" vs "bbconelondon").
             // Only accepted when every candidate agrees on a single epg id.
             var found: String? = null
-            for (alias in sortedKeys) {
-                val hit = (alias.key.length >= MIN_KEY_LENGTH) &&
-                    (alias.key.startsWith(groupKey) || groupKey.startsWith(alias.key))
-                if (!hit) continue
-                if (found == null) {
+            // Binary searches keep a scan of a large playlist from comparing every channel
+            // with every guide alias. First visit guide names extending the provider name.
+            var position = lowerBound(groupKey)
+            while (position < sortedKeys.size && sortedKeys[position].key.startsWith(groupKey)) {
+                val alias = sortedKeys[position++]
+                if (found != null && found != alias.epgId) return null
+                found = alias.epgId
+            }
+            // Then visit guide names that are prefixes of the provider name.
+            for (length in MIN_KEY_LENGTH until groupKey.length) {
+                val prefix = groupKey.take(length)
+                position = lowerBound(prefix)
+                while (position < sortedKeys.size && sortedKeys[position].key == prefix) {
+                    val alias = sortedKeys[position++]
+                    if (found != null && found != alias.epgId) return null
                     found = alias.epgId
-                } else if (found != alias.epgId) {
-                    return null // ambiguous — refuse to guess
                 }
             }
             return found
         }
+
+        private fun lowerBound(key: String): Int {
+            var low = 0
+            var high = sortedKeys.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (sortedKeys[middle].key < key) low = middle + 1 else high = middle
+            }
+            return low
+        }
+
+        /** Public catalogs contain thousands of similar names; discovery requires an exact hit. */
+        fun matchExact(groupKey: String): String? =
+            if (groupKey.length >= MIN_KEY_LENGTH) exact[groupKey] else null
     }
 
     /**
@@ -90,7 +112,7 @@ object EpgMatcher {
         }
         ambiguous.forEach(exact::remove)
 
-        return Index(exact, all)
+        return Index(exact, all.sortedBy { it.key })
     }
 
     /**

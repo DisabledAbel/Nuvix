@@ -63,6 +63,29 @@ class AppSettings private constructor(context: Context) {
     private val _guidePreviewSound = MutableStateFlow(prefs.getBoolean(KEY_PREVIEW_SOUND, false))
     val guidePreviewSound: StateFlow<Boolean> = _guidePreviewSound.asStateFlow()
 
+    private val _automaticEpg = MutableStateFlow(prefs.getBoolean(KEY_AUTO_EPG, true))
+    val automaticEpg: StateFlow<Boolean> = _automaticEpg.asStateFlow()
+
+    fun setAutomaticEpg(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_EPG, enabled).apply()
+        _automaticEpg.value = enabled
+    }
+
+    fun isEpgFeedSuppressed(url: String): Boolean =
+        epgFeedKey(url) in prefs.getStringSet(KEY_EPG_SUPPRESSED, emptySet()).orEmpty()
+
+    fun suppressEpgFeed(url: String, suppressed: Boolean) {
+        val urls = prefs.getStringSet(KEY_EPG_SUPPRESSED, emptySet()).orEmpty().toMutableSet()
+        val key = epgFeedKey(url)
+        if (suppressed) urls.add(key) else urls.remove(key)
+        prefs.edit().putStringSet(KEY_EPG_SUPPRESSED, urls).apply()
+    }
+
+    // Custom guide URLs can contain passwords or signed query strings. Persist only a digest.
+    private fun epgFeedKey(url: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+
     /** The profile whose watch history is active. Defaults to the built-in profile (id 1). */
     private val _activeProfileId = MutableStateFlow(prefs.getLong(KEY_ACTIVE_PROFILE, 1L))
     val activeProfileId: StateFlow<Long> = _activeProfileId.asStateFlow()
@@ -430,6 +453,8 @@ class AppSettings private constructor(context: Context) {
     }
 
     companion object {
+        private const val KEY_AUTO_EPG = "automatic_epg"
+        private const val KEY_EPG_SUPPRESSED = "epg_suppressed_feed_hashes"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_CHANNEL_LAYOUT = "channel_layout"
         private const val KEY_SUBTITLES = "subtitles_enabled"
