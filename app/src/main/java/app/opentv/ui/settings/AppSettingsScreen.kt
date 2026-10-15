@@ -63,6 +63,9 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     val channelLayout by settings.channelLayout.collectAsState()
     val previewVideo by settings.guidePreviewVideo.collectAsState()
     val previewSound by settings.guidePreviewSound.collectAsState()
+    val persistentLivePlayback by settings.persistentLivePlayback.collectAsState()
+    val livePreview by settings.livePreview.collectAsState()
+    val browsingAudio by settings.continueAudioWhileBrowsing.collectAsState()
     val captions by settings.subtitlesEnabled.collectAsState()
     val resumeLast by settings.resumeLastChannel.collectAsState()
     val language by settings.languageTag.collectAsState()
@@ -194,6 +197,24 @@ fun AppSettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         SettingsSection(stringResource(R.string.settings_section_playback)) {
+            ToggleRow(
+                title = stringResource(R.string.persistent_live_playback_title),
+                subtitle = stringResource(R.string.persistent_live_playback_subtitle),
+                checked = persistentLivePlayback,
+                onToggle = settings::setPersistentLivePlayback,
+            )
+            ToggleRow(
+                title = stringResource(R.string.live_preview_title),
+                subtitle = stringResource(R.string.live_preview_subtitle),
+                checked = livePreview,
+                onToggle = settings::setLivePreview,
+            )
+            ToggleRow(
+                title = stringResource(R.string.continue_audio_while_browsing_title),
+                subtitle = stringResource(R.string.continue_audio_while_browsing_subtitle),
+                checked = browsingAudio,
+                onToggle = settings::setContinueAudioWhileBrowsing,
+            )
             ToggleRow(
                 title = stringResource(R.string.settings_subtitles_title),
                 subtitle = stringResource(R.string.settings_subtitles_subtitle),

@@ -85,6 +85,7 @@ fun GuidePreview(
     onRefresh: () -> Unit,
     onAddSource: () -> Unit,
     previewPlayer: ExoPlayer?,
+    persistentPreview: (@Composable () -> Unit)? = null,
     isRecording: Boolean = false,
     onRecord: () -> Unit = {},
     dayLabel: String = "",
@@ -106,7 +107,7 @@ fun GuidePreview(
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black)
-                .clickable(onClick = onWatch),
+                .then(if (persistentPreview == null) Modifier.clickable(onClick = onWatch) else Modifier),
             contentAlignment = Alignment.Center,
         ) {
             // Logo sits behind everything as the fallback / shutter.
@@ -120,7 +121,9 @@ fun GuidePreview(
 
             // Live video on top of the logo when preview playback is on. The transparent
             // shutter means the logo behind shows through until the first frame arrives.
-            if (previewPlayer != null && row != null) {
+            if (persistentPreview != null) {
+                persistentPreview()
+            } else if (previewPlayer != null && row != null) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
@@ -129,6 +132,8 @@ fun GuidePreview(
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            isFocusable = false
+                            isFocusableInTouchMode = false
                             player = previewPlayer
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -136,11 +141,12 @@ fun GuidePreview(
                             )
                         }
                     },
-                    update = { it.player = previewPlayer },
+                    onRelease = { it.player = null },
+                    update = { if (it.player !== previewPlayer) it.player = previewPlayer },
                 )
             }
 
-            Row(
+            if (persistentPreview == null) Row(
                 Modifier
                     .align(Alignment.BottomStart)
                     .padding(10.dp)

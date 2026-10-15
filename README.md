@@ -12,6 +12,7 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.
+- Persistent live TV across Home, Guide, Sports, and Search, with an optional current-channel preview. See [live playback](docs/live-playback.md).
 - Optional home launcher with installed-app shortcuts and customizable startup destinations.
 - Automatic TVmaze show, season, episode, and cast metadata with clickable actor profiles; no key required. See [TV metadata](docs/tv-metadata.md).
 - Optional Supabase sync for content favorites and movie/episode progress.
@@ -48,6 +49,7 @@ See [build instructions](docs/building.md), [signing](docs/signing.md), and [rel
 
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
 - **Launcher:** Open **Settings → Home launcher** and enable the HOME entry. Use your device's default-home selector where supported. Restore the original default launcher before disabling the entry. See [device compatibility](docs/launcher-compatibility.md).
+- **Live playback:** Under **Settings → Display & playback → Playback**, choose **Persistent Live Playback**, **Live Preview**, and **Continue Audio While Browsing**. Select the preview to return to fullscreen. Disable persistence on devices that struggle to retain video while browsing.
 - **Cloud sync:** Configure your project and sign in under **Settings → Supabase cloud sync**, then enable sync. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 

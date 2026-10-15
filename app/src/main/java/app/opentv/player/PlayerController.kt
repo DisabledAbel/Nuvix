@@ -10,6 +10,7 @@ package app.opentv.player
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -45,7 +46,7 @@ import okhttp3.OkHttpClient
  * nothing plays until the app is killed. That is the "changing channels too quickly causes
  * streams to fail" class of bug, and it is entirely self-inflicted.
  *
- * OpenTV keeps exactly one player for the lifetime of the screen and only ever swaps its
+ * Nuvix keeps one player per playback owner (the live Activity session or a non-live screen) and swaps its
  * media item. Requests are debounced, and an in-flight switch is cancelled the moment a newer
  * one arrives, so holding channel-up costs one actual tune — the one the user stopped on.
  */
@@ -116,8 +117,17 @@ class PlayerController(
     val tracks: StateFlow<Tracks> = _tracks.asStateFlow()
 
     private var switchJob: Job? = null
+    private var retryJob: Job? = null
     private var current: Request? = null
+    private var loadedRequest: Request? = null
     private var consecutiveFailures = 0
+    private var suspended = false
+    private var released = false
+    internal val isReleased: Boolean get() = released
+    private var explicitTextSelection = false
+    private var generation = 0L
+    private val _userPaused = MutableStateFlow(false)
+    val userPaused: StateFlow<Boolean> = _userPaused.asStateFlow()
 
     /**
      * Held so the User-Agent can be swapped per source before each tune.
@@ -211,6 +221,11 @@ class PlayerController(
         )
         .setTrackSelector(trackSelector)
         .setLoadControl(loadControl)
+        .setAudioAttributes(
+            AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+            !preview,
+        )
+        .setHandleAudioBecomingNoisy(!preview)
         .build()
         .apply {
             addListener(object : Player.Listener {
@@ -222,17 +237,24 @@ class PlayerController(
                     val title = current?.title.orEmpty()
                     _state.value = when (playbackState) {
                         Player.STATE_BUFFERING -> State.Buffering(title)
-                        Player.STATE_READY -> {
-                            consecutiveFailures = 0
-                            State.Playing(title)
-                        }
+                        Player.STATE_READY -> State.Playing(title)
                         Player.STATE_IDLE -> _state.value
                         Player.STATE_ENDED -> State.Idle
                         else -> _state.value
                     }
                 }
 
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (!playWhenReady && (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ||
+                            reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY)) {
+                        // A permanent focus loss is a user-visible pause, never undone by navigation.
+                        _userPaused.value = true
+                    }
+                }
+
                 override fun onPlayerError(error: PlaybackException) {
+                    if (released || suspended) return
+                    retryJob?.cancel()
                     consecutiveFailures++
                     val request = current
                     _state.value = State.Error(
@@ -243,9 +265,12 @@ class PlayerController(
                     // One silent restart covers the common case of a provider dropping the
                     // connection when another device on the account starts streaming.
                     if (consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
-                        scope.launch {
+                        val token = generation
+                        retryJob = scope.launch {
                             delay(AUTO_RESTART_DELAY_MILLIS)
-                            if (current == request) play(request, debounce = false)
+                            if (!released && !suspended && generation == token && current == request) {
+                                start(request, debounce = false, resetFailures = false)
+                            }
                         }
                     }
                 }
@@ -263,15 +288,24 @@ class PlayerController(
      * that rapid presses collapse into a single tune. Pass false for a deliberate selection.
      */
     fun play(request: Request, debounce: Boolean = true) {
+        _userPaused.value = false
+        start(request, debounce, resetFailures = true)
+    }
+
+    private fun start(request: Request, debounce: Boolean, resetFailures: Boolean) {
+        if (released) return
         // Cancelling here is what makes fast channel-changing safe: the previous switch never
         // reaches the player, so we never stack prepares.
         switchJob?.cancel()
+        retryJob?.cancel()
+        generation++
         current = request
+        if (resetFailures) consecutiveFailures = 0
+        if (suspended) return
 
         switchJob = scope.launch {
             if (debounce) delay(switchDebounceMillis)
 
-            consecutiveFailures = 0
             httpFactory.setDefaultRequestProperties(mapOf("User-Agent" to request.userAgent))
             _state.value = State.Buffering(request.title)
 
@@ -297,14 +331,41 @@ class PlayerController(
                 if (!request.isLive && request.startPositionMillis > 0) {
                     seekTo(request.startPositionMillis)
                 }
-                playWhenReady = true
+                loadedRequest = request
+                playWhenReady = !_userPaused.value
                 prepare()
             }
         }
     }
 
     fun retry() {
-        current?.let { play(it, debounce = false) }
+        current?.let { start(it, debounce = false, resetFailures = true) }
+    }
+
+    /** User intent is independent of lifecycle suspension and browsing audio suppression. */
+    fun setUserPaused(paused: Boolean) {
+        _userPaused.value = paused
+        if (!released) player.playWhenReady = !paused && !suspended
+    }
+
+    /** Stop loading in the background; keep the selected item and tracks for a later resume. */
+    fun setSuspended(value: Boolean) {
+        if (released || suspended == value) return
+        suspended = value
+        if (value) {
+            switchJob?.cancel()
+            retryJob?.cancel()
+            generation++
+            player.playWhenReady = false
+            player.stop()
+        } else {
+            val request = current ?: return
+            if (loadedRequest != request) start(request, debounce = false, resetFailures = false)
+            else {
+                player.playWhenReady = !_userPaused.value
+                player.prepare()
+            }
+        }
     }
 
     /**
@@ -313,6 +374,13 @@ class PlayerController(
      * the user sees no captions even though they turned them on. So On explicitly selects the
      * first available subtitle track; Off disables text entirely.
      */
+    /** Auto-defaults may run again after a surface moves; explicit picks always win. */
+    fun applySubtitleDefault(enabled: Boolean) {
+        if (explicitTextSelection) return
+        setSubtitlesEnabled(enabled)
+        explicitTextSelection = false
+    }
+
     fun setSubtitlesEnabled(enabled: Boolean) {
         if (!enabled) {
             disableText()
@@ -333,6 +401,7 @@ class PlayerController(
 
     /** Force a specific audio or text track on (used by the in-player pickers). */
     fun selectTrack(group: Tracks.Group, trackIndex: Int) {
+        if (group.type == C.TRACK_TYPE_TEXT) explicitTextSelection = true
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
             .setTrackTypeDisabled(group.type, false)
@@ -341,6 +410,7 @@ class PlayerController(
 
     /** Turn subtitles off entirely. */
     fun disableText() {
+        explicitTextSelection = true
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -363,16 +433,25 @@ class PlayerController(
     }
 
     fun stop() {
+        if (released) return
+        generation++
         switchJob?.cancel()
+        retryJob?.cancel()
         current = null
+        loadedRequest = null
         player.stop()
         player.clearMediaItems()
         _state.value = State.Idle
     }
 
     fun release() {
+        if (released) return
+        released = true
+        generation++
+        current = null
         bufferJob.cancel()
         switchJob?.cancel()
+        retryJob?.cancel()
         player.release()
     }
 

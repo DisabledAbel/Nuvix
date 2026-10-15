@@ -7,7 +7,6 @@
 package app.opentv.ui.player
 
 import android.view.ViewGroup
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -98,22 +97,16 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
-import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.core.requestIgnoreBatteryOptimizations
 import app.opentv.data.model.Channel
-import app.opentv.data.model.shownName
+import app.opentv.player.LivePlaybackSession
 import app.opentv.player.PlaybackQueue
 import app.opentv.player.PlayerController
 import app.opentv.ui.RecordingBackgroundDialog
 import app.opentv.ui.RecordingBackgroundPrompt
 import coil.compose.AsyncImage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -131,52 +124,45 @@ import java.util.Locale
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    channelId: Long?,
+    liveSession: LivePlaybackSession,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
-    val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
     val subtitlesDefault by settings.subtitlesEnabled.collectAsState()
-    val controller = remember {
-        PlayerController(
-            context, scope, graph.streamingHttpClient,
-            subtitlesEnabled = settings.subtitlesEnabled.value,
-            // Opt-in shallow DVR so the transport's pause/rewind actually holds on a live stream.
-            dvr = settings.livePauseEnabled.value,
-        )
-    }
-    val state by controller.state.collectAsState()
+    val active by liveSession.active.collectAsState()
+    // An outgoing navigation destination can recompose after stop() releases the session. It
+    // must not allocate a replacement controller or replay the channel in its obsolete route.
+    // All explicit playback requests are accepted by the navigation owner before opening us.
+    if (!active) return
+    // Navigation only changes where this Activity-owned player is displayed. The session owns
+    // tuning, recovery and release, including while this composable is absent.
+    val controller = liveSession.controller
+    val state by liveSession.state.collectAsState()
     val tracks by controller.tracks.collectAsState()
+    val variants by liveSession.variants.collectAsState()
+    val currentChannel by liveSession.currentChannel.collectAsState()
+    val currentId = currentChannel?.id
+    val previousId by liveSession.previousChannelId.collectAsState()
+    val paused by liveSession.paused.collectAsState()
     // What's recording right now, so the Record button can show as armed for this channel.
     val activeRecordings by graph.recordingRepository.observeActive().collectAsState(initial = emptyList())
 
-    // Hold the screen awake while the player is on screen. A view-level keepScreenOn flag isn't
-    // reliable on every TV box, so we set the window flag on the Activity directly — that's what
-    // actually stops the system screensaver from firing mid-programme. keepScreenOn stays on too,
-    // as a belt-and-braces backstop.
+    // MainActivity owns the window flag across surface transitions.
     DisposableEffect(Unit) {
-        val window = context.findActivity()?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         view.keepScreenOn = true
         onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             view.keepScreenOn = false
-            controller.release()
-            scope.cancel()
         }
     }
 
-    var variants by remember { mutableStateOf<List<Channel>>(emptyList()) }
-    var currentId by remember { mutableStateOf<Long?>(null) }
-    // The channel we were on before this one — powers the "Last channel" recall in the list.
-    var previousId by remember { mutableStateOf<Long?>(null) }
     // Digits typed on the remote accumulate here, then jump to that channel number after a beat.
     var numberEntry by remember { mutableStateOf("") }
-    var paused by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableIntStateOf(settings.playerResizeMode.value) }
+    var surfaceAvailable by remember { mutableStateOf(true) }
+    val videoView = remember { arrayOfNulls<PlayerView>(1) }
 
     var controlsVisible by remember { mutableStateOf(true) }
     var panel by remember { mutableStateOf(Panel.NONE) }
@@ -186,8 +172,8 @@ fun PlayerScreen(
     // battery optimisation, so the capture survives the screen sleeping. Never blocks recording.
     var showBackgroundPrompt by remember { mutableStateOf(false) }
 
-    // Picture-in-picture. While the player is on it is "eligible" to shrink to a floating window
-    // (pressing Home does it, handled in MainActivity); [inPip] drives hiding all the chrome.
+    // PiP eligibility and playback controls belong to the Activity/session. This screen only
+    // hides its chrome; disposing a fullscreen surface must not clear the retained session flags.
     val inPip by app.opentv.core.PipState.inPip.collectAsState()
     val pipSupported = remember {
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
@@ -195,14 +181,6 @@ fun PlayerScreen(
                 android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE,
             )
     }
-    DisposableEffect(Unit) {
-        app.opentv.core.PipState.eligible = true
-        onDispose {
-            app.opentv.core.PipState.eligible = false
-            app.opentv.core.PipState.isPlaying = false
-        }
-    }
-    LaunchedEffect(paused) { app.opentv.core.PipState.isPlaying = !paused }
     val barFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -218,35 +196,11 @@ fun PlayerScreen(
     }
 
     fun tuneTo(channel: Channel) {
-        currentId = channel.id
-        paused = false
-        settings.lastChannelId = channel.id
-        app.opentv.core.RecentChannels.get(context).record(channel.id)
-        scope.launch {
-            val source = graph.sourceRepository.byId(channel.sourceId)
-            // Xtream/M3U carry a ready URL; a Stalker channel's URL is minted here from its cmd.
-            val url = graph.catalogRepository.resolvePlaybackUrl(channel, source)
-            controller.play(
-                PlayerController.Request(
-                    url = url,
-                    title = channel.shownName,
-                    userAgent = source?.userAgent ?: "Nuvix/0.1 (Android)",
-                    isLive = true,
-                ),
-                debounce = false,
-            )
-        }
+        liveSession.tune(channel)
     }
 
     fun playChannelId(id: Long) {
-        // Remember where we came from so "Last channel" can bounce straight back. Quality switches
-        // go through tuneTo directly, so they never count as a channel change here.
-        currentId?.let { if (it != id) previousId = it }
-        scope.launch {
-            val channel = graph.catalogRepository.channel(id) ?: return@launch
-            variants = graph.catalogRepository.variants(channel)
-            tuneTo(variants.firstOrNull { it.id == channel.id } ?: channel)
-        }
+        liveSession.openChannel(id)
     }
 
     fun zapBy(delta: Int) {
@@ -262,32 +216,13 @@ fun PlayerScreen(
             graph.recordingEngine.stop(active.id)
         } else {
             val channel = variants.firstOrNull { it.id == currentId } ?: return
-            scope.launch { graph.recordingEngine.startChannel(channel) }
+            liveSession.recordChannel(channel)
             if (RecordingBackgroundPrompt.shouldShow(context)) {
                 RecordingBackgroundPrompt.markShown()
                 showBackgroundPrompt = true
             }
         }
         interaction++
-    }
-
-    LaunchedEffect(channelId) {
-        val id = channelId ?: return@LaunchedEffect
-        val channel = graph.catalogRepository.channel(id) ?: return@LaunchedEffect
-        variants = graph.catalogRepository.variants(channel)
-        tuneTo(variants.firstOrNull { it.id == channel.id } ?: channel)
-    }
-
-    // Sleep timer: when the armed deadline passes, stop and leave the player. Re-arming from
-    // settings restarts this effect with the new deadline.
-    val sleepDeadline by SleepTimer.deadline.collectAsState()
-    LaunchedEffect(sleepDeadline) {
-        val d = sleepDeadline ?: return@LaunchedEffect
-        val wait = d - System.currentTimeMillis()
-        if (wait > 0) delay(wait)
-        SleepTimer.clear()
-        controller.stop()
-        onBack()
     }
 
     // Apply the saved captions default once the stream's tracks arrive. Only auto-selects when
@@ -297,7 +232,7 @@ fun PlayerScreen(
         val textChosen = tracks.groups.any { g ->
             g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { g.isTrackSelected(it) }
         }
-        if (subtitlesDefault && hasText && !textChosen) controller.setSubtitlesEnabled(true)
+        if (subtitlesDefault && hasText && !textChosen) controller.applySubtitleDefault(true)
     }
 
     // Auto-hide the bar after a few seconds — but never while paused or with a picker open.
@@ -330,10 +265,7 @@ fun PlayerScreen(
             channelListVisible -> channelListVisible = false
             panel != Panel.NONE -> panel = Panel.NONE
             controlsVisible -> controlsVisible = false
-            else -> {
-                controller.stop()
-                onBack()
-            }
+            else -> onBack()
         }
     }
 
@@ -405,7 +337,6 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    player = controller.player
                     useController = false
                     subtitleView?.setUserDefaultStyle()
                     subtitleView?.setUserDefaultTextSize()
@@ -413,10 +344,35 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                    videoView[0] = this
+                    surfaceAvailable = liveSession.surfaceOwner.attach(this)
                 }
             },
             update = { it.resizeMode = resizeMode },
+            onRelease = {
+                liveSession.surfaceOwner.detach(it)
+                if (videoView[0] === it) videoView[0] = null
+            },
         )
+
+        if (!surfaceAvailable && !inPip && state !is PlayerController.State.Error) {
+            Column(
+                Modifier.align(Alignment.Center).padding(48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(R.string.player_surface_unavailable),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = {
+                    videoView[0]?.let { surfaceAvailable = liveSession.surfaceOwner.attach(it) }
+                }) {
+                    Text(stringResource(R.string.common_try_again))
+                }
+            }
+        }
 
         // The channel number as you type it, top-right, until it resolves.
         if (numberEntry.isNotEmpty() && !inPip) {
@@ -462,7 +418,7 @@ fun PlayerScreen(
                             textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.height(24.dp))
-                        Button(onClick = { controller.retry() }) { Text(stringResource(R.string.common_try_again)) }
+                        Button(onClick = liveSession::retry) { Text(stringResource(R.string.common_try_again)) }
                     }
                 }
             }
@@ -537,8 +493,7 @@ fun PlayerScreen(
                         selected = false,
                         focusRequester = barFocus,
                     ) {
-                        paused = !paused
-                        controller.player.playWhenReady = !paused
+                        liveSession.setPaused(!paused)
                         interaction++
                     }
                     if (controller.isSeekable) {

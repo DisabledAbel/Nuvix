@@ -58,6 +58,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import app.opentv.player.LivePlaybackSession
+import app.opentv.player.LivePresentation
+import app.opentv.ui.player.LivePlaybackPreview
 import app.opentv.core.AppSettings
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -110,6 +113,9 @@ private val RAIL_EXPANDED = 236.dp
 @Composable
 fun MainScreen(
     isTelevision: Boolean,
+    liveSession: LivePlaybackSession,
+    onReturnToLive: () -> Unit,
+    onLivePresentation: (LivePresentation, Boolean) -> Unit,
     hasSources: Boolean,
     isSyncing: Boolean,
     onPlayChannel: (Channel) -> Unit,
@@ -176,6 +182,14 @@ fun MainScreen(
         if (tab !in visibleTabs) tab = homeTab
     }
 
+    LaunchedEffect(tab) {
+        onLivePresentation(
+            if (tab in listOf(Tab.HOME, Tab.GUIDE, Tab.LIVE, Tab.SPORTS)) LivePresentation.BROWSING
+            else LivePresentation.HIDDEN,
+            tab == Tab.GUIDE || tab == Tab.LIVE,
+        )
+    }
+
     // Back from a non-home tab returns to the home tab rather than dropping out of the app.
     BackHandler(enabled = tab != homeTab) { tab = homeTab }
 
@@ -215,36 +229,43 @@ fun MainScreen(
             activeProfileName = activeProfileName,
         )
 
-        Box(Modifier.weight(1f).fillMaxHeight()) {
-            when (tab) {
-                Tab.HOME -> TelevisionHomeScreen(hasSources, onPlayChannel, onOpenMovie, onOpenSeries, onResume, onAddSource, { tab = Tab.GUIDE }, { tab = Tab.APPS })
-                Tab.SPORTS -> SportsScreen(onPlayChannel)
-                Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
-                Tab.LIVE, Tab.GUIDE -> HomeScreen(
-                    isTelevision = isTelevision,
-                    hasSources = hasSources,
-                    isSyncing = isSyncing,
-                    onPlayChannel = onPlayChannel,
-                    onAddSource = onAddSource,
-                    onRefresh = onRefresh,
-                    onPlayCatchup = onPlayCatchup,
-                    layoutOverride = if (tab == Tab.GUIDE) AppSettings.ChannelLayout.GRID else AppSettings.ChannelLayout.LIST,
-                )
-                Tab.MOVIES -> MoviesScreen(
-                    onOpenMovie = onOpenMovie,
-                    onResume = onResume,
-                    onOpenSearch = onOpenSearch,
-                    hasSources = hasSources,
-                    isSyncing = isSyncing,
-                )
-                Tab.SHOWS -> SeriesScreen(
-                    onOpenSeries = onOpenSeries,
-                    onResume = onResume,
-                    onOpenSearch = onOpenSearch,
-                    hasSources = hasSources,
-                    isSyncing = isSyncing,
-                )
-                Tab.RECORDINGS -> LibraryScreen(onPlayRecording, onPlayChannel, onOpenMovie, onResume)
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            if (tab == Tab.HOME || tab == Tab.SPORTS) {
+                LivePlaybackPreview(liveSession, onFullscreen = onReturnToLive)
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (tab) {
+                    Tab.HOME -> TelevisionHomeScreen(hasSources, onPlayChannel, onOpenMovie, onOpenSeries, onResume, onAddSource, { tab = Tab.GUIDE }, { tab = Tab.APPS })
+                    Tab.SPORTS -> SportsScreen(onPlayChannel)
+                    Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
+                    Tab.LIVE, Tab.GUIDE -> HomeScreen(
+                        isTelevision = isTelevision,
+                        liveSession = liveSession,
+                        onReturnToLive = onReturnToLive,
+                        hasSources = hasSources,
+                        isSyncing = isSyncing,
+                        onPlayChannel = onPlayChannel,
+                        onAddSource = onAddSource,
+                        onRefresh = onRefresh,
+                        onPlayCatchup = onPlayCatchup,
+                        layoutOverride = if (tab == Tab.GUIDE) AppSettings.ChannelLayout.GRID else AppSettings.ChannelLayout.LIST,
+                    )
+                    Tab.MOVIES -> MoviesScreen(
+                        onOpenMovie = onOpenMovie,
+                        onResume = onResume,
+                        onOpenSearch = onOpenSearch,
+                        hasSources = hasSources,
+                        isSyncing = isSyncing,
+                    )
+                    Tab.SHOWS -> SeriesScreen(
+                        onOpenSeries = onOpenSeries,
+                        onResume = onResume,
+                        onOpenSearch = onOpenSearch,
+                        hasSources = hasSources,
+                        isSyncing = isSyncing,
+                    )
+                    Tab.RECORDINGS -> LibraryScreen(onPlayRecording, onPlayChannel, onOpenMovie, onResume)
+                }
             }
         }
       }
