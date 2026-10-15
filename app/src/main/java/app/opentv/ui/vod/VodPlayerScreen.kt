@@ -7,7 +7,6 @@
 package app.opentv.ui.vod
 
 import android.view.ViewGroup
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -92,6 +91,7 @@ import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
+import app.opentv.player.LivePlaybackSession
 import app.opentv.player.PlayerController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +116,7 @@ fun VodPlayerScreen(
     streamUrl: String,
     title: String,
     userAgent: String,
+    liveSession: LivePlaybackSession,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -131,13 +132,17 @@ fun VodPlayerScreen(
     // http/file URLs of ordinary VOD.
     val controller = remember {
         PlayerController(
-            context, scope, graph.streamingHttpClient, subtitlesEnabled = false,
+            context.applicationContext, scope, graph.streamingHttpClient, subtitlesEnabled = false,
             smbDataSourceFactory = app.opentv.player.SmbDataSource.Factory(graph.settings),
             // Lets an `optvrec://<id>` recording play while it's still being written.
             growingDataSourceFactory =
                 app.opentv.player.GrowingRecordingDataSource.Factory(context.applicationContext),
             liveRecording = growingRec,
         )
+    }
+    DisposableEffect(controller, liveSession) {
+        liveSession.registerNonLivePlayback(controller)
+        onDispose { liveSession.unregisterNonLivePlayback(controller) }
     }
     // Skip forward/back within the recorded portion. For a growing recording ExoPlayer won't report
     // the item as seekable (no fixed length), so we seek directly, clamped to what's on disk.
@@ -182,14 +187,10 @@ fun VodPlayerScreen(
         }
     }
 
-    // Keep the screen awake during playback — see the note in PlayerScreen; a film is exactly when
-    // the screensaver must not fire. Window flag is the reliable path; keepScreenOn is a backstop.
+    // MainActivity owns the window flag; this View only owns its local keep-awake hint.
     DisposableEffect(Unit) {
-        val window = context.findActivity()?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         view.keepScreenOn = true
         onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             view.keepScreenOn = false
             scope.launch { savePosition() }
             controller.release()

@@ -6,4 +6,6 @@ The next phase is device acceptance testing: Android TV, Google TV and Fire TV D
 
 Then expand cloud scope with explicitly typed custom groups/settings/app favorites/launcher preferences, review removal/conflict semantics, and add more device-to-device tests. Add QR/device authorization only with an authenticated, reviewed browser pairing architecture; no fake device code flow.
 
-Further playback work includes uninterrupted shared live-preview state across navigation, update transfer range resume, broader provider sports-event metadata, low-memory performance profiling, and a pluggable playback-engine contract. Broaden automated TV UI tests alongside each feature.
+Shared live playback and a current-channel preview now span main navigation; see [live playback](live-playback.md) for ownership, preferences, and fallback behavior. Device acceptance must verify surface transfers, decoder recovery, PiP, audio focus, and low-memory behavior with authorized streams on Android TV, Google TV, and Fire TV hardware.
+
+Further playback work includes update transfer range resume, broader provider sports-event metadata, low-memory performance profiling, and a pluggable playback-engine contract. Broaden automated TV UI tests alongside each feature.

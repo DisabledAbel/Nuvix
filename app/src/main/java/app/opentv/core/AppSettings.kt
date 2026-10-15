@@ -63,6 +63,18 @@ class AppSettings private constructor(context: Context) {
     private val _guidePreviewSound = MutableStateFlow(prefs.getBoolean(KEY_PREVIEW_SOUND, false))
     val guidePreviewSound: StateFlow<Boolean> = _guidePreviewSound.asStateFlow()
 
+    /** Retain the active live player while navigating within this Activity's app session. */
+    private val _persistentLivePlayback = MutableStateFlow(prefs.getBoolean(KEY_PERSISTENT_LIVE, true))
+    val persistentLivePlayback: StateFlow<Boolean> = _persistentLivePlayback.asStateFlow()
+
+    /** Display the retained live session while browsing; this never starts a new stream. */
+    private val _livePreview = MutableStateFlow(prefs.getBoolean(KEY_LIVE_PREVIEW, true))
+    val livePreview: StateFlow<Boolean> = _livePreview.asStateFlow()
+
+    /** In-app browsing audio only; background playback remains governed by lifecycle/PiP. */
+    private val _continueAudioWhileBrowsing = MutableStateFlow(prefs.getBoolean(KEY_BROWSING_AUDIO, true))
+    val continueAudioWhileBrowsing: StateFlow<Boolean> = _continueAudioWhileBrowsing.asStateFlow()
+
     private val _automaticEpg = MutableStateFlow(prefs.getBoolean(KEY_AUTO_EPG, true))
     val automaticEpg: StateFlow<Boolean> = _automaticEpg.asStateFlow()
 
@@ -167,6 +179,21 @@ class AppSettings private constructor(context: Context) {
     fun setGuidePreviewSound(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_PREVIEW_SOUND, enabled).apply()
         _guidePreviewSound.value = enabled
+    }
+
+    fun setPersistentLivePlayback(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PERSISTENT_LIVE, enabled).apply()
+        _persistentLivePlayback.value = enabled
+    }
+
+    fun setLivePreview(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LIVE_PREVIEW, enabled).apply()
+        _livePreview.value = enabled
+    }
+
+    fun setContinueAudioWhileBrowsing(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BROWSING_AUDIO, enabled).apply()
+        _continueAudioWhileBrowsing.value = enabled
     }
 
     /** Whether launching the app jumps straight back to the last channel you watched. */
@@ -460,6 +487,9 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_SUBTITLES = "subtitles_enabled"
         private const val KEY_PREVIEW_VIDEO = "guide_preview_video"
         private const val KEY_PREVIEW_SOUND = "guide_preview_sound"
+        private const val KEY_PERSISTENT_LIVE = "persistent_live_playback"
+        private const val KEY_LIVE_PREVIEW = "live_preview"
+        private const val KEY_BROWSING_AUDIO = "continue_audio_while_browsing"
         private const val KEY_PIN_HASH = "parental_pin_hash"
         private const val KEY_HIDDEN_CATS = "hidden_categories"
         private const val KEY_ACTIVE_PROFILE = "active_profile_id"

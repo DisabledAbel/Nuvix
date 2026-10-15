@@ -119,8 +119,11 @@ providers where it matters most.
 
 ## Playback
 
-`PlayerController` owns exactly one `ExoPlayer` for the lifetime of the screen and only ever
-swaps its media item.
+`PlayerController` owns exactly one `ExoPlayer` and swaps its media item on explicit tune
+requests. Nuvix's live session now owns that controller above the player destination so
+navigation can retain playback. VOD, catch-up, and recording playback retain their separate
+screen lifecycle after live ownership is relinquished. See [live playback](live-playback.md)
+for the current lifecycle and surface contract; the notes below describe the reused engine.
 
 The naive implementation of "change channel" releases the player and builds a new one. On a
 low-end box that is slow enough that a user holding channel-up queues several constructions and

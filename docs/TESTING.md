@@ -1,6 +1,61 @@
-> Historical upstream testing notes. Exact Nuvix validation is recorded in [implementation-report.md](implementation-report.md); build commands are in [building.md](building.md).
+> Current live playback validation and historical upstream testing notes. Earlier Nuvix foundation validation is recorded in [implementation-report.md](implementation-report.md); build setup is in [building.md](building.md).
 
 # Testing OpenTV
+
+## Persistent live playback
+
+The normal Android JVM suite includes credential-free session ownership, navigation policy,
+surface ownership, and local playback-preference regressions. Test doubles count player
+creation, explicit tuning, release, and attachment; they do not contact IPTV providers.
+Robolectric exercises Android lifecycle/surface boundaries where supported. See
+[live playback](live-playback.md) for expected behavior and device limitations.
+
+Run the same validation tasks used by the PR workflow, separately:
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+```bash
+./gradlew :app:lintDebug
+```
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+```bash
+python3 -m unittest discover -s scripts/tests -v
+```
+
+```bash
+git diff --check
+```
+
+The existing Build workflow runs on pushes and pull requests, keeps read-only repository
+permissions, and uploads JVM test/lint reports and the debug APK. A JVM fake cannot prove
+decoder behavior, provider connection counts, audio focus, or vendor PiP behavior; use the
+following device checks with an authorized stream before a release.
+
+| Check | Expected result |
+|---|---|
+| Start live TV, then visit Home, Guide, Sports, and Search repeatedly | Current channel stays consistent; the guide does not tune newly highlighted rows; no extra persistent live player is created |
+| Select the preview or reopen the current channel | Fullscreen returns without a fresh media item or buffer reset |
+| Change channel through the guide or existing player channel list | Only the explicitly selected channel becomes current; rapid requests resolve to the latest channel |
+| Change audio/subtitle tracks, browse, and return | Track choices and configured buffering remain effective |
+| Disable Live Preview; disable browsing audio; return to fullscreen | Preview disappears without creating another player; browsing is muted; fullscreen restores the user's audio and pause choices |
+| Disable persistence and leave fullscreen | Live playback is released; reopening follows the screen-owned fallback |
+| Recreate the Activity; background/foreground the app; relaunch after process death | Configuration changes retain ownership, unsupported background playback pauses, and process recreation follows startup/resume preferences |
+| Enter PiP, return, and close PiP | One stream and one active video surface; PiP controls work; no browsing preview appears inside PiP |
+| Lose network, retry, switch channel during recovery | Existing bounded retry/error behavior remains visible; old channel requests cannot win |
+| Open VOD, catch-up, local/NAS/USB recordings, or a growing recording | Live relinquishes ownership before another playback connection starts; scheduled/background recordings continue independently |
+| Trigger memory pressure or a decoder/surface failure | Resources are bounded, recordings continue, and recovery/fallback offers a clear action |
+| Use D-pad, Back, and channel-list controls | Preview has a visible focus state without capturing unrelated keys; Back and channel selection retain existing behavior |
+
+Record device model, Android version, provider connection limit, and whether a result used
+real hardware, an emulator, or fakes. Do not claim real-device playback from JVM tests or a
+source-free app screenshot. New playback preference/preview strings currently fall back to
+English in other locales, consistent with existing Nuvix additions.
 
 There is no QA department; there is you, your provider and your telly. This page makes that
 count. The app logs everything it does, so a bug report with a log attached is usually a fix

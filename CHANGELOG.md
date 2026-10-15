@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain one lifecycle-owned live TV player across main navigation, transfer its video
+  surface between fullscreen and a current-channel preview, and add local persistence,
+  preview, and browsing-audio preferences. Preserve guide-preview, channel-list, PiP,
+  buffer, subtitle, recording, and VOD ownership paths; add playback regression tests.
 - Add automatic keyless TVmaze TV metadata, full season/episode listings, cast and
   crew photos/characters, clickable actor profiles and credits, and CC BY-SA attribution.
 - Prefer TVmaze, use IMDbAPI.dev secondarily, and retain optional TMDb fallback;

@@ -10,6 +10,7 @@ import com.disabledabel.nuvix.R
 
 import android.app.PictureInPictureParams
 import android.app.UiModeManager
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -42,12 +43,14 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,9 +59,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import app.opentv.player.LivePlaybackSession
+import app.opentv.player.LivePresentation
+import app.opentv.ui.player.LivePlaybackPreview
 import app.opentv.core.findActivity
 import app.opentv.core.AppSettings
 import app.opentv.core.ServiceLocator
@@ -91,6 +98,7 @@ import app.opentv.update.UpdateGate
 
 class MainActivity : ComponentActivity() {
     private var homeGeneration by mutableIntStateOf(0)
+    private var liveSession: LivePlaybackSession? = null
 
 
     // Apply the chosen UI language before any view or resource is resolved. A language change in
@@ -124,13 +132,52 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     Box(Modifier.fillMaxSize()) {
-                        NuvixNavigation(isTelevision = isTelevision, homeGeneration = homeGeneration)
+                        NuvixNavigation(
+                            isTelevision = isTelevision, homeGeneration = homeGeneration,
+                            restoringNavigation = savedInstanceState != null,
+                            onLiveSession = { session ->
+                                if (liveSession !== session) {
+                                    liveSession = session
+                                    session.setForeground(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+                                }
+                            },
+                        )
                         // Available even if protected local data cannot open after a bad update.
                         UpdateGate()
                     }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        liveSession?.setForeground(true)
+    }
+
+    override fun onStop() {
+        // A retained ViewModel keeps the same player during configuration changes. Process death
+        // creates a new owner and only the existing startup preference may request a new stream.
+        if (!isChangingConfigurations) liveSession?.setForeground(false)
+        super.onStop()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        liveSession?.onMemoryPressure(level)
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        liveSession?.onMemoryPressure(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
+    }
+
+    override fun onDestroy() {
+        val session = liveSession
+        // A device that rejected surface cleanup cannot retain a View into a destroyed Activity.
+        if (session != null && !session.surfaceOwner.clear()) session.stop()
+        liveSession = null
+        super.onDestroy()
     }
 
     // singleTask: a reminder tapped while the app is already running arrives here, not a fresh
@@ -189,6 +236,7 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         app.opentv.core.PipState.setInPip(isInPictureInPictureMode)
+        liveSession?.setInPip(isInPictureInPictureMode)
     }
 
     companion object {
@@ -245,7 +293,12 @@ object Routes {
 }
 
 @Composable
-private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
+private fun NuvixNavigation(
+    isTelevision: Boolean,
+    homeGeneration: Int,
+    restoringNavigation: Boolean,
+    onLiveSession: (LivePlaybackSession) -> Unit,
+) {
     val startupContext = androidx.compose.ui.platform.LocalContext.current
     val initialHomeGeneration = remember { homeGeneration }
     val recoveryUpdater: app.opentv.update.UpdateViewModel = viewModel()
@@ -279,7 +332,39 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
         } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    // Created outside NavHost: the Activity owns this ViewModel, not a player back-stack entry.
+    val liveSession: LivePlaybackSession = viewModel()
+    SideEffect { onLiveSession(liveSession) }
     val navController = rememberNavController()
+    var mainLivePresentation by rememberSaveable { mutableStateOf(LivePresentation.BROWSING) }
+    var guideVisible by rememberSaveable { mutableStateOf(false) }
+    DisposableEffect(navController, liveSession) {
+        val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
+            when (destination.route) {
+                Routes.PLAYER -> liveSession.setPresentation(LivePresentation.FULLSCREEN)
+                Routes.HOME -> liveSession.setPresentation(mainLivePresentation)
+                Routes.SEARCH -> liveSession.setPresentation(LivePresentation.BROWSING)
+                Routes.VOD_PLAYER -> liveSession.stop() // release provider connection before VOD allocates
+                else -> liveSession.setPresentation(LivePresentation.HIDDEN)
+            }
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
+    fun openLive(id: Long) {
+        // Accept the request before navigation, cancelling obsolete lookups and guide preview.
+        liveSession.setPresentation(LivePresentation.FULLSCREEN)
+        liveSession.openChannel(id)
+        val replacingFullscreen = navController.currentDestination?.route == Routes.PLAYER
+        navController.navigate(Routes.player(id)) {
+            launchSingleTop = true
+            if (replacingFullscreen) popUpTo(Routes.PLAYER) { inclusive = true }
+        }
+    }
+    fun openVod(route: String) {
+        liveSession.stop()
+        navController.navigate(route) { launchSingleTop = true }
+    }
     val sourcesViewModel: SourcesViewModel = viewModel()
     val vodViewModel: VodViewModel = viewModel()
     val profilesViewModel: ProfilesViewModel = viewModel()
@@ -308,18 +393,77 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
     val bootContext = androidx.compose.ui.platform.LocalContext.current
     val bootSettings = remember { ServiceLocator.get(bootContext).settings }
     val launcherSettings = remember { app.opentv.launcher.LauncherSettingsStore(bootContext) }
+    val restoringAfterProcessDeath = remember { restoringNavigation && !liveSession.startupNavigationHandled }
     DisposableEffect(launcherSettings) { onDispose { launcherSettings.close() } }
     LaunchedEffect(homeGeneration) {
         if (homeGeneration != initialHomeGeneration) navController.navigate(Routes.HOME) {
             launchSingleTop = true
             popUpTo(Routes.HOME) { inclusive = false }
         }
+        if (liveSession.startupNavigationHandled) return@LaunchedEffect
+        liveSession.startupNavigationHandled = true
         val destination = launcherSettings.preferences.value.startupDestination
         val resumeLast = destination == app.opentv.launcher.StartupDestination.LAST_WATCHED ||
             (destination == app.opentv.launcher.StartupDestination.HOME && bootSettings.resumeLastChannel.value)
-        if (homeGeneration == initialHomeGeneration && resumeLast && sourcesUi.sources.isNotEmpty() && bootSettings.lastChannelId != 0L &&
-            ServiceLocator.get(bootContext).database.channels().byId(bootSettings.lastChannelId) != null) {
-            navController.navigate(Routes.player(bootSettings.lastChannelId)) { launchSingleTop = true }
+        val startupChannel = if (resumeLast && bootSettings.lastChannelId != 0L) {
+            ServiceLocator.get(bootContext).catalogRepository.channel(bootSettings.lastChannelId)
+        } else null
+        val recordingOwnsSource = startupChannel != null && ServiceLocator.get(bootContext)
+            .recordingRepository.active().any { it.sourceId == startupChannel.sourceId }
+        if (homeGeneration == initialHomeGeneration && resumeLast && sourcesUi.sources.isNotEmpty() &&
+            startupChannel != null && !recordingOwnsSource && !liveSession.active.value) {
+            openLive(startupChannel.id)
+        } else if (restoringAfterProcessDeath && !liveSession.active.value &&
+            navController.currentDestination?.route == Routes.PLAYER) {
+            navController.navigate(Routes.HOME) {
+                popUpTo(Routes.HOME) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val liveActive by liveSession.active.collectAsState()
+    val route = currentEntry?.destination?.route
+    val liveRoute = route == Routes.PLAYER
+    val previewVideo by bootSettings.livePreview.collectAsState()
+    val guideVideo by bootSettings.guidePreviewVideo.collectAsState()
+    val previewSuppressed by liveSession.guidePreviewSuppressed.collectAsState()
+    val keepAwake = route == Routes.PLAYER || route == Routes.VOD_PLAYER ||
+        (previewVideo && ((liveActive && (route == Routes.SEARCH ||
+            (route == Routes.HOME && mainLivePresentation == LivePresentation.BROWSING))) ||
+            (route == Routes.HOME && guideVisible && guideVideo && !previewSuppressed)))
+    DisposableEffect(keepAwake) {
+        val window = bootContext.findActivity()?.window
+        if (keepAwake) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+    DisposableEffect(liveSession, liveRoute, liveActive) {
+        val player = if (liveRoute && liveActive) liveSession.controller.player else null
+        val listener = object : androidx.media3.common.Player.Listener {
+            fun update() {
+                app.opentv.core.PipState.eligible = player != null
+                app.opentv.core.PipState.isPlaying = player?.isPlaying == true
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) = update()
+        }
+        if (player != null) {
+            player.addListener(listener)
+            listener.update()
+        }
+        onDispose {
+            player?.removeListener(listener)
+            if (player != null) {
+                app.opentv.core.PipState.eligible = false
+                app.opentv.core.PipState.isPlaying = false
+            }
+        }
+    }
+    // Stop/sleep/memory fallback cannot leave an inactive screen that lazily recreates a player.
+    LaunchedEffect(liveRoute, liveActive) {
+        if (liveRoute && !liveActive && !navController.popBackStack()) {
+            navController.navigate(Routes.HOME) { launchSingleTop = true }
         }
     }
 
@@ -330,7 +474,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
         val id = playRequest
         if (id != null && id != 0L) {
             app.opentv.core.PlayRequests.consume()
-            navController.navigate(Routes.player(id))
+            openLive(id)
         }
     }
 
@@ -345,6 +489,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
             val rec = runCatching {
                 ServiceLocator.get(bootContext).recordingRepository.byId(req.recordingId)
             }.getOrNull() ?: return@LaunchedEffect
+            liveSession.stop()
             runCatching {
                 navController.navigate(
                     Routes.vodPlayer(
@@ -359,7 +504,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                     // the recording returns to the home screen — never to a live stream. On a single-
                     // connection line, returning to live TV while still recording would open a second
                     // stream and risk the provider banning the account.
-                    popUpTo(Routes.PLAYER) { inclusive = true }
+                    popUpTo(Routes.HOME) { inclusive = false }
                 }
             }
         }
@@ -390,9 +535,16 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
             composable(Routes.HOME) {
                 MainScreen(
                     isTelevision = isTelevision,
+                    liveSession = liveSession,
+                    onReturnToLive = { liveSession.currentChannel.value?.id?.let { openLive(it) } },
+                    onLivePresentation = { presentation, showingGuide ->
+                        mainLivePresentation = presentation
+                        guideVisible = showingGuide
+                        if (navController.currentDestination?.route == Routes.HOME) liveSession.setPresentation(presentation)
+                    },
                     hasSources = sourcesUi.sources.isNotEmpty(),
                     isSyncing = sourcesUi.syncing,
-                    onPlayChannel = { channel -> navController.navigate(Routes.player(channel.id)) },
+                    onPlayChannel = { channel -> openLive(channel.id) },
                     onOpenMovie = { movie ->
                         navController.navigate(Routes.movieDetail(movie.id))
                     },
@@ -400,7 +552,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                         navController.navigate(Routes.seriesDetail(series.id))
                     },
                     onResume = { key, url, title ->
-                        navController.navigate(
+                        openVod(
                             Routes.vodPlayer(key, url, title, "Nuvix/0.1 (Android)"),
                         )
                     },
@@ -426,7 +578,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                             app.opentv.recording.RecordingStorage.isContent(rec.filePath) -> rec.filePath
                             else -> android.net.Uri.fromFile(java.io.File(rec.filePath)).toString()
                         }
-                        navController.navigate(
+                        openVod(
                             Routes.vodPlayer(
                                 key = "rec:${rec.id}",
                                 url = url,
@@ -437,7 +589,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                     },
                     onPlayCatchup = { key, url, title, ua ->
                         // Catch-up is a seekable archive stream — plays through the VOD player.
-                        navController.navigate(Routes.vodPlayer(key, url, title, ua))
+                        openVod(Routes.vodPlayer(key, url, title, ua))
                     },
                     activeProfileName = activeProfileName,
                     onOpenLauncherSettings = { navController.navigate(Routes.LAUNCHER_SETTINGS) },
@@ -454,21 +606,26 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
             }
 
             composable(Routes.SEARCH) {
-                SearchScreen(
-                    onPlayChannel = { channel -> navController.navigate(Routes.player(channel.id)) },
-                    onPlayMovie = { movie ->
-                        navController.navigate(
-                            Routes.vodPlayer(
-                                key = "movie:${movie.id}",
-                                url = movie.streamUrl,
-                                title = movie.displayTitle,
-                                ua = "Nuvix/0.1 (Android)",
-                            ),
-                        )
-                    },
-                    onOpenSeries = { series -> navController.navigate(Routes.seriesDetail(series.id)) },
-                    onBack = { navController.popBackStack() },
-                )
+                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+                    LivePlaybackPreview(liveSession, onFullscreen = {
+                        liveSession.currentChannel.value?.id?.let { openLive(it) }
+                    })
+                    SearchScreen(
+                        onPlayChannel = { channel -> openLive(channel.id) },
+                        onPlayMovie = { movie ->
+                            openVod(
+                                Routes.vodPlayer(
+                                    key = "movie:${movie.id}",
+                                    url = movie.streamUrl,
+                                    title = movie.displayTitle,
+                                    ua = "Nuvix/0.1 (Android)",
+                                ),
+                            )
+                        },
+                        onOpenSeries = { series -> navController.navigate(Routes.seriesDetail(series.id)) },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
 
             composable(Routes.SETTINGS_HUB) {
@@ -548,10 +705,15 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                 AppSettingsScreen(onBack = { navController.popBackStack() })
             }
 
-            composable(Routes.PLAYER) { entry ->
-                val channelId = entry.arguments?.getString("channelId")?.toLongOrNull()
+            composable(
+                Routes.PLAYER,
+                enterTransition = { androidx.compose.animation.EnterTransition.None },
+                exitTransition = { androidx.compose.animation.ExitTransition.None },
+                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+                popExitTransition = { androidx.compose.animation.ExitTransition.None },
+            ) {
                 PlayerScreen(
-                    channelId = channelId,
+                    liveSession = liveSession,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -562,7 +724,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                     seriesId = seriesId,
                     viewModel = vodViewModel,
                     onPlayEpisode = { key, url, title ->
-                        navController.navigate(
+                        openVod(
                             Routes.vodPlayer(key, url, title, "Nuvix/0.1 (Android)"),
                         )
                     },
@@ -577,7 +739,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                     movieId = movieId,
                     viewModel = vodViewModel,
                     onPlay = { movie ->
-                        navController.navigate(
+                        openVod(
                             Routes.vodPlayer(
                                 key = "movie:${movie.id}",
                                 url = movie.streamUrl,
@@ -587,7 +749,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                         )
                     },
                     onPlayUrl = { key, url, title ->
-                        navController.navigate(
+                        openVod(
                             Routes.vodPlayer(key = key, url = url, title = title, ua = "Nuvix/0.1 (Android)"),
                         )
                     },
@@ -613,6 +775,7 @@ private fun NuvixNavigation(isTelevision: Boolean, homeGeneration: Int) {
                     ?.let { java.net.URLDecoder.decode(it, "UTF-8") }.orEmpty()
                 VodPlayerScreen(
                     mediaKey = arg("key"),
+                    liveSession = liveSession,
                     streamUrl = arg("url"),
                     title = arg("title"),
                     userAgent = arg("ua").ifEmpty { "Nuvix/0.1 (Android)" },

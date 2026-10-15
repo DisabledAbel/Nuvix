@@ -67,7 +67,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Intent
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.ui.window.Dialog
 import com.disabledabel.nuvix.R
@@ -81,6 +80,8 @@ import app.opentv.data.model.Reminder
 import app.opentv.data.model.shownName
 import app.opentv.reminders.ReminderScheduler
 import app.opentv.player.PlaybackQueue
+import app.opentv.player.LivePlaybackSession
+import app.opentv.ui.player.LivePlaybackVideo
 import app.opentv.player.PlayerController
 import app.opentv.ui.ChannelsViewModel
 import app.opentv.ui.RecordingBackgroundDialog
@@ -95,6 +96,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 
 /**
  * Live TV: a category rail on the left, the channel list on the right.
@@ -110,6 +112,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     isTelevision: Boolean,
+    liveSession: LivePlaybackSession,
+    onReturnToLive: () -> Unit,
     hasSources: Boolean,
     isSyncing: Boolean,
     onPlayChannel: (Channel) -> Unit,
@@ -123,6 +127,11 @@ fun HomeScreen(
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
     val previewEnabled by settings.guidePreviewVideo.collectAsState()
+    val livePreviewEnabled by settings.livePreview.collectAsState()
+    val persistentActive by liveSession.active.collectAsState()
+    val optionalPreviewSuppressed by liveSession.guidePreviewSuppressed.collectAsState()
+    val inPip by app.opentv.core.PipState.inPip.collectAsState()
+    var screenResumed by remember { mutableStateOf(true) }
     val preferredChannelLayout by settings.channelLayout.collectAsState()
     val channelLayout = layoutOverride ?: preferredChannelLayout
 
@@ -149,7 +158,8 @@ fun HomeScreen(
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     // Recording from the guide: what's capturing now, and a scope to kick a capture off.
-    val activeRecordings by graph.recordingRepository.observeActive().collectAsState(initial = emptyList())
+    val activeRecordingSnapshot by graph.recordingRepository.observeActive().collectAsState(initial = null)
+    val activeRecordings = activeRecordingSnapshot.orEmpty()
     val recordScope = rememberCoroutineScope()
     // The programme the user pressed OK on in the grid — drives the per-programme record menu.
     var recordTarget by remember { mutableStateOf<Pair<ChannelsViewModel.Row, Programme>?>(null) }
@@ -205,21 +215,21 @@ fun HomeScreen(
         selectedRow = rows.firstOrNull { it.key == selectedRow?.key } ?: rows.firstOrNull()
     }
 
-    // ---- Live preview player -----------------------------------------------------------------
-    // One muted player, reused. It only ever decodes while the guide is the foreground screen,
-    // and is stopped before any hand-off to full-screen, so the box never runs two decoders at
-    // once — the thing that used to lock up cheap sticks.
+    // No standalone preview player exists while the shared live session owns playback.
+    // Disabled preview and active recording paths do not allocate a decoder either.
+    val recordingActive = activeRecordingSnapshot == null || activeRecordings.isNotEmpty()
     val previewScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
-    val previewController = remember {
-        PlayerController(context, previewScope, graph.httpClient, subtitlesEnabled = false, preview = true)
-            .also { it.player.volume = 0f }
+    val previewController = remember(previewEnabled, livePreviewEnabled, screenResumed, recordingActive, persistentActive, optionalPreviewSuppressed) {
+        if (previewEnabled && livePreviewEnabled && screenResumed && !recordingActive && !persistentActive && !optionalPreviewSuppressed) {
+            PlayerController(context.applicationContext, previewScope, graph.streamingHttpClient, subtitlesEnabled = false, preview = true)
+                .also { it.player.volume = 0f }
+        } else null
     }
-    DisposableEffect(Unit) {
-        onDispose {
-            previewController.release()
-            previewScope.cancel()
-        }
+    DisposableEffect(previewController) {
+        previewController?.let(liveSession::registerGuidePreview)
+        onDispose { previewController?.let(liveSession::unregisterGuidePreview) }
     }
+    DisposableEffect(Unit) { onDispose { previewScope.cancel() } }
 
     // Watching a live channel while a recording runs opens a second stream on the same line — which
     // cuts the recording and can get a single-connection account banned. So every jump to full-screen
@@ -229,7 +239,7 @@ fun HomeScreen(
         PlaybackQueue.items = rows.map {
             PlaybackQueue.Item(it.primary.id, it.primary.shownName, it.primary.logoUrl, it.primary.number)
         }
-        previewController.stop()
+        previewController?.release()
         onPlayChannel(channel)
     }
     fun requestLive(channel: Channel) {
@@ -237,14 +247,13 @@ fun HomeScreen(
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    var screenResumed by remember { mutableStateOf(true) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> screenResumed = true
                 Lifecycle.Event.ON_PAUSE -> {
                     screenResumed = false
-                    previewController.stop()
+                    previewController?.stop()
                 }
                 else -> Unit
             }
@@ -253,45 +262,32 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Hold the screen awake while the guide's live preview is playing — otherwise the box's
-    // screensaver fires while you're browsing with a channel running in the preview pane.
-    DisposableEffect(previewEnabled, screenResumed) {
-        val window = context.findActivity()?.window
-        if (previewEnabled && screenResumed) {
-            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-    }
-
     // Preview audio follows the setting; muted by default so browsing stays quiet.
-    LaunchedEffect(previewSound) {
-        previewController.player.volume = if (previewSound) 1f else 0f
+    LaunchedEffect(previewSound, previewController) {
+        previewController?.player?.volume = if (previewSound) 1f else 0f
     }
 
-    // Tune the preview to the highlighted channel, so it follows the d-pad as you browse — the
-    // standard TV-guide behaviour. Debounced, so holding a direction doesn't re-tune every step.
-    // While a recording is running the preview is silenced entirely: on a single-connection line a
-    // muted preview is still a second stream, which fights the recording and risks a provider ban.
-    val recordingActive = activeRecordings.isNotEmpty()
-    LaunchedEffect(highlightedRow?.key, previewEnabled, screenResumed, recordingActive) {
-        val row = highlightedRow
-        if (!previewEnabled || !screenResumed || recordingActive || row == null) {
-            previewController.stop()
-            return@LaunchedEffect
+    // Highlighted-channel playback is retained only when there is no persistent live session.
+    LaunchedEffect(highlightedRow?.key, previewController) {
+        val controller = previewController ?: return@LaunchedEffect
+        val channel = highlightedRow?.primary ?: return@LaunchedEffect
+        try {
+            val source = graph.sourceRepository.byId(channel.sourceId)
+            val url = graph.catalogRepository.resolvePlaybackUrl(channel, source)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            controller.play(
+                PlayerController.Request(
+                    url = url, title = channel.shownName,
+                    userAgent = source?.userAgent ?: "Nuvix/0.1 (Android)", isLive = true,
+                ),
+                debounce = true,
+            )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Provider exceptions may contain private URLs. Keep the guide's logo fallback.
+            controller.stop()
         }
-        val channel = row.primary
-        val source = graph.sourceRepository.byId(channel.sourceId)
-        previewController.play(
-            PlayerController.Request(
-                url = channel.streamUrl,
-                title = channel.shownName,
-                userAgent = source?.userAgent ?: "Nuvix/0.1 (Android)",
-                isLive = true,
-            ),
-            debounce = true,
-        )
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -407,7 +403,8 @@ fun HomeScreen(
                         graph.recordingEngine.stop(active.id)
                         Toast.makeText(context, context.getString(R.string.rec_recording_stopped), Toast.LENGTH_SHORT).show()
                     } else {
-                        recordScope.launch { graph.recordingEngine.startChannel(row.primary, row.now) }
+                        previewController?.release()
+                        liveSession.recordChannel(row.primary, row.now)
                         Toast.makeText(context, context.getString(R.string.rec_recording_started_see_tab, row.primary.shownName), Toast.LENGTH_LONG).show()
                         promptBackgroundIfNeeded()
                     }
@@ -426,7 +423,10 @@ fun HomeScreen(
                     onWatch = { highlightedRow?.let { goFullscreen(it.primary) } },
                     onRefresh = onRefresh,
                     onAddSource = onAddSource,
-                    previewPlayer = if (previewEnabled && !recordingActive) previewController.player else null,
+                    previewPlayer = previewController?.player,
+                    persistentPreview = if (persistentActive && previewEnabled && livePreviewEnabled && !inPip) {
+                        { LivePlaybackVideo(liveSession, onReturnToLive) }
+                    } else null,
                     isRecording = highlightedRow?.primary?.id?.let { id ->
                         activeRecordings.any { it.channelId == id }
                     } == true,
@@ -570,7 +570,8 @@ fun HomeScreen(
                         recordTarget = null
                     }
                     liveNow -> RecordActionRow(stringResource(R.string.rec_record_now), primary = true) {
-                        recordScope.launch { graph.recordingEngine.startChannel(chosenVariant, programme) }
+                        previewController?.release()
+                        liveSession.recordChannel(chosenVariant, programme)
                         Toast.makeText(context, context.getString(R.string.rec_recording_channel, channel.shownName), Toast.LENGTH_LONG).show()
                         promptBackgroundIfNeeded()
                         recordTarget = null
@@ -584,6 +585,7 @@ fun HomeScreen(
                             } else {
                                 val mins = (programme.durationMillis / 60000).toInt().coerceAtLeast(1)
                                 val url = graph.xtreamApi.catchupUrl(source, channel.streamId, programme.startUtcMillis, mins)
+                                previewController?.release()
                                 onPlayCatchup(
                                     "catchup:${channel.id}:${programme.startUtcMillis}",
                                     url,
@@ -636,6 +638,10 @@ fun HomeScreen(
                     }
                 }
                 RecordActionRow(stringResource(R.string.rec_record_series)) {
+                    if (liveNow) {
+                        previewController?.release()
+                        liveSession.stop()
+                    }
                     recordScope.launch {
                         graph.recordingEngine.recordSeries(channel, programme, targetRow.programmes)
                     }
@@ -756,7 +762,8 @@ fun HomeScreen(
                         }
                     } else {
                         RecordActionRow(stringResource(R.string.guide_record_now_playing), primary = true) {
-                            recordScope.launch { graph.recordingEngine.startChannel(channel, nowProg) }
+                            previewController?.release()
+                            liveSession.recordChannel(channel, nowProg)
                             Toast.makeText(context, context.getString(R.string.rec_recording_started_see_tab, channel.shownName), Toast.LENGTH_LONG).show()
                             promptBackgroundIfNeeded()
                             channelMenu = null
@@ -764,6 +771,8 @@ fun HomeScreen(
                     }
                     if (nowProg != null) {
                         RecordActionRow(stringResource(R.string.rec_record_series_named, nowProg.title)) {
+                            previewController?.release()
+                            liveSession.stop()
                             recordScope.launch {
                                 graph.recordingEngine.recordSeries(channel, nowProg, menuRow.programmes)
                             }

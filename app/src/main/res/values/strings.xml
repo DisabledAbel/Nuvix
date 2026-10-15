@@ -189,6 +189,18 @@
     <string name="settings_preview_sound_title">Preview sound</string>
     <string name="settings_preview_sound_subtitle">Play the preview channel\'s audio too, not just the picture.</string>
     <string name="settings_section_playback">Playback</string>
+    <string name="persistent_live_playback_title" tools:ignore="MissingTranslation">Persistent Live Playback</string>
+    <string name="persistent_live_playback_subtitle" tools:ignore="MissingTranslation">Keep live TV ready while browsing. Turn off to release the stream when leaving fullscreen on devices with limited memory.</string>
+    <string name="live_preview_title" tools:ignore="MissingTranslation">Live Preview</string>
+    <string name="live_preview_subtitle" tools:ignore="MissingTranslation">Show the current live channel while browsing. Guide video also follows the guide preview setting.</string>
+    <string name="continue_audio_while_browsing_title" tools:ignore="MissingTranslation">Continue Audio While Browsing</string>
+    <string name="continue_audio_while_browsing_subtitle" tools:ignore="MissingTranslation">Keep live TV audio during in-app navigation. When off, browsing mutes the retained session; returning to fullscreen restores your audio choice.</string>
+    <string name="live_preview_fullscreen" tools:ignore="MissingTranslation">Return to fullscreen</string>
+    <string name="live_preview_live" tools:ignore="MissingTranslation">LIVE</string>
+    <string name="live_preview_retry" tools:ignore="MissingTranslation">Retry live TV</string>
+    <string name="live_preview_stop" tools:ignore="MissingTranslation">Stop live TV</string>
+    <string name="live_preview_surface_unavailable" tools:ignore="MissingTranslation">Video preview unavailable. Return to fullscreen to watch.</string>
+    <string name="player_surface_unavailable" tools:ignore="MissingTranslation">Video surface unavailable. Try again to reconnect the picture without restarting playback.</string>
     <string name="settings_subtitles_title">Show subtitles when available</string>
     <string name="settings_subtitles_subtitle">The default for new channels. While watching, the Subtitles button on the player lets you pick a specific track or turn them off.</string>
     <string name="settings_resume_title">Resume last channel on startup</string>
