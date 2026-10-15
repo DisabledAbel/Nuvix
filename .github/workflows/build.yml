@@ -32,7 +32,7 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Set up Gradle and validate wrapper
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Validate Gradle configuration
         run: ./gradlew help --stacktrace
       - name: Compile, run unit tests, lint and assemble debug
