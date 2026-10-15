@@ -17,12 +17,19 @@ def run(*command: str) -> str:
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout
 
 
-def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certificate: str) -> dict:
+def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certificate: str,
+               channel: str = "stable") -> dict:
     if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_certificate):
         raise ValueError("A configured release certificate SHA-256 fingerprint is required")
-    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+    application_id = APPLICATION_ID
+    if channel == "nightly":
+        match = re.fullmatch(r"nightly-(\d{8}\.\d+\.\d+)", tag)
+        if not match:
+            raise ValueError("A nightly-YYYYMMDD.RUN.ATTEMPT release tag is required")
+        application_id += ".nightly"
+    elif channel != "stable" or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
         raise ValueError("A stable vX.Y.Z release tag is required")
-    if metadata.get("applicationId") != APPLICATION_ID:
+    if metadata.get("applicationId") != application_id:
         raise ValueError("Release metadata has the wrong application ID")
     elements = metadata.get("elements", [])
     if len(elements) != 1:
@@ -36,14 +43,18 @@ def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certif
         raise ValueError("An Android versionCode between 1 and Int.MAX_VALUE is required")
     if not isinstance(version_name, str) or not 1 <= len(version_name) <= 128:
         raise ValueError("Invalid release versionName")
-    if version_name != tag[1:]:
+    version_matches = (
+        re.fullmatch(r"\d+\.\d+\.\d+-nightly\." + re.escape(match[1]), version_name)
+        if channel == "nightly" else version_name == tag[1:]
+    )
+    if not version_matches:
         raise ValueError("The release tag must match the APK versionName")
     if not apk.is_file() or not 1 <= apk.stat().st_size <= 512 * 1024 * 1024:
         raise ValueError("The release APK is missing, empty or exceeds 512 MiB")
 
     badging = run(str(tools / "aapt"), "dump", "badging", str(apk))
     package = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
-    if not package or package.groups() != (APPLICATION_ID, str(version_code), version_name):
+    if not package or package.groups() != (application_id, str(version_code), version_name):
         raise ValueError("APK package identity or version does not match release metadata")
     if re.search(r"^application-debuggable", badging, re.M):
         raise ValueError("A debuggable APK cannot be published")
@@ -64,7 +75,7 @@ def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certif
         "schemaVersion": 1,
         "versionCode": version_code,
         "versionName": version_name,
-        "applicationId": APPLICATION_ID,
+        "applicationId": application_id,
         "apkAsset": "nuvix.apk",
         "sha256": digest,
         "sizeBytes": apk.stat().st_size,
@@ -92,6 +103,7 @@ def release_notes(changelog: Path, version: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", required=True)
+    parser.add_argument("--channel", choices=("stable", "nightly"), default="stable")
     parser.add_argument("--android-sdk", type=Path, required=True)
     parser.add_argument("--expected-certificate-sha256", required=True)
     parser.add_argument("--output", type=Path, default=Path("dist"))
@@ -108,13 +120,13 @@ def main() -> None:
     apk = args.metadata.parent / filename
     # compileSdk 35's release toolchain is fixed in the project for reproducibility.
     tools = args.android_sdk / "build-tools" / "35.0.0"
-    manifest = verify_apk(apk, tools, metadata, args.tag, args.expected_certificate_sha256)
+    manifest = verify_apk(apk, tools, metadata, args.tag, args.expected_certificate_sha256, args.channel)
     args.output.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(apk, args.output / "nuvix.apk")
     (args.output / "update.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (args.output / "SHA256SUMS").write_text(f"{manifest['sha256']}  nuvix.apk\n")
     (args.output / "release-notes.md").write_text(release_notes(args.changelog, manifest["versionName"]))
-    print(f"Verified {APPLICATION_ID} versionCode {manifest['versionCode']}; release assets written to {args.output}")
+    print(f"Verified {manifest['applicationId']} versionCode {manifest['versionCode']}; release assets written to {args.output}")
 
 
 if __name__ == "__main__":
