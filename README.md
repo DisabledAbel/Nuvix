@@ -42,6 +42,10 @@ Nuvix is in development. Real-device testing is still needed for launcher select
 
 See the [implementation report](docs/implementation-report.md), [roadmap](docs/ROADMAP.md), [architecture](docs/nuvix-architecture.md), and [contributing guide](CONTRIBUTING.md).
 
+## Community
+
+Join the [Nuvix Discord server](https://discord.gg/9tyVjwyNbq) to ask questions, share feedback, and discuss the project.
+
 ## License
 
 **GPL-3.0.** Copyright (C) 2026 The OpenTV Contributors; Nuvix modifications Copyright (C) 2026 Nuvix Contributors.
