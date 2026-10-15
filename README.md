@@ -27,24 +27,6 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 
 ![Nuvix Home](docs/screenshots/nuvix-home.png)
 
-## Build and install
-
-Development APKs use `com.disabledabel.nuvix.debug`. Production releases require configured signing and use `com.disabledabel.nuvix`; debug and release installations have separate data.
-
-Use Android Studio with JDK 17 and Android SDK 35, or build with:
-
-```sh
-./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
-```
-
-Install with:
-
-```sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-See [build instructions](docs/building.md), [signing](docs/signing.md), and [release publication](docs/RELEASING.md).
-
 ## Setup
 
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
