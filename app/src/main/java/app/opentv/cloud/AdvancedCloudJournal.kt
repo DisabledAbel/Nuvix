@@ -51,13 +51,9 @@ internal class AdvancedCloudJournal(
         val known = current.known.associateBy { it.identity() }
         val observed = current.observed.associateBy { it.identity() }.toMutableMap()
         val pending = current.pending.associateBy { it.identity() }.toMutableMap()
-        // A catalogue import may remove a row and later recreate it with provider defaults.
-        // Forget only its observed availability, retaining cloud state and pending intent. Its
-        // eventual reappearance is reconciliation, not an explicit unhide/unfavorite/reset.
-        val present = local.filter { it.isSafe(Long.MAX_VALUE) && it.category in enabled }.map { it.identity() }.toSet()
-        observed.entries.removeAll { (identity, record) ->
-            record.category in enabled && isContentOrganization(record) && identity !in present
-        }
+        // Content snapshots are sparse: untouched provider defaults and unavailable rows are
+        // omitted. Keep the last observed intent through absence so a later explicit reset is
+        // still compared with the user value, rather than mistaken for an initial seed.
         var captured = 0
         for (record in local) {
             // Validate before inspecting the category so unsupported input cannot throw or upload.
@@ -69,8 +65,8 @@ internal class AdvancedCloudJournal(
             val accepted = known[identity]
             val queued = pending[identity]
             val newest = listOfNotNull(accepted, queued).reduceOrNull(::newestAdvancedRecord)
-            // A newly available local channel/default is not an edit of an existing cloud value.
-            if (previous == null && (accepted != null || queued != null)) continue
+            // Non-content adapters still emit full defaults. Sparse content records carry intent.
+            if (previous == null && (accepted != null || queued != null) && !isContentOrganization(record)) continue
             if (newest?.samePayload(record) == true) continue
             // A retired group UUID can never be reused, even by a later local edit.
             if (newest?.kind == "group_name" && newest.deleted && !record.deleted) continue
@@ -78,7 +74,7 @@ internal class AdvancedCloudJournal(
             val nextTime = if (previousTime == Long.MAX_VALUE) Long.MAX_VALUE else previousTime + 1
             // Initial local values are baseline seeds. An older real edit from another TV must
             // beat a freshly enabled device's defaults; subsequent deliberate changes use now.
-            val authoredTime = if (previous == null) 1L else maxOf(1L, nowMillis, nextTime)
+            val authoredTime = if (previous == null && newest == null) 1L else maxOf(1L, nowMillis, nextTime)
             val authored = record.copy(updatedAtMillis = authoredTime, deviceId = deviceId)
             pending[identity] = queued?.let { newestAdvancedRecord(it, authored) } ?: authored
             captured++

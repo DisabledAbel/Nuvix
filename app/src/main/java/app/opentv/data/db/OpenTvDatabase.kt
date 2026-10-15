@@ -284,6 +284,9 @@ abstract class OpenTvDatabase : RoomDatabase() {
                     "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cloudId` TEXT NOT NULL, " +
                     "`name` TEXT NOT NULL, `rank` INTEGER NOT NULL, `members` TEXT NOT NULL, `deleted` INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_custom_channel_groups_cloudId` ON `custom_channel_groups` (`cloudId`)")
+                db.execSQL("ALTER TABLE channels ADD COLUMN syncTouched INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE movies ADD COLUMN favouriteTouched INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE series ADD COLUMN favouriteTouched INTEGER NOT NULL DEFAULT 0")
             }
         }
 

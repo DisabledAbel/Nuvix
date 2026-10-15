@@ -152,3 +152,8 @@ A passing JVM/SQL run does not establish real OTP delivery, Android Keystore cra
 launcher interoperability or actual two-TV convergence. Record those device checks separately;
 never run destructive account/deletion testing against production data. See [cloud-sync.md](cloud-sync.md)
 for protocol, privacy, limits and troubleshooting.
+
+CodeRabbit regression coverage includes a 33,400-channel untouched catalog producing no advanced
+journal seeds, explicit default resets surviving provider refresh (including separator visibility),
+sparse optimistic application protecting a concurrent local edit, and a future-dated remote record
+leaving other pulled records usable.

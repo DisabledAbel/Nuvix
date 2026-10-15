@@ -87,12 +87,8 @@ class AdvancedCloudJournalTest {
         journal.mergeRemote(ownerA, cloudValues, selected, 1000)
         journal.markApplied(ownerA, cloudValues, selected)
         journal.capture(ownerA, emptyList(), selected, device, 2000)
-        val reimportDefaults = cloudValues.map { record -> when {
-            record.boolValue != null -> record.copy(boolValue = false)
-            record.textValue != null -> record.copy(textValue = "")
-            else -> record.copy(intValue = 0)
-        } }
-        journal.capture(ownerA, reimportDefaults, selected, device, 3000)
+        // Untouched imported fields are omitted by the sparse catalogue adapter.
+        journal.capture(ownerA, emptyList(), selected, device, 3000)
         assertEquals(0, journal.pendingCount(ownerA))
         assertEquals(cloudValues.toSet(), journal.mergeRemote(ownerA, emptyList(), selected, 3000).toSet())
     }
@@ -106,9 +102,23 @@ class AdvancedCloudJournalTest {
         journal.capture(ownerA, listOf(initial.copy(boolValue = true)), selected, device, 2000)
         val pending = journal.pending(ownerA, selected, 2000)
         journal.capture(ownerA, emptyList(), selected, device, 3000)
-        journal.capture(ownerA, listOf(initial), selected, device, 4000)
+        journal.capture(ownerA, emptyList(), selected, device, 4000)
         assertEquals(pending, journal.pending(ownerA, selected, 4000))
         assertTrue(journal.pending(ownerA, selected, 4000).single().boolValue!!)
+    }
+
+    @Test fun explicitSparseResetAfterAbsenceIsStillANewEdit() {
+        val selected = setOf(AdvancedSyncCategory.FAVOURITE_REMOVALS)
+        val initial = AdvancedCloudRecord("a".repeat(64), "channel_favourite_state", 1000, device, boolValue = true)
+        val journal = Storage().journal()
+        journal.bindOwner(ownerA)
+        journal.mergeRemote(ownerA, listOf(initial), selected, 1000)
+        journal.markApplied(ownerA, listOf(initial), selected)
+        journal.capture(ownerA, emptyList(), selected, device, 2000)
+        journal.capture(ownerA, listOf(initial.copy(boolValue = false)), selected, device, 3000)
+        val pending = journal.pending(ownerA, selected, 3000).single()
+        assertEquals(false, pending.boolValue)
+        assertEquals(3000L, pending.updatedAtMillis)
     }
 
     @Test fun exactAcknowledgementDoesNotDropAnEditMadeDuringUpload() {

@@ -163,6 +163,8 @@ data class Channel(
      * has 40,000 channels. A stamp comparison has no such limit.
      */
     val lastSeenMillis: Long = 0,
+    /** Explicit field edits: favourite=1, hidden=2, name=4, order=8. Provider imports leave this clear. */
+    @ColumnInfo(defaultValue = "0") val syncTouched: Int = 0,
 ) {
     /**
      * The guide ids worth trying for this channel, most trustworthy first. The UI walks
@@ -294,6 +296,7 @@ data class Movie(
     val tmdbId: String? = null,
     /** Director(s), provider-formatted. Movies only. */
     val director: String? = null,
+    @ColumnInfo(defaultValue = "0") val favouriteTouched: Boolean = false,
 )
 
 @Entity(
@@ -328,6 +331,7 @@ data class Series(
     val genre: String? = null,
     /** TMDB id, stored only — resolved/used by a later agent. Coerced to String (panels vary). */
     val tmdbId: String? = null,
+    @ColumnInfo(defaultValue = "0") val favouriteTouched: Boolean = false,
 )
 
 @Entity(

@@ -733,8 +733,8 @@ class CatalogRepository(
         if (movieCategories.isNotEmpty() || seriesCategories.isNotEmpty()) {
             categoryDao.upsertAll(movieCategories + seriesCategories)
         }
-        if (movies.isNotEmpty()) movieDao.upsertAll(movies)
-        if (series.isNotEmpty()) seriesDao.upsertAll(series)
+        if (movies.isNotEmpty()) movieDao.replaceCatalogue(source.id, movies)
+        if (series.isNotEmpty()) seriesDao.replaceCatalogue(source.id, series)
     }
 
     private suspend fun syncM3u(source: Source, nowUtcMillis: Long): SyncResult {

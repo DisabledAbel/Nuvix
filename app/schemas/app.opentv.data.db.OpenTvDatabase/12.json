@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 12,
-    "identityHash": "53cc0c1428f88ff8b818b4b0c420bc0c",
+    "identityHash": "054efcff0cc406846b664640953a9edf",
     "entities": [
       {
         "tableName": "sources",
@@ -138,7 +138,7 @@
       },
       {
         "tableName": "channels",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, `name` TEXT NOT NULL, `displayName` TEXT NOT NULL, `groupKey` TEXT NOT NULL, `qualityRank` INTEGER NOT NULL, `qualityLabel` TEXT NOT NULL, `categoryId` TEXT, `logoUrl` TEXT, `epgChannelId` TEXT, `matchedEpgId` TEXT, `epgOverrideId` TEXT, `tvArchive` INTEGER NOT NULL DEFAULT 0, `tvArchiveDays` INTEGER NOT NULL DEFAULT 0, `number` INTEGER, `streamUrl` TEXT NOT NULL, `cmd` TEXT, `favourite` INTEGER NOT NULL, `hidden` INTEGER NOT NULL, `sortIndex` INTEGER NOT NULL, `customName` TEXT, `lastSeenMillis` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, `name` TEXT NOT NULL, `displayName` TEXT NOT NULL, `groupKey` TEXT NOT NULL, `qualityRank` INTEGER NOT NULL, `qualityLabel` TEXT NOT NULL, `categoryId` TEXT, `logoUrl` TEXT, `epgChannelId` TEXT, `matchedEpgId` TEXT, `epgOverrideId` TEXT, `tvArchive` INTEGER NOT NULL DEFAULT 0, `tvArchiveDays` INTEGER NOT NULL DEFAULT 0, `number` INTEGER, `streamUrl` TEXT NOT NULL, `cmd` TEXT, `favourite` INTEGER NOT NULL, `hidden` INTEGER NOT NULL, `sortIndex` INTEGER NOT NULL, `syncTouched` INTEGER NOT NULL DEFAULT 0, `customName` TEXT, `lastSeenMillis` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -267,6 +267,13 @@
             "columnName": "sortIndex",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "syncTouched",
+            "columnName": "syncTouched",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           },
           {
             "fieldPath": "customName",
@@ -552,7 +559,7 @@
       },
       {
         "tableName": "movies",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, `name` TEXT NOT NULL, `categoryId` TEXT, `posterUrl` TEXT, `rating` REAL, `year` INTEGER, `plot` TEXT, `durationSeconds` INTEGER, `containerExtension` TEXT, `streamUrl` TEXT NOT NULL, `favourite` INTEGER NOT NULL, `addedMillis` INTEGER NOT NULL, `backdropUrl` TEXT, `cast` TEXT, `genre` TEXT, `tmdbId` TEXT, `director` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, `name` TEXT NOT NULL, `categoryId` TEXT, `posterUrl` TEXT, `rating` REAL, `year` INTEGER, `plot` TEXT, `durationSeconds` INTEGER, `containerExtension` TEXT, `streamUrl` TEXT NOT NULL, `favourite` INTEGER NOT NULL, `favouriteTouched` INTEGER NOT NULL DEFAULT 0, `addedMillis` INTEGER NOT NULL, `backdropUrl` TEXT, `cast` TEXT, `genre` TEXT, `tmdbId` TEXT, `director` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -633,6 +640,13 @@
             "notNull": true
           },
           {
+            "fieldPath": "favouriteTouched",
+            "columnName": "favouriteTouched",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "addedMillis",
             "columnName": "addedMillis",
             "affinity": "INTEGER",
@@ -701,7 +715,7 @@
       },
       {
         "tableName": "series",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `seriesId` TEXT NOT NULL, `name` TEXT NOT NULL, `categoryId` TEXT, `posterUrl` TEXT, `rating` REAL, `year` INTEGER, `plot` TEXT, `favourite` INTEGER NOT NULL, `addedMillis` INTEGER NOT NULL, `backdropUrl` TEXT, `cast` TEXT, `genre` TEXT, `tmdbId` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` INTEGER NOT NULL, `seriesId` TEXT NOT NULL, `name` TEXT NOT NULL, `categoryId` TEXT, `posterUrl` TEXT, `rating` REAL, `year` INTEGER, `plot` TEXT, `favourite` INTEGER NOT NULL, `favouriteTouched` INTEGER NOT NULL DEFAULT 0, `addedMillis` INTEGER NOT NULL, `backdropUrl` TEXT, `cast` TEXT, `genre` TEXT, `tmdbId` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -762,6 +776,13 @@
             "columnName": "favourite",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "favouriteTouched",
+            "columnName": "favouriteTouched",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           },
           {
             "fieldPath": "addedMillis",
@@ -1372,7 +1393,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '53cc0c1428f88ff8b818b4b0c420bc0c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '054efcff0cc406846b664640953a9edf')"
     ]
   }
 }

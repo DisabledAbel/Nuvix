@@ -37,6 +37,19 @@ class SupabaseAdvancedApiTest {
         assertTrue(server.takeRequest().path!!.contains("id=gt.1"))
     }
 
+    @Test fun futureRecordDoesNotAbortOtherValidRecordsInThePull() = runBlocking {
+        val future = apps().copy(updatedAtMillis = System.currentTimeMillis() + 600_000)
+        server.enqueue(MockResponse().setBody(page(future)))
+        server.enqueue(MockResponse().setBody(page(apps(), 2)))
+        server.enqueue(MockResponse().setBody("[]"))
+        val pulled = api.pullAdvanced("test-token", owner, categories)
+        assertEquals(listOf(future, apps()), pulled)
+        var stored: String? = null
+        val journal = AdvancedCloudJournal({ stored }, { stored = it })
+        journal.bindOwner(owner)
+        assertEquals(listOf(apps()), journal.mergeRemote(owner, pulled, categories, System.currentTimeMillis()))
+    }
+
     @Test fun unsupportedSchemaAndUnknownCredentialFieldsFailBeforeReturningAnyRecords() = runBlocking {
         server.enqueue(MockResponse().setBody(page(apps().copy(schemaVersion = 2))))
         assertTrue(runCatching { api.pullAdvanced("test-token", owner, categories) }.isFailure)
