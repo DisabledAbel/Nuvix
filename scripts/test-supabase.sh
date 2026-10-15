@@ -1,20 +1,30 @@
 #!/usr/bin/env bash
-# Clean PostgreSQL, no hosted database URL, network listener, or Supabase credentials.
+# Clean PostgreSQL, no hosted database URL, published port, or Supabase credentials.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 command -v docker >/dev/null || { echo 'Docker is required for isolated SQL validation.' >&2; exit 1; }
 container="nuvix-sql-tests-$$"
 image="postgres:16.15-alpine"
+test_password="nuvix-isolated-test"
 cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
-docker run --detach --name "$container" --env POSTGRES_PASSWORD=nuvix-isolated-test "$image" >/dev/null
+docker run --detach --name "$container" --env POSTGRES_PASSWORD="$test_password" "$image" >/dev/null
+psql_test() {
+  docker exec --interactive --env PGPASSWORD="$test_password" --env PGCONNECT_TIMEOUT=2 "$container" \
+    psql -X -v ON_ERROR_STOP=1 --host 127.0.0.1 --port 5432 --username postgres --dbname postgres "$@"
+}
+# The image's temporary initialization server accepts Unix sockets, then stops.
+# Wait for an authenticated query on the final TCP server using the same connection as the tests.
 ready=false
 for attempt in {1..60}; do
-  if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then ready=true; break; fi
+  if psql_test --quiet --tuples-only --command 'SELECT 1' >/dev/null 2>&1; then ready=true; break; fi
   sleep 1
 done
-if [[ "$ready" != true ]]; then docker logs "$container"; exit 1; fi
-psql_test() { docker exec --interactive "$container" psql -X -v ON_ERROR_STOP=1 --username postgres --dbname postgres "$@"; }
+if [[ "$ready" != true ]]; then
+  echo 'PostgreSQL did not become ready for SQL validation.' >&2
+  docker logs "$container" >&2
+  exit 1
+fi
 psql_test < supabase/tests/support/bootstrap.sql
 for migration in supabase/migrations/*.sql; do
   echo "Applying $migration"
