@@ -9,6 +9,7 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 ## Features
 
 - Live TV, time-grid guide, movies, TV shows, and remote-friendly navigation.
+- [Mini TV Guide](docs/mini-tv-guide.md): press Left during immersive live TV, browse without tuning, OK to watch, Back to close; local transparency, position and idle-timeout settings.
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.

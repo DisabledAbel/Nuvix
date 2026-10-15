@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an interactive translucent Mini TV Guide over live playback, with now/next EPG,
+  progress, playing/focus indicators, context-preserving favourites filtering, remote
+  selection and local display/timeout preferences; retain the legacy channel list.
+- Add Mini Guide state, Room, preference and Compose regressions to the existing CI suite.
+
 - Add automatic keyless TVmaze TV metadata, full season/episode listings, cast and
   crew photos/characters, clickable actor profiles and credits, and CC BY-SA attribution.
 - Prefer TVmaze, use IMDbAPI.dev secondarily, and retain optional TMDb fallback;

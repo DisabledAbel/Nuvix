@@ -39,3 +39,7 @@ Open a GitHub issue with: device + Android version, what you did (checklist lett
 enough), what happened, and the relevant chunk of `testrun.log`. **Strip your provider's
 URL/username/password first** — logs deliberately never print credentials, but check what
 you paste anyway.
+
+## Mini TV Guide
+
+See [Mini TV Guide](mini-tv-guide.md) for controls, automated coverage and device limitations. The existing `:app:testDebugUnitTest` task includes `ChannelTuneRequestsTest`, `MiniGuideStateTest`, `MiniGuideProgrammesTest`, `MiniGuideEpgTest`, `MiniGuideSettingsTest` and `MiniTvGuideUiTest`. Tests use local fixtures and no IPTV/EPG network services. On hardware, start an authorized live stream, hide controls, open Left, navigate rapidly without selecting, close Back, reopen and select, recall Last, enter digits, exercise quality/subtitle pickers, change idle settings and enter/leave PiP. Confirm continuous video/audio until confirmed channel selection, correct focus restoration and unchanged recording/catch-up/VOD behaviour. Hardware checks are pending unless explicitly recorded in the feature PR.

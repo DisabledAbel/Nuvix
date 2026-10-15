@@ -31,6 +31,8 @@ import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -103,6 +105,15 @@ class EpgRepository(
 
     fun observeNow(nowUtcMillis: Long): Flow<List<Programme>> =
         programmeDao.observeNow(nowUtcMillis)
+
+    /** Local Room flows only. Candidate precedence matches the full guide, with stale IDs skipped. */
+    fun observeMiniGuide(candidates: List<String>, nowUtcMillis: Long): Flow<List<Programme>> {
+        val ids = candidates.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return flowOf(emptyList())
+        return combine(ids.map { programmeDao.observeMiniGuide(it, nowUtcMillis) }) { schedules ->
+            schedules.firstOrNull { it.isNotEmpty() }.orEmpty()
+        }
+    }
 
     suspend fun upcoming(epgChannelId: String, nowUtcMillis: Long, limit: Int = 12): List<Programme> =
         programmeDao.upcoming(epgChannelId, nowUtcMillis, limit)

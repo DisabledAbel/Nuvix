@@ -382,6 +382,28 @@ interface EpgChannelAliasDao {
 
 @Dao
 interface ProgrammeDao {
+    /** Two rows per visible Mini Guide channel; no whole-catalogue schedule allocation. */
+    @Query(
+        """
+        WITH current AS (
+            SELECT * FROM programmes
+            WHERE epgChannelId = :channelId
+              AND feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+              AND startUtcMillis <= :now AND endUtcMillis > :now
+            ORDER BY startUtcMillis, feedId LIMIT 1
+        ), following AS (
+            SELECT * FROM programmes
+            WHERE epgChannelId = :channelId
+              AND feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+              AND startUtcMillis >= COALESCE((SELECT endUtcMillis FROM current), :now + 1)
+              AND endUtcMillis > startUtcMillis
+            ORDER BY startUtcMillis, feedId LIMIT 1
+        )
+        SELECT * FROM current UNION ALL SELECT * FROM following
+        """
+    )
+    fun observeMiniGuide(channelId: String, now: Long): Flow<List<Programme>>
+
     /**
      * The guide grid: everything overlapping the visible window.
      *

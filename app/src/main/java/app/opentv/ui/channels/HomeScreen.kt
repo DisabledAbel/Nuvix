@@ -227,7 +227,12 @@ fun HomeScreen(
     var pendingLiveChannel by remember { mutableStateOf<Channel?>(null) }
     fun startLive(channel: Channel) {
         PlaybackQueue.items = rows.map {
-            PlaybackQueue.Item(it.primary.id, it.primary.shownName, it.primary.logoUrl, it.primary.number)
+            PlaybackQueue.Item(
+                it.primary.id, it.primary.shownName, it.primary.logoUrl, it.primary.number,
+                epgCandidates = it.variants.flatMap { variant -> variant.epgCandidates }.distinct(),
+                favourite = it.variants.any { variant -> variant.favourite },
+                variantIds = it.variants.map { variant -> variant.id },
+            )
         }
         previewController.stop()
         onPlayChannel(channel)

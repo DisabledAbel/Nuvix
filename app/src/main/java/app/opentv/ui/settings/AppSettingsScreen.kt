@@ -210,11 +210,54 @@ fun AppSettingsScreen(onBack: () -> Unit) {
 
         Spacer(Modifier.height(16.dp))
 
+        MiniGuideSettings(settings)
+
+        Spacer(Modifier.height(16.dp))
+
         TmdbKeySection(settings)
 
         Spacer(Modifier.height(16.dp))
 
         SleepTimerSection()
+    }
+}
+
+@Composable
+private fun MiniGuideSettings(settings: AppSettings) {
+    val enabled by settings.miniGuideEnabled.collectAsState()
+    val transparency by settings.miniGuideTransparency.collectAsState()
+    val position by settings.miniGuidePosition.collectAsState()
+    val timeout by settings.miniGuideAutoClose.collectAsState()
+    SettingsSection(stringResource(R.string.mini_guide_title)) {
+        ToggleRow(
+            stringResource(R.string.mini_guide_enabled),
+            stringResource(R.string.mini_guide_enabled_note),
+            enabled, settings::setMiniGuideEnabled,
+        )
+        Text(stringResource(R.string.mini_guide_transparency), style = MaterialTheme.typography.titleMedium)
+        AppSettings.GuideTransparency.entries.forEach { value ->
+            val label = when (value) {
+                AppSettings.GuideTransparency.LOW -> R.string.mini_guide_low
+                AppSettings.GuideTransparency.MEDIUM -> R.string.mini_guide_medium
+                AppSettings.GuideTransparency.HIGH -> R.string.mini_guide_high
+            }
+            ThemeOption(stringResource(label), transparency == value) { settings.setMiniGuideTransparency(value) }
+        }
+        Text(stringResource(R.string.mini_guide_position), style = MaterialTheme.typography.titleMedium)
+        AppSettings.GuidePosition.entries.forEach { value ->
+            ThemeOption(
+                stringResource(if (value == AppSettings.GuidePosition.LEFT) R.string.mini_guide_left else R.string.mini_guide_right),
+                position == value,
+            ) { settings.setMiniGuidePosition(value) }
+        }
+        Text(stringResource(R.string.mini_guide_auto_close), style = MaterialTheme.typography.titleMedium)
+        listOf(0, 5, 10, 15).forEach { seconds ->
+            ThemeOption(
+                if (seconds == 0) stringResource(R.string.mini_guide_off)
+                else stringResource(R.string.mini_guide_seconds, seconds),
+                timeout == seconds,
+            ) { settings.setMiniGuideAutoClose(seconds) }
+        }
     }
 }
 

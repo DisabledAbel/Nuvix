@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,9 +36,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -85,6 +81,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -96,6 +93,9 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
@@ -103,16 +103,21 @@ import app.opentv.core.findActivity
 import app.opentv.core.requestIgnoreBatteryOptimizations
 import app.opentv.data.model.Channel
 import app.opentv.data.model.shownName
+import app.opentv.player.MiniGuideState
+import app.opentv.player.ChannelTuneRequests
+import app.opentv.player.PlayerRemoteAction
+import app.opentv.player.PlayerRemoteKey
+import app.opentv.player.playerRemoteAction
 import app.opentv.player.PlaybackQueue
 import app.opentv.player.PlayerController
 import app.opentv.ui.RecordingBackgroundDialog
 import app.opentv.ui.RecordingBackgroundPrompt
-import coil.compose.AsyncImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -180,7 +185,19 @@ fun PlayerScreen(
 
     var controlsVisible by remember { mutableStateOf(true) }
     var panel by remember { mutableStateOf(Panel.NONE) }
-    var channelListVisible by remember { mutableStateOf(false) }
+    var guide by remember { mutableStateOf(MiniGuideState()) }
+    val channelListVisible = guide.visible
+    val miniGuideEnabled by settings.miniGuideEnabled.collectAsState()
+    val guideTransparency by settings.miniGuideTransparency.collectAsState()
+    val guidePosition by settings.miniGuidePosition.collectAsState()
+    val guideTimeout by settings.miniGuideAutoClose.collectAsState()
+    val accessibility = LocalAccessibilityManager.current
+    val guideTimeoutMillis = accessibility?.calculateRecommendedTimeoutMillis(
+        guideTimeout * 1_000L, containsIcons = true, containsText = true, containsControls = true,
+    ) ?: (guideTimeout * 1_000L)
+    val tuneRequests = remember { ChannelTuneRequests(scope) }
+    var consumedSelect by remember { mutableStateOf(false) }
+    var focusedGuideId by remember { mutableStateOf<Long?>(null) }
     var interaction by remember { mutableIntStateOf(0) }
     // Offered once per session the first time the user records here while OpenTV isn't exempt from
     // battery optimisation, so the capture survives the screen sleeping. Never blocks recording.
@@ -206,7 +223,6 @@ fun PlayerScreen(
     val barFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
-    val listFocus = remember { FocusRequester() }
 
     // The channel list you were browsing, for channel up/down and the in-player list. Snapshotted
     // on entry so it doesn't shift under you mid-session.
@@ -217,15 +233,22 @@ fun PlayerScreen(
         interaction++
     }
 
-    fun tuneTo(channel: Channel) {
-        currentId = channel.id
-        paused = false
-        settings.lastChannelId = channel.id
-        app.opentv.core.RecentChannels.get(context).record(channel.id)
-        scope.launch {
+    // Resolve provider URLs through the existing pathway. Cancel a superseded resolution before
+    // it can submit a stale request, including slow Stalker create_link calls.
+    fun requestChannel(id: Long, quality: Channel? = null) {
+        tuneRequests.submit(id, currentId) {
+            val channel = quality ?: graph.catalogRepository.channel(id) ?: return@submit
+            val choices = if (quality == null) graph.catalogRepository.variants(channel) else variants
             val source = graph.sourceRepository.byId(channel.sourceId)
-            // Xtream/M3U carry a ready URL; a Stalker channel's URL is minted here from its cmd.
             val url = graph.catalogRepository.resolvePlaybackUrl(channel, source)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (quality == null) currentId?.let { if (it != id) previousId = it }
+            variants = choices
+            currentId = channel.id
+            guide = guide.reconcile(queue, channel.id)
+            paused = false
+            settings.lastChannelId = channel.id
+            app.opentv.core.RecentChannels.get(context).record(channel.id)
             controller.play(
                 PlayerController.Request(
                     url = url,
@@ -238,20 +261,37 @@ fun PlayerScreen(
         }
     }
 
-    fun playChannelId(id: Long) {
-        // Remember where we came from so "Last channel" can bounce straight back. Quality switches
-        // go through tuneTo directly, so they never count as a channel change here.
-        currentId?.let { if (it != id) previousId = it }
-        scope.launch {
-            val channel = graph.catalogRepository.channel(id) ?: return@launch
-            variants = graph.catalogRepository.variants(channel)
-            tuneTo(variants.firstOrNull { it.id == channel.id } ?: channel)
+    fun tuneTo(channel: Channel) = requestChannel(channel.id, quality = channel)
+    fun playChannelId(id: Long) = requestChannel(id)
+
+    fun closeGuide() {
+        guide = guide.close()
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) closeGuide()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun selectGuideChannel(id: Long) {
+        if (!guide.visible || guide.channels(queue).none { it.id == id }) return
+        guide = guide.highlight(id, queue, android.os.SystemClock.elapsedRealtime())
+        val selected = guide.selection(queue)
+        closeGuide()
+        if (selected != null) playChannelId(selected)
+        else if (queue.any { it.id == id && it.isPlaying(currentId) }) {
+            // A confirmation of the playing row also supersedes a still-resolving older tune.
+            tuneRequests.cancel()
         }
     }
 
     fun zapBy(delta: Int) {
         if (queue.isEmpty()) return
-        val cur = queue.indexOfFirst { it.id == currentId }.let { if (it < 0) 0 else it }
+        val cur = queue.indexOfFirst { it.isPlaying(tuneRequests.pendingId ?: currentId) }.let { if (it < 0) 0 else it }
         val next = (cur + delta).coerceIn(0, queue.size - 1)
         if (next != cur) playChannelId(queue[next].id)
     }
@@ -272,10 +312,18 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(channelId) {
-        val id = channelId ?: return@LaunchedEffect
-        val channel = graph.catalogRepository.channel(id) ?: return@LaunchedEffect
-        variants = graph.catalogRepository.variants(channel)
-        tuneTo(variants.firstOrNull { it.id == channel.id } ?: channel)
+        channelId?.let { playChannelId(it) }
+    }
+
+    LaunchedEffect(inPip) {
+        if (inPip) { closeGuide(); panel = Panel.NONE; controlsVisible = false; numberEntry = "" }
+    }
+
+    LaunchedEffect(guide.visible, guide.lastInteractionMillis, guide.keyHeld, guideTimeoutMillis, miniGuideEnabled) {
+        if (guide.visible && miniGuideEnabled && guideTimeout > 0 && !guide.keyHeld) {
+            delay(guideTimeoutMillis)
+            if (guide.timedOut(android.os.SystemClock.elapsedRealtime(), guideTimeout)) closeGuide()
+        }
     }
 
     // Sleep timer: when the armed deadline passes, stop and leave the player. Re-arming from
@@ -312,7 +360,8 @@ fun PlayerScreen(
 
     // Focus: a picker's first row when one is open, otherwise the bar, otherwise the full-screen
     // catcher (so the next remote press brings the bar back).
-    LaunchedEffect(controlsVisible, panel) {
+    LaunchedEffect(controlsVisible, panel, channelListVisible, inPip) {
+        if (channelListVisible || inPip) return@LaunchedEffect
         if (controlsVisible) {
             delay(40)
             runCatching { if (panel != Panel.NONE) panelFocus.requestFocus() else barFocus.requestFocus() }
@@ -327,7 +376,7 @@ fun PlayerScreen(
     // you wanted to dismiss the bar.
     BackHandler {
         when {
-            channelListVisible -> channelListVisible = false
+            channelListVisible -> closeGuide()
             panel != Panel.NONE -> panel = Panel.NONE
             controlsVisible -> controlsVisible = false
             else -> {
@@ -347,52 +396,90 @@ fun PlayerScreen(
         if (target != null) playChannelId(target.id)
     }
 
-    // Focus the channel list when it opens; hand focus back to the video catcher when it closes.
-    LaunchedEffect(channelListVisible) {
-        if (channelListVisible) {
-            delay(40)
-            runCatching { listFocus.requestFocus() }
-        } else if (!controlsVisible) {
-            runCatching { rootFocus.requestFocus() }
-        }
-    }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
+                val selectKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                // Consume the full selection gesture even after its KeyDown dismisses the guide.
+                // A held OK must not then pause playback or reveal the bar.
+                if (consumedSelect && selectKey) {
+                    if (event.type == KeyEventType.KeyUp) consumedSelect = false
+                    return@onPreviewKeyEvent true
+                }
+                if (inPip) return@onPreviewKeyEvent false
+                if (event.type == KeyEventType.KeyUp) {
+                    if (channelListVisible) guide = guide.interact(android.os.SystemClock.elapsedRealtime())
+                    return@onPreviewKeyEvent false
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val repeated = event.nativeKeyEvent.repeatCount > 0
                 val digit = keyToDigit(event.key)
-                when {
-                    // Never swallow Back/Escape — they must reach the back handler.
-                    event.key == Key.Back || event.key == Key.Escape -> false
-                    // Typing a channel number jumps to it, TiviMate-style.
-                    digit != null -> {
-                        numberEntry = (numberEntry + digit).take(4)
-                        reveal(); interaction++; true
+                val remoteKey = when {
+                    event.key == Key.Back || event.key == Key.Escape -> PlayerRemoteKey.BACK
+                    digit != null -> PlayerRemoteKey.NUMBER
+                    event.key == Key.DirectionLeft -> PlayerRemoteKey.LEFT
+                    event.key == Key.DirectionRight -> PlayerRemoteKey.RIGHT
+                    event.key == Key.DirectionUp -> PlayerRemoteKey.UP
+                    event.key == Key.DirectionDown -> PlayerRemoteKey.DOWN
+                    event.key == Key.ChannelUp -> PlayerRemoteKey.CHANNEL_UP
+                    event.key == Key.ChannelDown -> PlayerRemoteKey.CHANNEL_DOWN
+                    else -> PlayerRemoteKey.OTHER
+                }
+                when (playerRemoteAction(remoteKey, channelListVisible, panel != Panel.NONE, controlsVisible)) {
+                    PlayerRemoteAction.BACK -> false
+                    PlayerRemoteAction.NUMBER -> {
+                        if (!repeated) {
+                            closeGuide()
+                            numberEntry = (numberEntry + digit).take(4)
+                            reveal()
+                        }
+                        true
                     }
-                    // A picker or the channel list owns the whole d-pad while it's up.
-                    channelListVisible || panel != Panel.NONE -> {
-                        interaction++
-                        false
+                    PlayerRemoteAction.GUIDE_INPUT -> {
+                        val time = android.os.SystemClock.elapsedRealtime()
+                        guide = guide.interact(time, held = true)
+                        when {
+                            remoteKey == PlayerRemoteKey.UP || remoteKey == PlayerRemoteKey.CHANNEL_UP -> {
+                                // At the first row native focus can reach Last/filter buttons.
+                                if (focusedGuideId == null || guide.channels(queue).firstOrNull()?.id == guide.highlightedId) return@onPreviewKeyEvent false
+                                guide = guide.move(-1, queue, time)
+                            }
+                            remoteKey == PlayerRemoteKey.DOWN || remoteKey == PlayerRemoteKey.CHANNEL_DOWN -> {
+                                if (focusedGuideId == null) return@onPreviewKeyEvent false
+                                guide = guide.move(1, queue, time)
+                            }
+                            selectKey -> {
+                                if (focusedGuideId == null) return@onPreviewKeyEvent false
+                                if (!repeated) guide.highlightedId?.let { selectGuideChannel(it) }
+                                consumedSelect = true
+                            }
+                            remoteKey == PlayerRemoteKey.LEFT || remoteKey == PlayerRemoteKey.RIGHT -> {
+                                if (!repeated && miniGuideEnabled) guide = guide.toggleFavourites(queue, time).interact(time, held = true)
+                            }
+                        }
+                        true
                     }
-                    // Channel up/down works whether or not the bar is showing — this remote has no
-                    // CH+/CH- keys, so up/down IS the channel changer. Each zap flashes the bar as a
-                    // channel banner, then it auto-hides.
-                    event.key == Key.DirectionUp || event.key == Key.ChannelUp -> { zapBy(-1); reveal(); true }
-                    event.key == Key.DirectionDown || event.key == Key.ChannelDown -> { zapBy(1); reveal(); true }
-                    // With the bar up, left/right drive its buttons; let them through.
-                    controlsVisible -> {
-                        interaction++
-                        false
+                    PlayerRemoteAction.PICKER_INPUT -> { interaction++; false }
+                    PlayerRemoteAction.ZAP_UP -> { zapBy(-1); reveal(); true }
+                    PlayerRemoteAction.ZAP_DOWN -> { zapBy(1); reveal(); true }
+                    PlayerRemoteAction.GUIDE -> {
+                        if (!repeated) {
+                            panel = Panel.NONE
+                            controlsVisible = false
+                            guide = guide.open(queue, currentId, android.os.SystemClock.elapsedRealtime(), inPip = inPip)
+                        }
+                        true
                     }
-                    // Immersive: left opens the channel list, right the quality picker.
-                    event.key == Key.DirectionLeft -> { if (queue.isNotEmpty()) channelListVisible = true; true }
-                    event.key == Key.DirectionRight -> {
-                        if (variants.size > 1) { reveal(); panel = Panel.QUALITY }; true
+                    PlayerRemoteAction.QUALITY -> {
+                        if (!repeated && variants.size > 1) { reveal(); panel = Panel.QUALITY }
+                        true
                     }
-                    else -> { reveal(); true }
+                    PlayerRemoteAction.CONTROLS -> {
+                        if (controlsVisible) { interaction++; false } else { if (!repeated) reveal(); true }
+                    }
                 }
             }
             .focusRequester(rootFocus)
@@ -585,59 +672,24 @@ fun PlayerScreen(
             }
         }
 
-        // Left-side transparent channel list — d-pad Left opens it, pick a channel to switch.
-        AnimatedVisibility(
-            visible = channelListVisible && !inPip,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterStart),
+        // Enhances the existing channel-list overlay. The video view and controller stay mounted.
+        if (!inPip) AnimatedVisibility(
+            visible = channelListVisible,
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(
+                if (guidePosition == app.opentv.core.AppSettings.GuidePosition.LEFT) Alignment.CenterStart else Alignment.CenterEnd,
+            ),
         ) {
-            val currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
-            val listState = rememberLazyListState()
-            LaunchedEffect(Unit) { runCatching { listState.scrollToItem(currentIndex) } }
-            Column(
-                Modifier
-                    .fillMaxHeight()
-                    .width(380.dp)
-                    .background(Color.Black.copy(alpha = 0.72f))
-                    .padding(vertical = 16.dp),
-            ) {
-                Text(
-                    stringResource(R.string.common_channels),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                // A quick "jump back to the channel you just left" pin, TiviMate-style.
-                val lastItem = previousId?.let { pid -> queue.firstOrNull { it.id == pid } }
-                if (lastItem != null && lastItem.id != currentId) {
-                    ChannelListRow(
-                        item = lastItem,
-                        playing = false,
-                        focusRequester = null,
-                        leadingLabel = stringResource(R.string.player_last),
-                        onClick = {
-                            playChannelId(lastItem.id)
-                            channelListVisible = false
-                        },
-                    )
-                    Spacer(Modifier.height(4.dp))
-                }
-                LazyColumn(state = listState) {
-                    itemsIndexed(queue, key = { _, item -> item.id }) { index, item ->
-                        ChannelListRow(
-                            item = item,
-                            playing = item.id == currentId,
-                            focusRequester = if (index == currentIndex) listFocus else null,
-                            onClick = {
-                                playChannelId(item.id)
-                                channelListVisible = false
-                            },
-                        )
-                    }
-                }
-            }
+            MiniTvGuide(
+                queue = queue, state = guide, programmes = graph.epgRepository::observeMiniGuide,
+                enabled = miniGuideEnabled, opacity = guideTransparency.opacity, previousId = previousId,
+                onHighlight = { guide = guide.highlight(it, queue, android.os.SystemClock.elapsedRealtime()) },
+                onSelect = { selectGuideChannel(it) },
+                onToggleFavourites = { guide = guide.toggleFavourites(queue, android.os.SystemClock.elapsedRealtime()) },
+                onRowFocusChanged = { id, focused ->
+                    if (focused) focusedGuideId = id else if (focusedGuideId == id) focusedGuideId = null
+                },
+            )
         }
     }
 
@@ -649,50 +701,6 @@ fun PlayerScreen(
             },
             onDismiss = { showBackgroundPrompt = false },
         )
-    }
-}
-
-@Composable
-private fun ChannelListRow(
-    item: PlaybackQueue.Item,
-    playing: Boolean,
-    focusRequester: FocusRequester?,
-    onClick: () -> Unit,
-    leadingLabel: String? = null,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val bg = when {
-        focused -> MaterialTheme.colorScheme.primary
-        playing -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-        else -> Color.Transparent
-    }
-    val fg = if (focused) MaterialTheme.colorScheme.onPrimary else Color.White
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onFocusChanged { focused = it.isFocused }
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // A "Last" tag, or the channel number if the provider gives one — a fixed-width slot so
-        // the logos and names line up down the list.
-        Text(
-            leadingLabel ?: item.number?.toString().orEmpty(),
-            style = MaterialTheme.typography.labelMedium,
-            color = fg.copy(alpha = 0.7f),
-            maxLines = 1,
-            modifier = Modifier.width(40.dp),
-        )
-        AsyncImage(
-            model = item.logoUrl,
-            contentDescription = null,
-            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(item.name, style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

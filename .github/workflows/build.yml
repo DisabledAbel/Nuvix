@@ -33,7 +33,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Validate Gradle configuration
         run: ./gradlew help --stacktrace
-      - name: Compile, run unit tests, lint and assemble debug
+      - name: Compile, run unit tests including Mini Guide regressions, lint and assemble debug
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -48,5 +48,6 @@ jobs:
           name: validation-reports
           path: |
             app/build/reports/tests/
+            app/build/test-results/testDebugUnitTest/
             app/build/reports/lint-results-debug.*
           if-no-files-found: ignore

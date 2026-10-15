@@ -51,6 +51,48 @@ class AppSettings private constructor(context: Context) {
     private val _channelLayout = MutableStateFlow(readChannelLayout())
     val channelLayout: StateFlow<ChannelLayout> = _channelLayout.asStateFlow()
 
+    // Local display preferences, deliberately outside the cloud sync record model.
+    enum class GuideTransparency(val opacity: Float) { LOW(0.94f), MEDIUM(0.82f), HIGH(0.68f) }
+    enum class GuidePosition { LEFT, RIGHT }
+
+    private val _miniGuideEnabled = MutableStateFlow(prefs.getBoolean("mini_guide_enabled", true))
+    val miniGuideEnabled = _miniGuideEnabled.asStateFlow()
+    private val _miniGuideTransparency = MutableStateFlow(
+        runCatching { GuideTransparency.valueOf(prefs.getString("mini_guide_transparency", "MEDIUM")!!) }
+            .getOrDefault(GuideTransparency.MEDIUM),
+    )
+    val miniGuideTransparency = _miniGuideTransparency.asStateFlow()
+    private val _miniGuidePosition = MutableStateFlow(
+        runCatching { GuidePosition.valueOf(prefs.getString("mini_guide_position", "LEFT")!!) }
+            .getOrDefault(GuidePosition.LEFT),
+    )
+    val miniGuidePosition = _miniGuidePosition.asStateFlow()
+    private val _miniGuideAutoClose = MutableStateFlow(
+        prefs.getInt("mini_guide_auto_close", 10).takeIf { it in listOf(0, 5, 10, 15) } ?: 10,
+    )
+    val miniGuideAutoClose = _miniGuideAutoClose.asStateFlow()
+
+    fun setMiniGuideEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("mini_guide_enabled", enabled).apply()
+        _miniGuideEnabled.value = enabled
+    }
+
+    fun setMiniGuideTransparency(value: GuideTransparency) {
+        prefs.edit().putString("mini_guide_transparency", value.name).apply()
+        _miniGuideTransparency.value = value
+    }
+
+    fun setMiniGuidePosition(value: GuidePosition) {
+        prefs.edit().putString("mini_guide_position", value.name).apply()
+        _miniGuidePosition.value = value
+    }
+
+    fun setMiniGuideAutoClose(seconds: Int) {
+        val value = seconds.takeIf { it in listOf(0, 5, 10, 15) } ?: 10
+        prefs.edit().putInt("mini_guide_auto_close", value).apply()
+        _miniGuideAutoClose.value = value
+    }
+
     /** Whether embedded subtitles/closed captions are shown when a stream carries them. */
     private val _subtitlesEnabled = MutableStateFlow(prefs.getBoolean(KEY_SUBTITLES, true))
     val subtitlesEnabled: StateFlow<Boolean> = _subtitlesEnabled.asStateFlow()
