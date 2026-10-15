@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -339,16 +340,15 @@ private fun NavRail(
                 painter = painterResource(R.drawable.ic_nuvix_logo),
                 contentDescription = "Nuvix",
                 modifier = Modifier.size(34.dp),
+                contentScale = ContentScale.Fit,
             )
             if (expanded) {
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    "Nuvix",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Image(
+                    painter = painterResource(R.drawable.nuvix_wordmark),
+                    contentDescription = null,
+                    modifier = Modifier.width(104.dp).height(32.dp),
+                    contentScale = ContentScale.Fit,
                 )
             }
         }

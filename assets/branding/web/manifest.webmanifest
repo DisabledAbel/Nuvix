@@ -3,8 +3,8 @@
   "short_name": "Nuvix",
   "display": "standalone",
   "start_url": "/",
-  "background_color": "#020926",
-  "theme_color": "#020926",
+  "background_color": "#081A3A",
+  "theme_color": "#081A3A",
   "icons": [
     {
       "src": "icon-192.png",
