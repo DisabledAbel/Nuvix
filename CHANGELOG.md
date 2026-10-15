@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Extend optional Supabase sync with separate opt-ins for channel visibility, names and
+  ordering; UUID custom groups and ordered membership; home shelf visibility; ordered
+  pinned apps; and allowlisted appearance, subtitle, guide and startup preferences.
+- Add an explicit favorite-removal opt-in while preserving existing additive favorites
+  and watch-progress records. Retain missing channel/app references for reconciliation.
+- Add a versioned advanced-record protocol, forward-only migration, owner-only RLS and
+  atomic deterministic merges, durable encrypted account-bound pending changes, and
+  per-category status controls. Keep email-code sign-in, WorkManager and LAN/NAS sync.
+- Document migration rollout, conflict/deletion semantics, privacy boundaries, isolated
+  SQL validation and a two-TV acceptance checklist. Hardware verification remains required.
 - Retain one lifecycle-owned live TV player across main navigation, transfer its video
   surface between fullscreen and a current-channel preview, and add local persistence,
   preview, and browsing-audio preferences. Preserve guide-preview, channel-list, PiP,

@@ -193,3 +193,28 @@ Things worth testing that are not yet covered, and would be very welcome contrib
 - `EpgRepository.sync` against a mid-stream failure, asserting the old guide survives
 - `ChannelDao.replaceCatalogue` preserving favourites across a refresh
 - `XtreamApi` against captured real-world panel responses (with credentials stripped)
+
+## Optional advanced cloud synchronization
+
+The original `CloudRecord` protocol, email-code authentication, `CloudVault` and network-constrained
+WorkManager jobs remain in use. `AdvancedCloudRecord` adds strictly typed records in a separate
+owner-scoped table without changing deployed favorites/progress columns. Category flags default
+to the original behavior; every new category requires opt-in. The independent LAN/NAS engine is
+not serialized into cloud requests.
+
+`AdvancedCloudJournal` persists one authenticated owner's pending mutations, observed local
+baseline and retained remote records atomically through the existing encrypted vault.
+`AdvancedSyncEngine` pulls initial cloud values before uploading baseline seeds, captures edits
+again after network waits, resolves records deterministically, applies through local adapters,
+and acknowledges only exact uploaded revisions after durable completion. Disabled categories
+retain their journal state; account/project changes clear it. Group deletion permanently retires
+its UUID. App order and group membership each merge as a bounded complete ordered collection;
+preference keys, group names, group rank and channel fields remain separate merge units.
+
+Room schema 12 adds `custom_channel_groups`, mapping stable UUIDs to local IDs and retaining
+ordered public-metadata fingerprints, including unavailable members and deletion tombstones.
+`LocalCustomGroups` powers the existing channel manager and home shelves. It resolves only one
+authorized local match and preserves local visibility restrictions. `AdvancedChannelData` uses
+field-only writes; cloud payloads never create playable channels. `AdvancedPreferenceData` reads
+and applies an exact settings/shelf/package allowlist, keeping provider and hardware state local.
+See [cloud-sync.md](cloud-sync.md) and [TESTING.md](TESTING.md#advanced-cloud-sync).

@@ -25,6 +25,11 @@ internal class CloudSettings(context: Context) {
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
         set(value) { prefs.edit().putBoolean("enabled", value).commit() }
+    var categories: Set<AdvancedSyncCategory>
+        get() = prefs.getStringSet("categories", null)?.mapNotNull { name ->
+            runCatching { AdvancedSyncCategory.valueOf(name) }.getOrNull()
+        }?.toSet() ?: setOf(AdvancedSyncCategory.FAVOURITES_PROGRESS)
+        set(value) { check(prefs.edit().putStringSet("categories", value.map { it.name }.toSet()).commit()) }
     var lastSynced: Long
         get() = prefs.getLong("last_synced", 0)
         set(value) { prefs.edit().putLong("last_synced", value).apply() }
@@ -33,7 +38,10 @@ internal class CloudSettings(context: Context) {
     }
     fun config(): CloudConfig? = vault.read("config")?.let { json.decodeFromString(CloudConfig.serializer(), it) }
     fun session(): CloudSession? = vault.read("session")?.let { json.decodeFromString(CloudSession.serializer(), it) }
-    fun saveSession(session: CloudSession) { vault.write("session", json.encodeToString(CloudSession.serializer(), session)) }
+    fun saveSession(session: CloudSession) {
+        require(UUID.fromString(session.userId).toString() == session.userId) { "Invalid cloud account." }
+        vault.write("session", json.encodeToString(CloudSession.serializer(), session))
+    }
 
     fun configure(url: String, key: String) {
         val parsed = url.trim().toHttpUrlOrNull()
@@ -45,12 +53,7 @@ internal class CloudSettings(context: Context) {
         val previous = config()
         val config = CloudConfig(parsed.toString().trimEnd('/'), key.trim())
         if (previous != config) {
-            enabled = false
-            vault.remove("session")
-            vault.remove("outbox")
-            vault.remove("acknowledged")
-            vault.remove("favourites")
-            lastSynced = 0
+            clearSession()
         }
         vault.write("config", json.encodeToString(CloudConfig.serializer(), config))
     }
@@ -61,6 +64,9 @@ internal class CloudSettings(context: Context) {
         vault.remove("outbox")
         vault.remove("acknowledged")
         vault.remove("favourites")
+        vault.remove("advanced_journal")
+        categories = setOf(AdvancedSyncCategory.FAVOURITES_PROGRESS)
+        lastSynced = 0
     }
 
     fun reset() { clearSession(); vault.remove("config"); lastSynced = 0 }

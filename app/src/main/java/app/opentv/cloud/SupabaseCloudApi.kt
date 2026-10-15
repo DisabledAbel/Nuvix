@@ -23,6 +23,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /** Small pinned REST protocol surface, using the application's existing OkHttp dependency. */
 internal class SupabaseCloudApi(private val config: CloudConfig) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val advancedJson = Json { ignoreUnknownKeys = false; encodeDefaults = true }
     private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS)
         // Never forward API keys or bearer tokens to a redirect target.
@@ -56,6 +57,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
     }
 
     suspend fun pull(token: String, userId: String): List<CloudRecord> {
+        require(UUID.fromString(userId).toString() == userId) { "Invalid cloud account." }
         // Stable keyset pagination also works when PostgREST's project row limit is under 1000.
         val result = mutableListOf<CloudRecord>()
         var after: String? = null
@@ -69,6 +71,50 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
             after = page.last().jsonObject["id"]?.jsonPrimitive?.content
                 ?: throw IOException("Cloud sync returned an invalid cursor.")
             require(after.matches(Regex("[0-9]+"))) { "Cloud sync returned an invalid cursor." }
+            check(result.size <= 100_000) { "Cloud library is too large for this device." }
+        }
+        return result
+    }
+
+    suspend fun pushAdvanced(token: String, records: List<AdvancedCloudRecord>) {
+        for (batch in records.chunked(100)) {
+            require(batch.all { it.isSafe(System.currentTimeMillis()) }) { "Invalid advanced cloud record." }
+            val body = buildJsonObject {
+                put("records", advancedJson.encodeToJsonElement(ListSerializer(AdvancedCloudRecord.serializer()), batch))
+            }.toString()
+            request("/rest/v1/rpc/nuvix_merge_advanced_records", token, body)
+        }
+    }
+
+    suspend fun pullAdvanced(token: String, userId: String, categories: Set<AdvancedSyncCategory>): List<AdvancedCloudRecord> {
+        require(UUID.fromString(userId).toString() == userId) { "Invalid cloud account." }
+        val kinds = AdvancedCloudRecord.KINDS.filter { kind ->
+            AdvancedCloudRecord("", kind, 1, "").category in categories
+        }
+        if (kinds.isEmpty()) return emptyList()
+        val result = mutableListOf<AdvancedCloudRecord>()
+        var after: String? = null
+        var receivedBytes = 0L
+        while (true) {
+            val cursor = after?.let { "&id=gt.$it" }.orEmpty()
+            val body = request("/rest/v1/nuvix_advanced_records?owner_id=eq.$userId&kind=in.(${kinds.joinToString(",")})&select=id,schema_version,kind,record_key,updated_at_ms,device_id,deleted,text_value,bool_value,int_value,entries&order=id.asc&limit=20$cursor", token)
+            receivedBytes += body.toByteArray(Charsets.UTF_8).size
+            check(receivedBytes <= 16L * 1024 * 1024) { "Cloud library is too large for this device." }
+            val page = advancedJson.parseToJsonElement(body) as? kotlinx.serialization.json.JsonArray
+                ?: throw IOException("Cloud sync returned an invalid response.")
+            if (page.isEmpty()) break
+            for (element in page) {
+                val fields = JsonObject(element.jsonObject.filterKeys { it != "id" })
+                val record = advancedJson.decodeFromJsonElement(AdvancedCloudRecord.serializer(), fields)
+                require(record.isSafe(System.currentTimeMillis())) { "Invalid advanced cloud record." }
+                result += record
+            }
+            val next = page.last().jsonObject["id"]?.jsonPrimitive?.content
+                ?: throw IOException("Cloud sync returned an invalid cursor.")
+            require(next.matches(Regex("[1-9][0-9]{0,18}")) && (after == null || next.toLong() > after.toLong())) {
+                "Cloud sync returned an invalid cursor."
+            }
+            after = next
             check(result.size <= 100_000) { "Cloud library is too large for this device." }
         }
         return result

@@ -62,7 +62,7 @@ fun SupabaseCloudScreen(onBack: () -> Unit) {
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onBack) { Text("Done") }
         }
-        Text("Optional sync through your own Supabase project. Watch progress and favourites stay available offline.",
+        Text("Optional sync through your own Supabase project. Choose what to share between your TVs. Your data stays available offline.",
             modifier = Modifier.widthIn(max = 840.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(Modifier.widthIn(max = 900.dp).fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -118,12 +118,54 @@ fun SupabaseCloudScreen(onBack: () -> Unit) {
                 }
             }
         }
+        Card(Modifier.widthIn(max = 900.dp).fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("What to sync", style = MaterialTheme.typography.titleMedium)
+                Text("New categories start off. A choice takes effect only while cloud sync is enabled. Turning it off stops uploads and downloads for that category and keeps existing local and cloud data.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                for (category in AdvancedSyncCategory.entries) {
+                    CloudCategorySwitch(category, category in state.categories, !state.busy && state.email != null) { enabled ->
+                        scope.launch { manager.setCategory(category, enabled) }
+                    }
+                }
+            }
+        }
+        Text("Cloud sync: ${if (state.enabled) "Enabled" else "Disabled"}", style = MaterialTheme.typography.titleMedium)
+        Text("Pending changes: ${state.pendingChanges}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(state.message, style = MaterialTheme.typography.bodyLarge)
         if (state.lastSynced > 0) Text("Last synced: ${DateFormat.getDateTimeInstance().format(Date(state.lastSynced))}",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Shared: content fingerprints, favourites, profile fingerprints, resume times and a random device ID. Provider URLs, logins, playlists, recordings and settings are never uploaded. Favourites merge additively; removing one locally does not remove it from other devices. Progress sync needs matching content and profile names.",
+        Text("Selected categories may share content and profile fingerprints, resume times, channel organization and custom group names, home preferences, app package names, compatible preferences and a random device ID. Provider URLs, logins, playlists, recordings, parental PINs and device permissions stay on this TV. App sync never installs apps. Progress requires matching content and profile names. Favourites stay additive unless you explicitly enable favourite removals.",
             modifier = Modifier.widthIn(max = 900.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(enabled = !state.busy, onClick = { scope.launch { manager.reset() } }) { Text("Remove cloud setup from this TV") }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun CloudCategorySwitch(category: AdvancedSyncCategory, selected: Boolean, enabled: Boolean, onSelected: (Boolean) -> Unit) {
+    val (title, description) = when (category) {
+        AdvancedSyncCategory.FAVOURITES_PROGRESS -> "Favourites and watch progress" to
+            "Content and profile fingerprints, added favourites and resume times."
+        AdvancedSyncCategory.CHANNEL_ORGANIZATION -> "Channel organization" to
+            "Hidden state, custom display names and channel order for matching authorized channels."
+        AdvancedSyncCategory.CUSTOM_GROUPS -> "Custom groups" to
+            "Your group names, channel fingerprints, membership and ordering."
+        AdvancedSyncCategory.HOME_PREFERENCES -> "Home preferences" to
+            "Visibility of Continue watching, Recent, Favorites, On now, Movies, Shows and Apps shelves."
+        AdvancedSyncCategory.APP_FAVOURITES -> "App favourites" to
+            "Package names and pin order. Only installed, launchable apps appear on each TV."
+        AdvancedSyncCategory.COMPATIBLE_SETTINGS -> "Compatible settings" to
+            "Theme, subtitle default, guide layout and startup destination. Hardware and security settings stay local."
+        AdvancedSyncCategory.FAVOURITE_REMOVALS -> "Synchronize favourite removals" to
+            "Optional two-way favourite state. Removing a favourite will also remove it on your other TVs. Starts off."
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = selected, onCheckedChange = onSelected, enabled = enabled)
     }
 }
