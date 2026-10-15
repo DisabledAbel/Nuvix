@@ -52,7 +52,7 @@ class MiniGuideEpgTest {
             programme("matched", 0, 100), programme("fallback", 0, 100),
         ))
         val rows = withTimeout(5_000) { repository.observeMiniGuide(listOf("override", "provider", "matched", "fallback"), 50).first() }
-        assertThat(rows.map { it.epgChannelId }).containsExactly("matched")
+        assertThat(rows.map { it.epgChannelId }).containsExactly("matched").inOrder()
     }
 
     @Test fun `empty ids gaps and expired schedules return friendly fallback data`() = runBlocking {

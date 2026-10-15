@@ -2,14 +2,19 @@
 package app.opentv.ui.player
 
 import android.app.Application
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import app.opentv.player.MiniGuideState
@@ -84,5 +89,26 @@ class MiniTvGuideUiTest {
         compose.onNodeWithText("Channel 1").assertExists()
         compose.onNodeWithText("No program information.", substring = true).assertDoesNotExist()
         compose.runOnIdle { assertThat(loads).isEqualTo(beforeLegacy) }
+    }
+
+    @Test fun `dismissal releases the guide focus boundary while the closing animation is mounted`() {
+        val smallQueue = queue.take(1)
+        var state by mutableStateOf(MiniGuideState().open(smallQueue, 1, 0))
+        val playerFocus = FocusRequester()
+        compose.setContent {
+            MaterialTheme {
+                LaunchedEffect(state.visible) { if (!state.visible) playerFocus.requestFocus() }
+                Box(Modifier.fillMaxSize().testTag("player-catcher").focusRequester(playerFocus).focusable()) {
+                    // AnimatedVisibility keeps its content mounted during fade-out in PlayerScreen.
+                    MiniTvGuide(smallQueue, state, programmes = { _, _ -> flowOf(emptyList()) },
+                        enabled = true, opacity = 0.82f, previousId = null,
+                        onHighlight = {}, onSelect = { state = state.close() },
+                        onToggleFavourites = {}, onRowFocusChanged = { _, _ -> })
+                }
+            }
+        }
+        compose.onNodeWithText("Channel 1").assertIsFocused().performClick()
+        compose.onNodeWithTag("player-catcher").assertIsFocused()
+        compose.runOnIdle { assertThat(state.playingId).isEqualTo(1) }
     }
 }
