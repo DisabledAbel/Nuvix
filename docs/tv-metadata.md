@@ -71,7 +71,8 @@ Each service has one serialized transport shared by detail pages and profiles:
   missing fields, corrupt cache files, and unwritable cache storage are tolerated.
 - Each cache is bounded to 256 responses/20 MiB, with an 8 MiB response limit.
   Writes use a temporary file and rename. Android may evict the cache at any time.
-- Connections close after every response; a descriptive Nuvix User-Agent is sent.
+- Response bodies close after every response; eligible connections remain pooled
+  and may be reused. A descriptive Nuvix User-Agent is sent.
   Metadata uses its own short timeout configuration and never changes playback's
   streaming client. Coroutine cancellation is preserved through backoff.
 

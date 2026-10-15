@@ -66,6 +66,9 @@ sealed interface PersonTitle {
     data class SeriesItem(val series: Series) : PersonTitle
 }
 
+/** Provider snapshot and IMDb mapping from the same series-info response. Never persisted together. */
+data class ProviderSeriesDetail(val series: Series, val imdbId: String?)
+
 /** One quality variant of a film, with the quality parsed from its name by [ChannelNameNormalizer]. */
 data class MovieVariant(val movie: Movie, val qualityLabel: String, val qualityRank: Int)
 
@@ -455,35 +458,32 @@ class CatalogRepository(
         result
     }
 
-    /** Loads a series and lazily back-fills its detail fields from `get_series_info`. See [movieDetail]. */
-    suspend fun seriesDetail(id: Long): Series? = withContext(Dispatchers.IO) {
+    /** Loads provider details and carries the same response's IMDb ID into external metadata matching. */
+    suspend fun seriesDetail(id: Long): ProviderSeriesDetail? = withContext(Dispatchers.IO) {
         val series = seriesDao.byId(id) ?: return@withContext null
         var result = series
         val source = sourceDao.byId(series.sourceId)
 
-        // 1) Provider back-fill from get_series_info, for a still-bare row on an Xtream source.
-        if (!result.isEnriched && source?.kind == SourceKind.XTREAM) {
-            val info = runCatching { api.seriesInfo(source, result.seriesId) }.getOrNull()
-            if (info != null) {
-                result = result.copy(
-                    backdropUrl = result.backdropUrl ?: info.backdropUrl,
-                    cast = result.cast ?: info.cast,
-                    genre = result.genre ?: info.genre,
-                    tmdbId = result.tmdbId ?: info.tmdbId,
-                    plot = result.plot ?: info.plot,
-                    rating = result.rating ?: info.rating,
-                    year = result.year ?: info.year,
-                )
-            }
+        // Fetch once for both provider back-fill and the external metadata IMDb lookup.
+        val info = if (source?.kind == SourceKind.XTREAM) {
+            try { api.seriesInfo(source, result.seriesId) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null }
+        } else null
+        if (!result.isEnriched && info != null) {
+            result = result.copy(
+                backdropUrl = result.backdropUrl ?: info.backdropUrl,
+                cast = result.cast ?: info.cast,
+                genre = result.genre ?: info.genre,
+                tmdbId = result.tmdbId ?: info.tmdbId,
+                plot = result.plot ?: info.plot,
+                rating = result.rating ?: info.rating,
+                year = result.year ?: info.year,
+            )
         }
 
         if (result != series) seriesDao.upsertAll(listOf(result))
-        result
-    }
-
-    suspend fun providerImdbId(series: Series): String? {
-        val source = sourceDao.byId(series.sourceId) ?: return null
-        return if (source.kind == SourceKind.XTREAM) api.seriesInfo(source, series.seriesId)?.imdbId else null
+        ProviderSeriesDetail(result, info?.imdbId)
     }
 
     suspend fun tmdbSeriesFallback(series: Series): app.opentv.data.remote.TmdbMeta? =
