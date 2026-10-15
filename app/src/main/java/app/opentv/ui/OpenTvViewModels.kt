@@ -1056,13 +1056,12 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun movieDetail(id: Long): Movie? = graph.catalogRepository.movieDetail(id)
 
     /** Loads a series, lazily enriching backdrop/cast/genre on first open. See CatalogRepository.seriesDetail. */
-    suspend fun seriesDetail(id: Long): Series? = graph.catalogRepository.seriesDetail(id)
+    suspend fun seriesDetail(id: Long): app.opentv.data.repo.ProviderSeriesDetail? =
+        graph.catalogRepository.seriesDetail(id)
 
-    suspend fun tvSeriesDetail(series: Series): app.opentv.data.repo.TvSeriesDetail {
-        val imdbId = try { graph.catalogRepository.providerImdbId(series) }
-            catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { null }
-        return graph.tvMetadata.detail(series, app.opentv.data.parser.VodTitleCleaner.clean(series.name), imdbId) {
+    suspend fun tvSeriesDetail(detail: app.opentv.data.repo.ProviderSeriesDetail): app.opentv.data.repo.TvSeriesDetail {
+        val series = detail.series
+        return graph.tvMetadata.detail(series, app.opentv.data.parser.VodTitleCleaner.clean(series.name), detail.imdbId) {
             graph.catalogRepository.tmdbSeriesFallback(series)
         }
     }

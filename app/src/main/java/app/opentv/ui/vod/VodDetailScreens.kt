@@ -267,6 +267,7 @@ fun SeriesDetailScreen(
     viewModel: VodViewModel = viewModel(),
 ) {
     var series by remember(seriesId) { mutableStateOf<Series?>(null) }
+    var providerDetail by remember(seriesId) { mutableStateOf<app.opentv.data.repo.ProviderSeriesDetail?>(null) }
     var tvDetail by remember(seriesId) { mutableStateOf<app.opentv.data.repo.TvSeriesDetail?>(null) }
     var metadataLoaded by remember(seriesId) { mutableStateOf(false) }
     var episodesLoaded by remember(seriesId) { mutableStateOf(false) }
@@ -274,7 +275,9 @@ fun SeriesDetailScreen(
     val favFocus = remember { FocusRequester() }
 
     LaunchedEffect(seriesId) {
-        val loaded = viewModel.seriesDetail(seriesId)
+        val detail = viewModel.seriesDetail(seriesId)
+        providerDetail = detail
+        val loaded = detail?.series
         series = loaded
         if (loaded != null) {
             viewModel.loadEpisodes(loaded)
@@ -283,8 +286,8 @@ fun SeriesDetailScreen(
         }
     }
 
-    LaunchedEffect(series?.id) {
-        val provider = series ?: return@LaunchedEffect
+    LaunchedEffect(providerDetail) {
+        val provider = providerDetail ?: return@LaunchedEffect
         tvDetail = viewModel.tvSeriesDetail(provider)
         metadataLoaded = true
     }
