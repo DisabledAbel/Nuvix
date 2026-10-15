@@ -527,27 +527,27 @@
     <string name="tv_no_episodes" tools:ignore="MissingTranslation">No episodes available.</string>
     <string name="tvmaze_automatic" tools:ignore="MissingTranslation">TV show metadata is automatic via TVmaze, with IMDbAPI.dev secondary. No key or account is required. TMDb below is an optional fallback.</string>
     <!-- Mini TV Guide: default resources fall back in existing translated locales. -->
-    <string name="mini_guide_title">Mini TV Guide</string>
-    <string name="mini_guide_enabled">Mini TV Guide enabled</string>
-    <string name="mini_guide_enabled_note">Show now and next over live TV. When off, use the channel list.</string>
-    <string name="mini_guide_transparency">Guide transparency</string>
-    <string name="mini_guide_low">Low</string>
-    <string name="mini_guide_medium">Medium</string>
-    <string name="mini_guide_high">High</string>
-    <string name="mini_guide_position">Guide position</string>
-    <string name="mini_guide_left">Left</string>
-    <string name="mini_guide_right">Right</string>
-    <string name="mini_guide_auto_close">Guide auto-close</string>
-    <string name="mini_guide_off">Off</string>
-    <string name="mini_guide_seconds">%1$d seconds</string>
-    <string name="mini_guide_controls">↑↓ Browse · OK Watch · Back Close · ←→ Filter</string>
-    <string name="mini_guide_favourites">Favourites in this list</string>
-    <string name="mini_guide_browse_context">Browsing list</string>
-    <string name="mini_guide_last_channel">Last: %1$s</string>
-    <string name="mini_guide_empty">No channels in this list. Change the filter or return to the full guide.</string>
-    <string name="mini_guide_playing">▶ Playing</string>
-    <string name="mini_guide_highlighted">Highlighted</string>
-    <string name="mini_guide_no_programme">No program information.</string>
-    <string name="mini_guide_live_time">Live · %1$s–%2$s</string>
-    <string name="mini_guide_next">Next: %1$s</string>
+    <string name="mini_guide_title" tools:ignore="MissingTranslation">Mini TV Guide</string>
+    <string name="mini_guide_enabled" tools:ignore="MissingTranslation">Mini TV Guide enabled</string>
+    <string name="mini_guide_enabled_note" tools:ignore="MissingTranslation">Show now and next over live TV. When off, use the channel list.</string>
+    <string name="mini_guide_transparency" tools:ignore="MissingTranslation">Guide transparency</string>
+    <string name="mini_guide_low" tools:ignore="MissingTranslation">Low</string>
+    <string name="mini_guide_medium" tools:ignore="MissingTranslation">Medium</string>
+    <string name="mini_guide_high" tools:ignore="MissingTranslation">High</string>
+    <string name="mini_guide_position" tools:ignore="MissingTranslation">Guide position</string>
+    <string name="mini_guide_left" tools:ignore="MissingTranslation">Left</string>
+    <string name="mini_guide_right" tools:ignore="MissingTranslation">Right</string>
+    <string name="mini_guide_auto_close" tools:ignore="MissingTranslation">Guide auto-close</string>
+    <string name="mini_guide_off" tools:ignore="MissingTranslation">Off</string>
+    <string name="mini_guide_seconds" tools:ignore="MissingTranslation">%1$d seconds</string>
+    <string name="mini_guide_controls" tools:ignore="MissingTranslation">↑↓ Browse · OK Watch · Back Close · ←→ Filter</string>
+    <string name="mini_guide_favourites" tools:ignore="MissingTranslation">Favourites in this list</string>
+    <string name="mini_guide_browse_context" tools:ignore="MissingTranslation">Browsing list</string>
+    <string name="mini_guide_last_channel" tools:ignore="MissingTranslation">Last: %1$s</string>
+    <string name="mini_guide_empty" tools:ignore="MissingTranslation">No channels in this list. Change the filter or return to the full guide.</string>
+    <string name="mini_guide_playing" tools:ignore="MissingTranslation">▶ Playing</string>
+    <string name="mini_guide_highlighted" tools:ignore="MissingTranslation">Highlighted</string>
+    <string name="mini_guide_no_programme" tools:ignore="MissingTranslation">No program information.</string>
+    <string name="mini_guide_live_time" tools:ignore="MissingTranslation">Live · %1$s–%2$s</string>
+    <string name="mini_guide_next" tools:ignore="MissingTranslation">Next: %1$s</string>
 </resources>
