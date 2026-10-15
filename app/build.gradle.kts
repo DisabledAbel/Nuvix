@@ -138,7 +138,7 @@ dependencies {
     // back in-app over the network. Pure-Java SMB2/3, no native bits.
     implementation("com.hierynomus:smbj:0.12.2")
 
-    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)

@@ -9,6 +9,15 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 5
+    # Major upgrades need a coordinated Kotlin / AGP / compileSdk migration.
+    # Continue minor and patch updates on the last validated Android toolchain.
+    ignore:
+      - dependency-name: "androidx.compose:compose-bom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.squareup.okhttp3:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
     groups:
       gradle-minor-and-patch:
         patterns:
