@@ -15,11 +15,12 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - Persistent live TV across Home, Guide, Sports, and Search, with an optional current-channel preview. See [live playback](docs/live-playback.md).
 - Optional home launcher with installed-app shortcuts and customizable startup destinations.
 - Automatic TVmaze show, season, episode, and cast metadata with clickable actor profiles; no key required. See [TV metadata](docs/tv-metadata.md).
-- Optional Supabase sync for content favorites and movie/episode progress.
+- Optional Supabase sync for favorites/progress, channel organization, custom groups,
+  home shelves, pinned apps, and compatible settings, with separate category controls.
 - Encrypted local provider/catalog storage and protected credentials.
 - In-app release checks, downloads, and Android-approved updates.
 
-Recording, playback, and launcher support depend on your device and provider. Cloud sync is disabled by default and excludes provider credentials and stream URLs; settings and launcher preferences remain local.
+Recording, playback, and launcher support depend on your device and provider. Cloud sync is disabled by default; new categories require explicit opt-in. Provider credentials, stream URLs, device permissions, and playback tuning stay local.
 
 ## Screenshot
 
@@ -50,7 +51,7 @@ See [build instructions](docs/building.md), [signing](docs/signing.md), and [rel
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
 - **Launcher:** Open **Settings → Home launcher** and enable the HOME entry. Use your device's default-home selector where supported. Restore the original default launcher before disabling the entry. See [device compatibility](docs/launcher-compatibility.md).
 - **Live playback:** Under **Settings → Display & playback → Playback**, choose **Persistent Live Playback**, **Live Preview**, and **Continue Audio While Browsing**. Select the preview to return to fullscreen. Disable persistence on devices that struggle to retain video while browsing.
-- **Cloud sync:** Configure your project and sign in under **Settings → Supabase cloud sync**, then enable sync. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
+- **Cloud sync:** Apply the supplied migrations to your own project, sign in under **Settings → Supabase cloud sync**, then enable sync and choose categories on each TV. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 
 ## Project status

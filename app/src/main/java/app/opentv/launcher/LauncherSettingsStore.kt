@@ -51,6 +51,8 @@ class LauncherSettingsStore(context: Context) {
     private val storage = context.applicationContext.getSharedPreferences("nuvix_launcher", Context.MODE_PRIVATE)
     private val state = MutableStateFlow(read())
     val preferences: StateFlow<LauncherPreferences> = state.asStateFlow()
+    /** Read storage directly when a preferences listener is capturing a just-authored edit. */
+    val currentPreferences: LauncherPreferences get() = read()
 
     private val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         state.value = read()
@@ -66,15 +68,38 @@ class LauncherSettingsStore(context: Context) {
     fun pin(packageName: String) = updateFavorites { AppOrder.pin(it, packageName) }
     fun unpin(packageName: String) = updateFavorites { AppOrder.unpin(it, packageName) }
     fun moveFavorite(packageName: String, offset: Int) = updateFavorites { AppOrder.move(it, packageName, offset) }
-    fun pruneFavorites(availablePackages: Set<String>) =
-        updateFavorites { AppOrder.retainInstalled(it, availablePackages) }
+    /**
+     * Availability is a display filter only. A package missing on this TV may be installed on
+     * another TV, or installed here later; it must stay in the user's desired order.
+     */
+    fun pruneFavorites(availablePackages: Set<String>): List<String> =
+        AppOrder.retainInstalled(read().favoritePackages, availablePackages)
+
+    /** Replace the explicitly synchronized desired order, including packages absent locally. */
+    fun applyRemoteAppOrder(packageNames: List<String>): Boolean {
+        if (packageNames.size > MAX_FAVORITES || packageNames.distinct().size != packageNames.size ||
+            packageNames.any { !isSupportedPackage(it) }) return false
+        check(storage.edit().putString("favorite_packages", JSONArray(packageNames).toString()).commit()) {
+            "Unable to persist synchronized app order."
+        }
+        state.value = read()
+        return true
+    }
+
+    /** This changes in-app navigation only; it never requests or changes Android's HOME role. */
+    fun applyRemoteStartupDestination(destination: StartupDestination) {
+        check(storage.edit().putString("startup_destination", destination.name).commit()) {
+            "Unable to persist synchronized startup destination."
+        }
+        state.value = read()
+    }
 
     /** Release the listener when a screen leaves composition. */
     fun close() { storage.unregisterOnSharedPreferenceChangeListener(listener) }
 
     private fun updateFavorites(update: (List<String>) -> List<String>) {
         val previous = read().favoritePackages
-        val next = update(previous)
+        val next = update(previous).filter(::isSupportedPackage).distinct()
         if (next != previous) storage.edit().putString("favorite_packages", JSONArray(next).toString()).apply()
         state.value = read()
     }
@@ -85,8 +110,16 @@ class LauncherSettingsStore(context: Context) {
         }.getOrDefault(StartupDestination.HOME)
         val favorites = runCatching {
             val array = JSONArray(storage.getString("favorite_packages", "[]"))
-            List(array.length()) { array.optString(it) }.filter { it.isNotBlank() }.distinct()
+            List(array.length()) { array.optString(it) }
+                .filter(::isSupportedPackage).distinct()
         }.getOrDefault(emptyList())
         return LauncherPreferences(destination, favorites)
+    }
+
+    companion object {
+        const val MAX_FAVORITES = 200
+        // Android package identifiers, never launch intents, filesystem paths, or URLs.
+        private val PACKAGE_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
+        fun isSupportedPackage(value: String): Boolean = value.length <= 255 && PACKAGE_NAME.matches(value)
     }
 }

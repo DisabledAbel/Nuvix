@@ -80,6 +80,11 @@ fun ChannelManagerScreen(
     onBack: () -> Unit,
     viewModel: ChannelsViewModel = viewModel(),
 ) {
+    var editingGroups by remember { mutableStateOf(false) }
+    if (editingGroups) {
+        CustomGroupsScreen(onBack = { editingGroups = false })
+        return
+    }
     val sources by viewModel.sources.collectAsState()
     val categoryGroups by viewModel.managerCategoryGroups.collectAsState()
     val selectedSource by viewModel.managerSelectedSource.collectAsState()
@@ -132,6 +137,8 @@ fun ChannelManagerScreen(
         ) {
             Text(stringResource(R.string.channels_manager_title), style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = { editingGroups = true }) { Text("Custom groups") }
+            Spacer(Modifier.width(12.dp))
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_done)) }
         }
 

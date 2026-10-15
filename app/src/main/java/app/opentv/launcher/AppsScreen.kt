@@ -101,7 +101,6 @@ fun AppsScreen(onBack: () -> Unit, onLauncherSettings: () -> Unit = {}) {
         val result = withContext(Dispatchers.IO) { runCatching { repository.discover() } }
         result.onSuccess {
             apps = it
-            settings.pruneFavorites(it.map { app -> app.packageName }.toSet())
             selected = selected?.let { current -> it.find { app -> app.packageName == current.packageName } }
         }.onFailure { message = "Installed apps could not be refreshed. Try again." }
         loading = false
@@ -177,7 +176,7 @@ fun AppsScreen(onBack: () -> Unit, onLauncherSettings: () -> Unit = {}) {
                     }, Modifier.fillMaxWidth())
                     if (favoriteIndex >= 0) {
                         LauncherAction("Move left", { settings.moveFavorite(app.packageName, -1) }, Modifier.fillMaxWidth(), enabled = favoriteIndex > 0)
-                        LauncherAction("Move right", { settings.moveFavorite(app.packageName, 1) }, Modifier.fillMaxWidth(), enabled = favoriteIndex < favorites.lastIndex)
+                        LauncherAction("Move right", { settings.moveFavorite(app.packageName, 1) }, Modifier.fillMaxWidth(), enabled = favoriteIndex < preferences.favoritePackages.lastIndex)
                     }
                     LauncherAction("App information", {
                         if (!repository.openAppInfo(app.packageName)) message = "App information is unavailable. The app may have been removed."

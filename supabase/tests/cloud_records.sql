@@ -80,3 +80,6 @@ do $$ begin
   exception when insufficient_privilege then null; end;
 end $$;
 rollback;
+
+-- Additive protocol/RLS/concurrency coverage lives in advanced_cloud_records.sql and
+-- scripts/test-supabase.sh; this original suite continues exercising unchanged legacy behavior.

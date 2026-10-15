@@ -71,12 +71,13 @@ internal class CloudLocalData(private val graph: ServiceLocator.Graph) {
     }
 
     /** Add favourites, and apply progress only to one unambiguous local content/profile match. */
-    suspend fun apply(records: List<CloudRecord>, locallyDismissed: Set<String>, onFavouriteApplied: (String, Long) -> Unit): Int {
+    suspend fun apply(records: List<CloudRecord>, locallyDismissed: Set<String>, syncFavourites: Boolean = true, onFavouriteApplied: (String, Long) -> Unit): Int {
         val index = index()
         var changed = 0
         for (record in records) {
             if (!record.isSafe(System.currentTimeMillis())) continue
             if (record.kind.endsWith("_favourite")) {
+                if (!syncFavourites) continue
                 val identity = "${record.kind}:${record.recordKey}"
                 if (identity in locallyDismissed) continue
                 if (identity in index.activeFavourites) continue

@@ -16,6 +16,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.opentv.data.model.Category
 import app.opentv.data.model.Channel
+import app.opentv.data.model.CustomChannelGroup
+import app.opentv.data.model.CustomGroupConverters
 import app.opentv.data.model.EpgChannelAlias
 import app.opentv.data.model.EpgFeed
 import app.opentv.data.model.Episode
@@ -71,11 +73,12 @@ class Converters {
         Recording::class,
         SeriesRule::class,
         Reminder::class,
+        CustomChannelGroup::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class, CustomGroupConverters::class)
 abstract class OpenTvDatabase : RoomDatabase() {
     abstract fun sources(): SourceDao
     abstract fun categories(): CategoryDao
@@ -91,6 +94,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
     abstract fun recordings(): RecordingDao
     abstract fun seriesRules(): SeriesRuleDao
     abstract fun reminders(): ReminderDao
+    abstract fun customGroups(): CustomGroupDao
 
     companion object {
         /**
@@ -273,6 +277,16 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Custom group UUID mappings and desired membership are additive to the provider cache. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `custom_channel_groups` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cloudId` TEXT NOT NULL, " +
+                    "`name` TEXT NOT NULL, `rank` INTEGER NOT NULL, `members` TEXT NOT NULL, `deleted` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_custom_channel_groups_cloudId` ON `custom_channel_groups` (`cloudId`)")
+            }
+        }
+
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
                 // Encrypt the complete cache: provider passwords and credential-bearing stream
@@ -283,7 +297,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                    MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+                    MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                 )
                 .build()
     }

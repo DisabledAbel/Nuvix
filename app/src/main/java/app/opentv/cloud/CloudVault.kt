@@ -31,6 +31,7 @@ internal class CloudVault(context: Context) {
     @Synchronized fun read(name: String): String? {
         val file = File(directory, name)
         if (!file.exists()) return null
+        require(file.length() <= 96L * 1024 * 1024) { "Encrypted cloud storage is too large." }
         val bytes = Base64.decode(file.readText(), Base64.NO_WRAP)
         require(bytes.size > 12) { "Encrypted cloud storage is invalid; reset cloud setup." }
         return Cipher.getInstance("AES/GCM/NoPadding").run {
@@ -55,7 +56,8 @@ internal class CloudVault(context: Context) {
     }
 
     @Synchronized fun remove(name: String) {
-        File(directory, name).delete()
-        File(directory, "$name.tmp").delete()
+        for (file in listOf(File(directory, name), File(directory, "$name.tmp"))) {
+            check(!file.exists() || file.delete()) { "Unable to remove encrypted cloud state." }
+        }
     }
 }

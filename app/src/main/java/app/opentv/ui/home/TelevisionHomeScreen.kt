@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -50,6 +52,10 @@ fun TelevisionHomeScreen(
 ) {
     val context = LocalContext.current
     val graph = remember { ServiceLocator.get(context) }
+    val homeStore = remember(context) { HomePreferencesStore(context) }
+    val homePreferences by homeStore.preferences.collectAsState()
+    var customizeHome by remember { mutableStateOf(false) }
+    DisposableEffect(homeStore) { onDispose { homeStore.close() } }
     val history = remember { RecentChannels.get(context) }
     val ids by history.ids.collectAsState()
     val recentFlow = remember(ids) { graph.database.channels().observeByIds(ids) }
@@ -80,6 +86,8 @@ fun TelevisionHomeScreen(
                     Text("Make yourself at home.", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("Everything you love, all in one place.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                OutlinedButton(onClick = { customizeHome = true }) { Text("Customize home") }
+                Spacer(Modifier.width(16.dp))
                 Text("NUVIX", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -115,32 +123,54 @@ fun TelevisionHomeScreen(
                 }
             }
         }
-        if (resume.isNotEmpty()) item {
+        if (homePreferences.isVisible(HomeSection.CONTINUE) && resume.isNotEmpty()) item {
             HomeShelf("Continue watching", resume, { it.mediaKey }) { item ->
                 ContentTile(item.title, item.posterUrl, "Resume watching", item.progress) { onResume(item.mediaKey, item.streamUrl, item.title) }
             }
         }
-        if (recent.isNotEmpty()) item { ChannelShelf("Recently watched", recent.take(16), programmes, onPlayChannel) }
-        if (favourites.isNotEmpty()) item { ChannelShelf("Your favorite channels", favourites.take(24), programmes, onPlayChannel) }
-        if (channels.isNotEmpty()) item { ChannelShelf("On now", channels.distinctBy { it.groupKey.ifBlank { "id:${it.id}" } }.take(16), programmes, onPlayChannel) }
+        if (homePreferences.isVisible(HomeSection.RECENT) && recent.isNotEmpty()) item { ChannelShelf("Recently watched", recent.take(16), programmes, onPlayChannel) }
+        if (homePreferences.isVisible(HomeSection.FAVOURITES) && favourites.isNotEmpty()) item { ChannelShelf("Your favorite channels", favourites.take(24), programmes, onPlayChannel) }
+        if (homePreferences.isVisible(HomeSection.ON_NOW) && channels.isNotEmpty()) item { ChannelShelf("On now", channels.distinctBy { it.groupKey.ifBlank { "id:${it.id}" } }.take(16), programmes, onPlayChannel) }
+        item { app.opentv.ui.channels.CustomGroupShelves(onPlayChannel, programmes) }
         val movieShelf = recommended.ifEmpty { movies }
-        if (movieShelf.isNotEmpty()) item {
+        if (homePreferences.isVisible(HomeSection.MOVIES) && movieShelf.isNotEmpty()) item {
             HomeShelf(if (recommended.isNotEmpty()) "Recommended for you" else "Recently added movies", movieShelf.take(18), { it.id.toString() }) { movie ->
                 ContentTile(movie.displayTitle, movie.posterUrl, "Movie") { onOpenMovie(movie) }
             }
         }
-        if (series.isNotEmpty()) item {
+        if (homePreferences.isVisible(HomeSection.SERIES) && series.isNotEmpty()) item {
             HomeShelf("Recently added shows", series.take(18), { it.id.toString() }) { show ->
                 ContentTile(show.displayTitle, show.posterUrl, "TV show") { onOpenSeries(show) }
             }
         }
-        item { app.opentv.launcher.FavoriteAppsRow(onOpenApps = onOpenApps) }
+        if (homePreferences.isVisible(HomeSection.APPS)) item { app.opentv.launcher.FavoriteAppsRow(onOpenApps = onOpenApps) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onOpenApps) { Text("Browse installed apps") }
                 OutlinedButton(onClick = onAddSource) { Text("Add another provider") }
             }
         }
+    }
+    if (customizeHome) {
+        AlertDialog(
+            onDismissRequest = { customizeHome = false },
+            title = { Text("Customize home") },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text("Choose the sections shown on your home screen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HomeSection.entries.forEach { section ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(section.title, Modifier.weight(1f))
+                            Switch(
+                                checked = homePreferences.isVisible(section),
+                                onCheckedChange = { homeStore.setVisible(section, it) },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { customizeHome = false }) { Text("Done") } },
+        )
     }
 }
 
