@@ -77,6 +77,42 @@ class ReleaseVerificationTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "signing certificate"):
                 self.verify()
 
+    def nightly_metadata(self):
+        self.metadata["applicationId"] += ".nightly"
+        self.metadata["elements"][0]["versionName"] = "0.1.0-nightly.20261015.1.1"
+        self.badging = self.badging.replace("nuvix'", "nuvix.nightly'").replace("0.1.0'", "0.1.0-nightly.20261015.1.1'")
+
+    def test_nightly_checks_real_package_version_and_signing_certificate(self):
+        self.nightly_metadata()
+        with patch.object(release, "run", side_effect=[self.badging, self.signature]):
+            result = release.verify_apk(self.apk, Path("sdk"), self.metadata,
+                                        "nightly-20261015.1.1", "a" * 64, "nightly")
+        self.assertEqual("com.disabledabel.nuvix.nightly", result["applicationId"])
+        self.assertEqual("0.1.0-nightly.20261015.1.1", result["versionName"])
+
+    def test_nightly_cannot_be_published_as_stable(self):
+        self.nightly_metadata()
+        with self.assertRaisesRegex(ValueError, "application ID"):
+            self.verify()
+
+    def test_stable_package_cannot_be_published_as_nightly(self):
+        with self.assertRaisesRegex(ValueError, "application ID"):
+            release.verify_apk(self.apk, Path("sdk"), self.metadata,
+                               "nightly-20261015.1.1", "a" * 64, "nightly")
+
+    def test_nightly_tag_must_match_apk_version(self):
+        self.nightly_metadata()
+        with self.assertRaisesRegex(ValueError, "tag"):
+            release.verify_apk(self.apk, Path("sdk"), self.metadata,
+                               "nightly-20261015.2.1", "a" * 64, "nightly")
+
+    def test_nightly_rejects_wrong_certificate(self):
+        self.nightly_metadata()
+        with patch.object(release, "run", side_effect=[self.badging, self.signature]):
+            with self.assertRaisesRegex(ValueError, "long-lived release signing key"):
+                release.verify_apk(self.apk, Path("sdk"), self.metadata,
+                                   "nightly-20261015.1.1", "b" * 64, "nightly")
+
 
 if __name__ == "__main__":
     unittest.main()

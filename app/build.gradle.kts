@@ -50,6 +50,12 @@ android {
             // release builds never inherit the publicly known Android debug certificate.
             signingConfig = if (signingConfigured) signingConfigs.getByName("upload") else null
         }
+        create("nightly") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".nightly"
+            versionNameSuffix = "-nightly.${providers.gradleProperty("nightlyBuildId").getOrElse("local")}"
+            matchingFallbacks += listOf("release")
+        }
         debug {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
@@ -82,6 +88,16 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("nightly")) { variant ->
+        // Nightlies have their own increasing version codes, independent of stable.
+        val nightlyCode = providers.gradleProperty("nightlyVersionCode").map {
+            it.toInt().also { code -> require(code in 1..2_100_000_000) { "Invalid nightlyVersionCode" } }
+        }.orElse(1)
+        variant.outputs.forEach { it.versionCode.set(nightlyCode) }
     }
 }
 
