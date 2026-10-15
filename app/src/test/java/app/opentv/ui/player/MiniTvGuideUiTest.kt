@@ -26,6 +26,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
+@OptIn(ExperimentalTestApi::class)
 class MiniTvGuideUiTest {
     @get:Rule val compose = createComposeRule()
     private val queue = (1L..200L).map { PlaybackQueue.Item(it, "Channel $it", null, it.toInt(), listOf("epg-$it")) }
