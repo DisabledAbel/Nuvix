@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import android.content.Context
 import android.widget.Toast
@@ -254,7 +255,7 @@ private fun MiniGuideSettings(settings: AppSettings) {
         listOf(0, 5, 10, 15).forEach { seconds ->
             ThemeOption(
                 if (seconds == 0) stringResource(R.string.mini_guide_off)
-                else stringResource(R.string.mini_guide_seconds, seconds),
+                else pluralStringResource(R.plurals.mini_guide_seconds, seconds, seconds),
                 timeout == seconds,
             ) { settings.setMiniGuideAutoClose(seconds) }
         }

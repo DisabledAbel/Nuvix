@@ -116,7 +116,10 @@ internal fun MiniTvGuide(
         val previous = rows.firstOrNull { it.isPlaying(previousId) && !it.isPlaying(state.playingId) }
         if (previous != null) {
             OutlinedButton(onClick = { onSelect(previous.id) }) {
-                Text(stringResource(R.string.mini_guide_last_channel, previous.name), color = Color.White, maxLines = 1)
+                Text(
+                    stringResource(R.string.mini_guide_last_channel, stringResource(R.string.player_last), previous.name),
+                    color = Color.White, maxLines = 1,
+                )
             }
         }
         if (rows.isEmpty()) {

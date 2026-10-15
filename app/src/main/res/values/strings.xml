@@ -539,11 +539,14 @@
     <string name="mini_guide_right" tools:ignore="MissingTranslation">Right</string>
     <string name="mini_guide_auto_close" tools:ignore="MissingTranslation">Guide auto-close</string>
     <string name="mini_guide_off" tools:ignore="MissingTranslation">Off</string>
-    <string name="mini_guide_seconds" tools:ignore="MissingTranslation">%1$d seconds</string>
+    <plurals name="mini_guide_seconds" tools:ignore="MissingTranslation">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
     <string name="mini_guide_controls" tools:ignore="MissingTranslation">↑↓ Browse · OK Watch · Back Close · ←→ Filter</string>
     <string name="mini_guide_favourites" tools:ignore="MissingTranslation">Favourites in this list</string>
     <string name="mini_guide_browse_context" tools:ignore="MissingTranslation">Browsing list</string>
-    <string name="mini_guide_last_channel" tools:ignore="MissingTranslation">Last: %1$s</string>
+    <string name="mini_guide_last_channel" tools:ignore="MissingTranslation">%1$s: %2$s</string>
     <string name="mini_guide_empty" tools:ignore="MissingTranslation">No channels in this list. Change the filter or return to the full guide.</string>
     <string name="mini_guide_playing" tools:ignore="MissingTranslation">▶ Playing</string>
     <string name="mini_guide_highlighted" tools:ignore="MissingTranslation">Highlighted</string>
