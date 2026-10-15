@@ -75,7 +75,7 @@ jobs:
           python3 scripts/create-release.py --tag "$RELEASE_TAG" --android-sdk "$ANDROID_HOME" --expected-certificate-sha256 "$EXPECTED_SIGNING_CERT_SHA256" --output dist
           git archive --format=tar.gz --prefix="nuvix-$RELEASE_TAG/" HEAD > "dist/nuvix-$RELEASE_TAG-source.tar.gz"
       - name: Upload verified release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuvix-release
           path: dist/
@@ -85,7 +85,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/nuvix-release.jks"
       - name: Upload validation reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-validation-reports
           path: |
