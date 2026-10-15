@@ -106,7 +106,8 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
             for (element in page) {
                 val fields = JsonObject(element.jsonObject.filterKeys { it != "id" })
                 val record = advancedJson.decodeFromJsonElement(AdvancedCloudRecord.serializer(), fields)
-                require(record.isSafe(System.currentTimeMillis())) { "Invalid advanced cloud record." }
+                // Validate shape here; the journal defers records ahead of this TV's clock.
+                require(record.isSafe(Long.MAX_VALUE)) { "Invalid advanced cloud record." }
                 result += record
             }
             val next = page.last().jsonObject["id"]?.jsonPrimitive?.content

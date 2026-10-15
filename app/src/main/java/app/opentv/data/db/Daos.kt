@@ -201,16 +201,16 @@ interface ChannelDao {
     @Query("SELECT COUNT(*) FROM channels WHERE hidden = 0")
     fun observeVisibleCount(): Flow<Int>
 
-    @Query("UPDATE channels SET favourite = :favourite WHERE id = :id")
+    @Query("UPDATE channels SET favourite = :favourite, syncTouched = syncTouched | 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
-    @Query("UPDATE channels SET hidden = :hidden WHERE id = :id")
+    @Query("UPDATE channels SET hidden = :hidden, syncTouched = syncTouched | 2 WHERE id = :id")
     suspend fun setHidden(id: Long, hidden: Boolean)
 
-    @Query("UPDATE channels SET customName = :name WHERE id = :id")
+    @Query("UPDATE channels SET customName = :name, syncTouched = syncTouched | 4 WHERE id = :id")
     suspend fun setCustomName(id: Long, name: String?)
 
-    @Query("UPDATE channels SET sortIndex = :sortIndex WHERE id = :id")
+    @Query("UPDATE channels SET sortIndex = :sortIndex, syncTouched = syncTouched | 8 WHERE id = :id")
     suspend fun setSortIndex(id: Long, sortIndex: Int)
 
     /** Every channel for a source. The channels table is live-only, so these are its live channels. */
@@ -283,10 +283,10 @@ interface ChannelDao {
                 channel.copy(
                     id = previous.id,
                     favourite = previous.favourite,
-                    // OR, not overwrite: the importer hides separator rows ('### UK ###')
-                    // at parse time, and that decision must stick even for rows that
-                    // predate the rule. User hides are preserved the same way.
-                    hidden = previous.hidden || channel.hidden,
+                    syncTouched = previous.syncTouched,
+                    // Provider separator hiding is a baseline until the user explicitly
+                    // chooses visibility. Preserve an explicit unhide through refresh too.
+                    hidden = if (previous.syncTouched and 2 != 0) previous.hidden else previous.hidden || channel.hidden,
                     sortIndex = previous.sortIndex,
                     // A user's rename must outlive the provider's fresh name on every refresh.
                     customName = previous.customName,
@@ -526,7 +526,7 @@ interface MovieDao {
     @Query("SELECT * FROM movies WHERE streamUrl = :url LIMIT 1")
     suspend fun byStreamUrl(url: String): Movie?
 
-    @Query("UPDATE movies SET favourite = :favourite WHERE id = :id")
+    @Query("UPDATE movies SET favourite = :favourite, favouriteTouched = 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
     // --- Sync: favourites by stream URL ---
@@ -538,6 +538,20 @@ interface MovieDao {
 
     @Upsert
     suspend fun upsertAll(movies: List<Movie>)
+
+    @Query("SELECT * FROM movies WHERE sourceId = :sourceId")
+    suspend fun userStateForSource(sourceId: Long): List<Movie>
+
+    @Transaction
+    suspend fun replaceCatalogue(sourceId: Long, incoming: List<Movie>) {
+        val previous = userStateForSource(sourceId).associateBy { it.streamId }
+        incoming.chunked(500).forEach { chunk ->
+            upsertAll(chunk.map { item ->
+                previous[item.streamId]?.let { old -> item.copy(id = old.id,
+                    favourite = old.favourite, favouriteTouched = old.favouriteTouched) } ?: item
+            })
+        }
+    }
 
     @Query("DELETE FROM movies WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
@@ -596,7 +610,7 @@ interface SeriesDao {
     @Query("SELECT * FROM series WHERE id = :id")
     suspend fun byId(id: Long): Series?
 
-    @Query("UPDATE series SET favourite = :favourite WHERE id = :id")
+    @Query("UPDATE series SET favourite = :favourite, favouriteTouched = 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
     // --- Sync: favourites by provider series id (series carry no stream URL) ---
@@ -608,6 +622,20 @@ interface SeriesDao {
 
     @Upsert
     suspend fun upsertAll(items: List<Series>)
+
+    @Query("SELECT * FROM series WHERE sourceId = :sourceId")
+    suspend fun userStateForSource(sourceId: Long): List<Series>
+
+    @Transaction
+    suspend fun replaceCatalogue(sourceId: Long, incoming: List<Series>) {
+        val previous = userStateForSource(sourceId).associateBy { it.seriesId }
+        incoming.chunked(500).forEach { chunk ->
+            upsertAll(chunk.map { item ->
+                previous[item.seriesId]?.let { old -> item.copy(id = old.id,
+                    favourite = old.favourite, favouriteTouched = old.favouriteTouched) } ?: item
+            })
+        }
+    }
 
     @Query("DELETE FROM series WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)

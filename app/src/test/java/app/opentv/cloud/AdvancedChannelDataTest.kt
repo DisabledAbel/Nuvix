@@ -66,9 +66,9 @@ class AdvancedChannelDataTest {
         key, kind, System.currentTimeMillis(), device, textValue = text, boolValue = bool, intValue = number)
 
     @Test fun snapshotsOnlyPublicIdentityAndOrganizationFields() = runBlocking {
-        database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 5)))
-        database.movies().upsertAll(listOf(movie()))
-        database.series().upsertAll(listOf(series()))
+        database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 5, syncTouched = 15)))
+        database.movies().upsertAll(listOf(movie().copy(favouriteTouched = true)))
+        database.series().upsertAll(listOf(series().copy(favouriteTouched = true)))
         val records = adapter.snapshot(device, System.currentTimeMillis())
         assertEquals(setOf("channel_hidden", "channel_name", "channel_order", "channel_favourite_state",
             "movie_favourite_state", "series_favourite_state"), records.map { it.kind }.toSet())
@@ -82,7 +82,7 @@ class AdvancedChannelDataTest {
     }
 
     @Test fun matchingOtherTvUsesFingerprintAndNeverOverwritesPlayableFields() = runBlocking {
-        database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 7, favourite = true)))
+        database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 7, favourite = true, syncTouched = 15)))
         database.movies().upsertAll(listOf(movie().copy(favourite = true)))
         database.series().upsertAll(listOf(series().copy(favourite = true)))
         val records = adapter.snapshot(device, System.currentTimeMillis())
@@ -94,7 +94,7 @@ class AdvancedChannelDataTest {
             receiving.movies().upsertAll(listOf(movie(303, 77, "Translated movie")))
             receiving.series().upsertAll(listOf(series(404, 77, "Translated series")))
             assertEquals(6, AdvancedChannelData(receiving).apply(records))
-            assertEquals(local.copy(hidden = true, customName = "News", sortIndex = 7, favourite = true),
+            assertEquals(local.copy(hidden = true, customName = "News", sortIndex = 7, favourite = true, syncTouched = 15),
                 receiving.channels().byId(202))
             assertTrue(receiving.movies().byId(303)!!.favourite)
             assertTrue(receiving.series().byId(404)!!.favourite)
@@ -104,7 +104,7 @@ class AdvancedChannelDataTest {
     @Test fun fieldUpdatesPreserveIndependentLocalEditsAndSupportClearingNames() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "Local name", sortIndex = 8, favourite = true)))
         assertEquals(1, adapter.apply(listOf(record("channel_order", number = 2))))
-        assertEquals(channel().copy(hidden = true, customName = "Local name", sortIndex = 2, favourite = true), database.channels().byId(1))
+        assertEquals(channel().copy(hidden = true, customName = "Local name", sortIndex = 2, favourite = true, syncTouched = 8), database.channels().byId(1))
         assertEquals(2, adapter.apply(listOf(record("channel_name", text = ""), record("channel_hidden", bool = false))))
         assertNull(database.channels().byId(1)!!.customName)
         assertFalse(database.channels().byId(1)!!.hidden)
@@ -156,7 +156,7 @@ class AdvancedChannelDataTest {
         database.channels().upsertAll(listOf(channel(), channel(2, 2)))
         database.movies().upsertAll(listOf(movie(2, 2)))
         database.series().upsertAll(listOf(series(2, 2)))
-        assertEquals(4, adapter.snapshot(device, System.currentTimeMillis()).size)
+        assertTrue(adapter.snapshot(device, System.currentTimeMillis()).isEmpty())
         assertEquals(1, adapter.apply(listOf(record("channel_hidden", bool = true))))
         assertTrue(database.channels().byId(1)!!.hidden)
         assertFalse(database.channels().byId(2)!!.hidden)
@@ -183,6 +183,50 @@ class AdvancedChannelDataTest {
             record("channel_order", number = 9)), expected))
         assertEquals("Local edit during apply", database.channels().byId(1)!!.customName)
         assertEquals(9, database.channels().byId(1)!!.sortIndex)
+    }
+
+    @Test fun largeUntouchedProviderCatalogueNeverSeedsTheJournal() = runBlocking {
+        database.channels().upsertAll((1L..33_400L).map { id ->
+            channel(id, name = "Channel $id", epg = "channel.$id").copy(sortIndex = id.toInt(), hidden = id % 10 == 0L)
+        })
+        val snapshot = adapter.snapshot(device, System.currentTimeMillis())
+        assertTrue(snapshot.isEmpty())
+        var saved: String? = null
+        val journal = AdvancedCloudJournal({ saved }, { saved = it })
+        val owner = "11111111-1111-1111-1111-111111111111"
+        journal.bindOwner(owner)
+        journal.capture(owner, snapshot, AdvancedSyncCategory.entries.toSet(), device, System.currentTimeMillis())
+        assertEquals(0, journal.pendingCount(owner))
+    }
+
+    @Test fun explicitResetsSurviveRefreshAndRemainSparse() = runBlocking {
+        database.channels().upsertAll(listOf(channel().copy(sortIndex = 42)))
+        database.movies().upsertAll(listOf(movie()))
+        database.series().upsertAll(listOf(series()))
+        database.channels().setHidden(1, false)
+        database.channels().setCustomName(1, null)
+        database.channels().setSortIndex(1, 0)
+        database.channels().setFavourite(1, false)
+        database.movies().setFavourite(1, false)
+        database.series().setFavourite(1, false)
+        database.channels().replaceCatalogue(1, listOf(channel().copy(sortIndex = 99, hidden = true)), 10)
+        database.movies().replaceCatalogue(1, listOf(movie()))
+        database.series().replaceCatalogue(1, listOf(series()))
+        val records = adapter.snapshot(device, System.currentTimeMillis())
+        assertEquals(6, records.size)
+        assertEquals(0, records.single { it.kind == "channel_order" }.intValue)
+        assertEquals("", records.single { it.kind == "channel_name" }.textValue)
+        assertTrue(records.filter { it.boolValue != null }.all { it.boolValue == false })
+    }
+
+    @Test fun sparseExpectedSnapshotStillAppliesRemoteButProtectsAnInFlightLocalEdit() = runBlocking {
+        database.channels().upsertAll(listOf(channel()))
+        val expected = adapter.snapshot(device, System.currentTimeMillis())
+        assertTrue(expected.isEmpty())
+        database.channels().setHidden(1, false) // Explicit reset is a user edit even with the same payload.
+        assertEquals(1, adapter.apply(listOf(record("channel_hidden", bool = true), record("channel_name", text = "Remote")), expected))
+        assertFalse(database.channels().byId(1)!!.hidden)
+        assertEquals("Remote", database.channels().byId(1)!!.customName)
     }
 
     @Test fun malformedUnknownFutureAndDeletedRecordsLeaveLocalDataIntact() = runBlocking {

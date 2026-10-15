@@ -109,3 +109,16 @@ Run `bash scripts/test-supabase.sh` against its isolated Docker PostgreSQL harne
 | Encrypted state unavailable/corrupted | Keep ordinary local data; remove cloud setup and configure/sign in again. Unsynced cloud journal state may be lost during reset |
 
 Use a disposable project and two isolated clients for account-switch/deletion acceptance. Real OTP delivery, Android Keystore process-death behavior, vendor launchers and two-TV convergence require actual device verification; passing JVM/SQL tests alone does not establish those results. Supabase references: [email OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Data API security](https://supabase.com/docs/guides/api/securing-your-api).
+
+### Sparse catalog state
+
+Advanced sync exports explicit channel visibility and order edits, custom names, and favourite
+intent. Provider-assigned order and untouched visibility/favourite defaults do not create cloud
+records. Local edit markers retain explicit resets (unhide, clear name, unfavourite, or order zero)
+through catalog refreshes. Existing custom names and positive favourites can seed a new device;
+visibility and order changes made before this version need to be reapplied once to mark their intent,
+because older catalogs do not distinguish those edits from provider defaults. Unavailable catalog
+rows produce no reset or deletion, and saved cloud references reconcile when those rows return.
+
+A remote record ahead of a TV's clock is structurally validated during download and deferred by
+the journal. It does not stop unrelated records or categories from syncing.

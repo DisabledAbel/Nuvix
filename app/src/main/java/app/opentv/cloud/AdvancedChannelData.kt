@@ -25,7 +25,16 @@ internal class AdvancedChannelData(
         val hidden: Boolean = false,
         val customName: String = "",
         val sortIndex: Int = 0,
-    )
+        val touched: Int = 0,
+    ) {
+        // sortIndex is provider assigned; a nonzero value is never evidence of a user edit.
+        fun exports(kind: String): Boolean = when (kind) {
+            "channel_hidden" -> touched and 2 != 0
+            "channel_name" -> touched and 4 != 0 || customName.isNotEmpty()
+            "channel_order" -> touched and 8 != 0
+            else -> touched and 1 != 0 || favourite
+        }
+    }
 
     private data class Index(
         val channels: Map<String, List<Target>>,
@@ -38,7 +47,7 @@ internal class AdvancedChannelData(
         val blocked = blockedCategoryKeys()
         database.openHelper.readableDatabase.query("""
             SELECT c.id, c.displayName, c.epgChannelId, c.favourite, c.hidden,
-                c.customName, c.sortIndex, c.categoryId, category.name
+                c.customName, c.sortIndex, c.categoryId, category.name, c.syncTouched
             FROM channels c INNER JOIN sources s ON s.id = c.sourceId AND s.enabled = 1
             LEFT JOIN categories category ON category.sourceId = c.sourceId
                 AND category.id = c.categoryId AND category.kind = 'LIVE'
@@ -54,21 +63,21 @@ internal class AdvancedChannelData(
                 val key = CloudIdentity.channel(cursor.getString(1), cursor.getString(2))
                 channels.getOrPut(key) { mutableListOf() }.add(Target(cursor.getLong(0),
                     cursor.getInt(3) == 1, cursor.getInt(4) == 1,
-                    cursor.getString(5).orEmpty(), cursor.getInt(6)))
+                    cursor.getString(5).orEmpty(), cursor.getInt(6), cursor.getInt(9)))
             }
         }
         fun media(table: String, kind: String): Map<String, List<Target>> {
             val targets = mutableMapOf<String, MutableList<Target>>()
             // table/kind are fixed local constants; no remote value is interpolated into SQL.
             database.openHelper.readableDatabase.query("""
-                SELECT m.id, m.name, m.year, m.tmdbId, m.favourite FROM $table m
+                SELECT m.id, m.name, m.year, m.tmdbId, m.favourite, m.favouriteTouched FROM $table m
                 INNER JOIN sources s ON s.id = m.sourceId AND s.enabled = 1
             """.trimIndent()).use { cursor ->
                 while (cursor.moveToNext()) {
                     val key = CloudIdentity.media(kind, cursor.getString(1),
                         if (cursor.isNull(2)) null else cursor.getInt(2), cursor.getString(3))
                     targets.getOrPut(key) { mutableListOf() }
-                        .add(Target(cursor.getLong(0), cursor.getInt(4) == 1))
+                        .add(Target(cursor.getLong(0), cursor.getInt(4) == 1, touched = cursor.getInt(5)))
                 }
             }
             return targets
@@ -87,18 +96,18 @@ internal class AdvancedChannelData(
                 }
                 for ((key, targets) in index.channels) {
                     val target = targets.singleOrNull() ?: continue
-                    state(key, "channel_hidden", target.hidden)
-                    add(AdvancedCloudRecord(key, "channel_name", nowMillis, deviceId, textValue = target.customName))
-                    add(AdvancedCloudRecord(key, "channel_order", nowMillis, deviceId, intValue = target.sortIndex))
-                    if (includeFavourites) state(key, "channel_favourite_state", target.favourite)
+                    if (target.exports("channel_hidden")) state(key, "channel_hidden", target.hidden)
+                    if (target.exports("channel_name")) add(AdvancedCloudRecord(key, "channel_name", nowMillis, deviceId, textValue = target.customName))
+                    if (target.exports("channel_order")) add(AdvancedCloudRecord(key, "channel_order", nowMillis, deviceId, intValue = target.sortIndex))
+                    if (includeFavourites && target.exports("channel_favourite_state")) state(key, "channel_favourite_state", target.favourite)
                 }
                 for ((key, targets) in index.movies) {
                     val target = targets.singleOrNull() ?: continue
-                    state(key, "movie_favourite_state", target.favourite)
+                    if (target.exports("movie_favourite_state")) state(key, "movie_favourite_state", target.favourite)
                 }
                 for ((key, targets) in index.series) {
                     val target = targets.singleOrNull() ?: continue
-                    state(key, "series_favourite_state", target.favourite)
+                    if (target.exports("series_favourite_state")) state(key, "series_favourite_state", target.favourite)
                 }
             }.filter { it.isSafe(nowMillis) }
         }
@@ -128,8 +137,10 @@ internal class AdvancedChannelData(
                 // Compare under the same Room transaction as the write. A local edit made
                 // after the engine snapshot is retained and captured on the next journal pass.
                 if (expected != null) {
-                    val prior = expected[record.identity()] ?: continue
-                    val unchanged = when (record.kind) {
+                    val prior = expected[record.identity()]
+                    // Sparse snapshots omit untouched fields. They are still safe remote targets
+                    // unless a local setter has marked that field since the expected snapshot.
+                    val unchanged = if (prior == null) !target.exports(record.kind) else when (record.kind) {
                         "channel_hidden" -> prior.boolValue == target.hidden
                         "channel_name" -> prior.textValue == target.customName
                         "channel_order" -> prior.intValue == target.sortIndex
@@ -137,25 +148,34 @@ internal class AdvancedChannelData(
                     }
                     if (!unchanged) continue
                 }
+                val sameValue = when (record.kind) {
+                    "channel_hidden" -> record.boolValue == target.hidden
+                    "channel_name" -> record.textValue == target.customName
+                    "channel_order" -> record.intValue == target.sortIndex
+                    else -> record.boolValue == target.favourite
+                }
+                // Record receipt once even for an unchanged default, then avoid needless writes
+                // (and Room invalidations) on every subsequent reconciliation.
+                if (sameValue && target.exports(record.kind)) continue
                 val updated = when (record.kind) {
-                    "channel_hidden" -> if (record.boolValue != target.hidden) {
-                        database.channels().setHidden(target.id, record.boolValue!!); true
-                    } else false
-                    "channel_name" -> if (record.textValue != target.customName) {
-                        database.channels().setCustomName(target.id, record.textValue!!.ifEmpty { null }); true
-                    } else false
-                    "channel_order" -> if (record.intValue != target.sortIndex) {
-                        database.channels().setSortIndex(target.id, record.intValue!!); true
-                    } else false
-                    "channel_favourite_state" -> if (record.boolValue != target.favourite) {
-                        database.channels().setFavourite(target.id, record.boolValue!!); true
-                    } else false
-                    "movie_favourite_state" -> if (record.boolValue != target.favourite) {
-                        database.movies().setFavourite(target.id, record.boolValue!!); true
-                    } else false
-                    "series_favourite_state" -> if (record.boolValue != target.favourite) {
-                        database.series().setFavourite(target.id, record.boolValue!!); true
-                    } else false
+                    "channel_hidden" -> (record.boolValue != target.hidden).also {
+                        database.channels().setHidden(target.id, record.boolValue!!)
+                    }
+                    "channel_name" -> (record.textValue != target.customName).also {
+                        database.channels().setCustomName(target.id, record.textValue!!.ifEmpty { null })
+                    }
+                    "channel_order" -> (record.intValue != target.sortIndex).also {
+                        database.channels().setSortIndex(target.id, record.intValue!!)
+                    }
+                    "channel_favourite_state" -> (record.boolValue != target.favourite).also {
+                        database.channels().setFavourite(target.id, record.boolValue!!)
+                    }
+                    "movie_favourite_state" -> (record.boolValue != target.favourite).also {
+                        database.movies().setFavourite(target.id, record.boolValue!!)
+                    }
+                    "series_favourite_state" -> (record.boolValue != target.favourite).also {
+                        database.series().setFavourite(target.id, record.boolValue!!)
+                    }
                     else -> false
                 }
                 if (updated) changed++
