@@ -13,6 +13,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Guide reminders use the same channel/start slot that [SportsRepository.remind] reuses. */
+fun sportsReminderForEvent(reminders: List<Reminder>, eventId: String, streams: List<SportsStream>): Reminder? =
+    reminders.firstOrNull { it.sportsEventId == eventId }
+        ?: streams.filter { it.available }.firstNotNullOfOrNull { stream ->
+            reminders.firstOrNull { it.channelId == stream.channel.id && it.startUtcMillis == stream.programme.startUtcMillis }
+        }
+
 /** All matching is local. This class never resolves playback URLs or opens a provider connection. */
 class SportsRepository(private val db: OpenTvDatabase) {
     val dao get() = db.sports()
@@ -47,11 +54,13 @@ class SportsRepository(private val db: OpenTvDatabase) {
                                 event.startUtcMillis + SportsMatching.START_TOLERANCE)
                                 .filter { SportsMatching.confidence(it, p) != null }
                         else emptyList()
-                        val match = candidates.singleOrNull()
+                        val match = candidates.filter { it.verified }.singleOrNull() ?: candidates.singleOrNull()
                         val selected = match ?: dao.event(event.id) ?: event
                         // Never promote EPG timing to a verified live score/status.
-                        dao.upsertEvents(listOf(selected.copy(updatedAtMillis = maxOf(selected.updatedAtMillis, feed.lastSyncMillis))))
-                        val confidence = if (candidates.size > 1) MatchConfidence.POSSIBLE
+                        if (!selected.verified) {
+                            dao.upsertEvents(listOf(selected.copy(updatedAtMillis = maxOf(selected.updatedAtMillis, feed.lastSyncMillis))))
+                        }
+                        val confidence = if (match == null && candidates.size > 1) MatchConfidence.POSSIBLE
                             else SportsMatching.confidence(selected, p) ?: MatchConfidence.POSSIBLE
                         associations += SportsProgramme(programmeKey(p), selected.id, p.feedId, p.epgChannelId,
                             p.startUtcMillis, p.endUtcMillis, p.title, confidence.name)
@@ -179,7 +188,8 @@ class SportsRepository(private val db: OpenTvDatabase) {
                 dao.upsertEvents(listOf(event))
                 val reminder = db.reminders().forSportsEvent(event.id) ?: return@withTransaction null
                 val cancel = event.status in setOf("CANCELED", "POSTPONED", "FINAL")
-                val updated = reminder.copy(startUtcMillis = event.startUtcMillis, endUtcMillis = event.endUtcMillis, fired = cancel)
+                val updated = reminder.copy(startUtcMillis = event.startUtcMillis, endUtcMillis = event.endUtcMillis,
+                    fired = cancel || (reminder.fired && reminder.startUtcMillis == event.startUtcMillis))
                 db.reminders().update(updated)
                 updated to cancel
             }

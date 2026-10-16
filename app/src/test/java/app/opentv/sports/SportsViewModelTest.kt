@@ -134,4 +134,48 @@ class SportsViewModelTest {
         assertNull(vm.selectedId.value)
         assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
     }
+    @Test fun messagesAreConsumedAndClearedWhenTheViewChanges(): Unit = runBlocking {
+        val vm = model()
+        await(vm) { !it.loading }
+        vm.notify("Notice")
+        assertEquals("Notice", vm.state.value.message)
+        vm.consumeMessage()
+        assertNull(vm.state.value.message)
+        val changes = listOf<() -> Unit>({ vm.search("NHL") }, { vm.filter(SportsFilter.UPCOMING) },
+            { vm.select("another-event") }, { vm.browse("nhl", null, null) })
+        for (change in changes) {
+            vm.notify("Notice")
+            change()
+            assertNull(vm.state.value.message)
+        }
+        vm.refresh().join()
+        assertEquals("Local sports schedules refreshed", vm.state.value.message)
+        vm.favorite("invalid", "invalid", "", "Invalid").join()
+        assertEquals("Sports action could not be completed. Cached schedules remain available.", vm.state.value.message)
+    }
+    @Test fun unlinkedGuideReminderIsShownAndCanceledByItsChannelAndProgrammeStart(): Unit = runBlocking {
+        seed()
+        val vm = model()
+        val event = await(vm) { it.cards.size == 1 }.cards.single().event
+        vm.select(event.id)
+        val stream = await(vm) { it.streams.size == 1 }.streams.single()
+        val guide = Reminder(channelId = stream.channel.id, channelName = "Guide reminder", title = event.title,
+            startUtcMillis = stream.programme.startUtcMillis, endUtcMillis = stream.programme.endUtcMillis)
+        val id = db.reminders().insert(guide)
+        val reminders = db.reminders().observeAll().first()
+        val resolved = sportsReminderForEvent(reminders, event.id, vm.state.value.streams)
+        assertEquals(id, resolved?.id)
+        assertEquals(false, resolved?.fired)
+        assertNull(resolved?.sportsEventId)
+        assertNull(sportsReminderForEvent(listOf(guide.copy(channelId = 99)), event.id, listOf(stream)))
+        assertNull(sportsReminderForEvent(listOf(guide.copy(startUtcMillis = guide.startUtcMillis + 1)), event.id, listOf(stream)))
+        assertNull(sportsReminderForEvent(reminders, event.id, listOf(stream.copy(confidence = MatchConfidence.POSSIBLE))))
+        vm.cancelReminder(event.id).join()
+        assertNull(db.reminders().byId(id))
+        vm.remind(event.id).join()
+        assertEquals("Game reminder set", vm.state.value.message)
+        val linked = db.reminders().observeAll().first().single()
+        assertEquals(event.id, linked.sportsEventId)
+        assertEquals(linked, sportsReminderForEvent(listOf(linked), event.id, emptyList()))
+    }
 }

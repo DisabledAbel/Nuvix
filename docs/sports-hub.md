@@ -1,8 +1,9 @@
 # Sports Hub
 
-Open the existing **Sports** tab. Its seven sections are **My Sports**, **Live Games**,
+Open the existing **Sports** tab. Its shelves are **My Sports**, **Live Games**,
 **Upcoming Games**, **Favorite Teams**, **Favorite Leagues**, **All Sports**, and
-**Sports Channels**. Nothing needs an account or a paid sports API. Add an authorized
+**Sports Channels**, plus **Unmatched sports programs** and the conditional
+**Filtered Games** results shelf. Nothing needs an account or a paid sports API. Add an authorized
 provider and refresh its guide to populate the schedule. Existing category-derived
 Sports Channels remain available even when event metadata is absent.
 
