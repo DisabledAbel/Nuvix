@@ -218,3 +218,10 @@ authorized local match and preserves local visibility restrictions. `AdvancedCha
 field-only writes; cloud payloads never create playable channels. `AdvancedPreferenceData` reads
 and applies an exact settings/shelf/package allowlist, keeping provider and hardware state local.
 See [cloud-sync.md](cloud-sync.md) and [TESTING.md](TESTING.md#advanced-cloud-sync).
+
+
+## Nuvix Sports Hub extension
+
+The current local Sports architecture, Room migration, matching boundaries and retained playback
+integration are documented in [Nuvix architecture](nuvix-architecture.md#sports-hub) and
+[Sports Hub](sports-hub.md). No additional player or cloud backend is introduced.

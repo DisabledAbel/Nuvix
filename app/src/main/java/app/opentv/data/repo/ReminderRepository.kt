@@ -18,13 +18,14 @@ class ReminderRepository(private val dao: ReminderDao) {
     suspend fun byId(id: Long): Reminder? = dao.byId(id)
     suspend fun upcoming(nowMillis: Long): List<Reminder> = dao.upcoming(nowMillis)
     suspend fun forProgramme(channelId: Long, startMillis: Long): Reminder? =
-        dao.forProgramme(channelId, startMillis)
+        dao.forProgrammeOrSports(channelId, startMillis)
 
-    suspend fun insert(reminder: Reminder): Long = dao.insert(reminder)
+    suspend fun insert(reminder: Reminder): Long = dao.insertDeduplicated(reminder)
     suspend fun markFired(id: Long) = dao.markFired(id)
     suspend fun delete(id: Long) = dao.delete(id)
-    suspend fun deleteForProgramme(channelId: Long, startMillis: Long) =
-        dao.deleteForProgramme(channelId, startMillis)
+    suspend fun deleteForProgramme(channelId: Long, startMillis: Long) {
+        dao.forProgrammeOrSports(channelId, startMillis)?.let { dao.delete(it.id) }
+    }
 
     suspend fun deleteEndedBefore(beforeMillis: Long) = dao.deleteEndedBefore(beforeMillis)
 }
