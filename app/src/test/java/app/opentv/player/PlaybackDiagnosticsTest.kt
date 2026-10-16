@@ -4,7 +4,6 @@ package app.opentv.player
 import android.app.Application
 import androidx.annotation.OptIn
 import androidx.media3.common.*
-import androidx.media3.common.util.FlagSet
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
@@ -238,7 +237,7 @@ class PlaybackDiagnosticsTest {
     @Test fun `HTTP status is classified through wrapped causes without exposing request data`() {
         val request = androidx.media3.datasource.DataSpec(android.net.Uri.parse("https://user:pass@private.invalid/token?auth=secret"))
         val cause = androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException(
-            403, "secret", mapOf("Authorization" to listOf("secret")), request, byteArrayOf())
+            403, "secret", null, mapOf("Authorization" to listOf("secret")), request, byteArrayOf())
         val error = PlaybackException("secret", IOException("secret", cause), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
         assertThat(PlaybackErrors.describe(error)).contains("403")
         assertThat(PlaybackErrors.describe(error)).doesNotContain("secret")
