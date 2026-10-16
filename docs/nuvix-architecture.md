@@ -65,3 +65,34 @@ The existing HOME_PREFERENCES category now also carries `home_order:shelves_v1`,
 isolate these values from older clients' explicit kind queries. Order and presentation
 are each one atomic merge revision with the existing timestamp/device/payload tie-breaker.
 Existing visibility records, owner binding, durable journal and worker are reused.
+
+
+## Sports Hub
+
+The existing `ui/home/SportsScreen` renders hub and game details without a second navigation tab.
+`SportsViewModel` retains the selected event through fullscreen playback and uses SavedStateHandle
+for query/filter/event identity. It observes bounded Room queries, local preferences and current
+EPG programs. Focus surfaces perform actions only on Select and restore the chosen game on Back.
+
+`sports/SportsRepository` indexes each changed enabled EPG feed in keyset batches of 500 after
+`EpgRepository.syncAll`, using revision checkpoints and a six-hour rolling seven-day horizon. It
+never resolves a playback URL. Events and programme evidence are separate from durable local
+favorites, content/provider-scoped decisions and preferred broadcasts. Indexed EPG-ID OR joins
+preserve distinct provider variants, apply guide ID priority, and exclude disabled/hidden/locked
+choices. Cards are capped at 200 initially (2,000 on request); stream pages read 200 distinct provider choices. Database filters apply before limits,
+and a saveable hub subtree retains lazy scroll positions for game-card focus restoration.
+A 50,000-program per-feed processing bound reports partial indexing rather than silently claiming
+completeness. Source timestamps, not UI refresh timestamps, determine cache freshness.
+
+`SportsMatching` requires paired normalized team identities, explicit competition and time evidence;
+lower confidence is reviewable and does not count as available. Source-scoped verified IDs are
+validated separately; cross-source identity requires an explicit compatible association. No external
+provider is enabled. See [source review and behavior](sports-hub.md).
+
+Room v13 adds six sports tables, programme/catalog lookup indexes and nullable unique
+`reminders.sportsEventId`. `ReminderDao` resolves confirmed game identities for guide actions and
+uses transactional insertion to avoid duplicate provider reminders. The existing alarm scheduler,
+receiver, notification permissions and live playback session remain the owners of those effects.
+The migration is additive and covered by the v2-to-current preservation regression.
+Sports records are not in cloud protocol allowlists; hosted Supabase schema and encrypted cloud
+journal behavior are unchanged. Derived caches can be cleared independently of local user intent.

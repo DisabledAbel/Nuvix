@@ -308,3 +308,54 @@ Automated UI tests cannot measure hardware decoder counters, real transfer throu
 provider connection limits, vendor PiP behavior or prove display readability. Do not claim
 hardware verification from these tests. No diagnostics screenshots are included until a
 representative device/emulator capture is available.
+
+
+## Sports Hub
+
+Run the existing CI commands with no IPTV credentials or real stream endpoints:
+
+```sh
+./gradlew :app:testDebugUnitTest
+./gradlew :app:lintDebug
+./gradlew :app:assembleDebug
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/benchmark_sports_queries.py
+bash scripts/test-supabase.sh
+```
+
+The deterministic `app.opentv.sports` tests cover source-scoped identity, Unicode/league aliases,
+exact/likely/ambiguous/wrong-game matches, provider variants and duplicate evidence, missing metadata,
+manual decisions/removal/reassignment, preferences and ordering, reminder concurrency and guide reuse,
+verified reschedule/cancellation, offline cache continuity/age, provider failures/cancellation, validation,
+timezones/DST and D-pad Select/focus without playback. Existing live-coordinator, session-lifecycle,
+guide/reminder and cloud security regressions still run in the same unit suite. Migration preservation
+runs from exported v2 through v13 and retains original credentials/favorites/overrides/resume state.
+The host SQLite diagnostic uses the exported Room schema and actual DAO SQL with 2,000 channels,
+96,000 programs, four synthetic providers and 100 events; it asserts bounded results and catalog index
+use. Host times do not establish device frame rates.
+
+Manual verification remains required; record device/OS, provider connection limit and observations:
+
+- [ ] Android TV, Google TV and Fire TV: enter the existing Sports tab; reach all seven sections,
+  search keyboard, filter chips, favorite ordering, settings and paged streams with D-pad only.
+- [ ] Select a game, return with Back, play a confirmed choice, Back to the same event, and explicitly
+  switch providers. Focusing cards or suggestions must never tune or open a provider connection.
+- [ ] Verify favorite leagues/teams and order after restart; identical names in different competitions
+  remain separate. Sparse EPG keeps Sports Channels usable; unknown participants stay unknown.
+- [ ] Confirm/reject/restore suggestions, associate an unmatched sports program with a game and inspect
+  possible duplicates. Refresh guides and verify intent persists while raw guide/catalog rows stay intact.
+- [ ] Compare card counts with provider choices, hidden/locked categories, disabled providers/feeds,
+  duplicates, manual EPG-ID overrides and large stream lists requiring multiple pages.
+- [ ] With authorized streams, test failures/retry, single-connection limits, concurrent recording guards,
+  PiP, browsing audio, audio focus, subtitle/track choices and existing guide/fullscreen surface transfers.
+- [ ] Set the same game reminder via Sports and several Guide channels: one alarm/notification only.
+  Test cancellation, denied notification/exact-alarm permissions and reboot rearming; no automatic tune.
+- [ ] Go offline and refresh a failing provider: other schedules remain, cached timestamps remain original,
+  and stale games do not claim live freshness. Check midnight, device timezone changes and DST boundaries.
+- [ ] On low-memory TVs, scroll large catalogs rapidly, change text size, use accessibility services,
+  inspect focus contrast/restoration, artwork caching and memory pressure with persistent playback.
+- [ ] Upgrade an existing installation to Room 13 with provider favorites, overrides, custom groups and
+  reminders populated. Verify all prior data and existing guide/reminder/recording workflows.
+
+No physical TV, real-provider, decoder or licensed-score acceptance is implied by synthetic tests.
+External API adapters and Sports cloud synchronization are not configured in this implementation.

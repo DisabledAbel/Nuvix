@@ -132,6 +132,7 @@ object ServiceLocator {
                 automaticEnabled = { settings.automaticEpg.value },
                 feedSuppressed = settings::isEpgFeedSuppressed,
                 suppressFeed = settings::suppressEpgFeed,
+                afterGuideSync = { now -> sportsRepository.reconcile(now) },
             )
         }
 
@@ -145,6 +146,10 @@ object ServiceLocator {
 
         val reminderRepository: ReminderRepository by lazy {
             ReminderRepository(database.reminders())
+        }
+
+        val sportsRepository: app.opentv.sports.SportsRepository by lazy {
+            app.opentv.sports.SportsRepository(database)
         }
 
         val recordingEngine: RecordingEngine by lazy {

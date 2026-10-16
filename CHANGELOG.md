@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Replace the basic Sports presentation with My Sports, Live/Upcoming games, favorite teams/leagues,
+  All Sports and the existing category-based channel fallback in the same destination.
+- Group enabled provider streams using exact league-scoped team evidence and time windows; distinguish
+  confirmed matches from reviewable likely/possible suggestions and verified events from inferred EPG.
+- Add local persistent favorites/order, preferred broadcasts, manual association/removal/restore,
+  bounded search/filtering, game details and explicit stream switching through retained live playback.
+- Deduplicate Sports/Guide reminders by game; preserve existing reminders in additive Room migration 13.
+  Add stale/offline labels, optional verified-source score fields and replaceable schedule interfaces.
+- Add synthetic matching, Room, persistence, reminder, timezone/DST and remote UI regressions, large
+  catalog query validation in existing CI, source-terms review and physical-TV acceptance documentation.
+
 - Add Standard, Compact and Expanded guide layouts, local guide customization, filters using
   existing channel organization, stable channel sorting, timeline controls and remembered position.
 - Add bounded local EPG search and a remote-friendly program details panel with optional

@@ -14,6 +14,7 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import app.opentv.sports.*
 import app.opentv.data.model.Category
 import app.opentv.data.model.Channel
 import app.opentv.data.model.CustomChannelGroup
@@ -74,8 +75,10 @@ class Converters {
         SeriesRule::class,
         Reminder::class,
         CustomChannelGroup::class,
+        SportsEvent::class, SportsProgramme::class, SportsDecision::class, SportsFavorite::class,
+        SportsPreferred::class, SportsFeedState::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
@@ -94,6 +97,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
     abstract fun recordings(): RecordingDao
     abstract fun seriesRules(): SeriesRuleDao
     abstract fun reminders(): ReminderDao
+    abstract fun sports(): SportsDao
     abstract fun customGroups(): CustomGroupDao
 
     companion object {
@@ -290,6 +294,33 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive sports cache and local intent; no catalogues or existing reminders are rebuilt. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_events` (`id` TEXT NOT NULL, `sportId` TEXT NOT NULL, `leagueId` TEXT NOT NULL, `homeTeamId` TEXT, `awayTeamId` TEXT, `homeName` TEXT, `awayName` TEXT, `title` TEXT NOT NULL, `startUtcMillis` INTEGER NOT NULL, `endUtcMillis` INTEGER NOT NULL, `status` TEXT NOT NULL, `source` TEXT NOT NULL, `sourceEventId` TEXT NOT NULL, `verified` INTEGER NOT NULL, `updatedAtMillis` INTEGER NOT NULL, `homeLogo` TEXT, `awayLogo` TEXT, `homeScore` INTEGER, `awayScore` INTEGER, `period` TEXT, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_programmes` (`key` TEXT NOT NULL, `eventId` TEXT NOT NULL, `feedId` INTEGER NOT NULL, `epgChannelId` TEXT NOT NULL, `startUtcMillis` INTEGER NOT NULL, `endUtcMillis` INTEGER NOT NULL, `title` TEXT NOT NULL, `confidence` TEXT NOT NULL, PRIMARY KEY(`key`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_decisions` (`programmeKey` TEXT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, `eventId` TEXT NOT NULL, `accepted` INTEGER NOT NULL, PRIMARY KEY(`programmeKey`, `sourceId`, `streamId`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_favorites` (`kind` TEXT NOT NULL, `id` TEXT NOT NULL, `leagueId` TEXT NOT NULL, `name` TEXT NOT NULL, `rank` INTEGER NOT NULL, PRIMARY KEY(`kind`, `id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_preferred` (`eventId` TEXT NOT NULL, `sourceId` INTEGER NOT NULL, `streamId` TEXT NOT NULL, PRIMARY KEY(`eventId`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sports_feed_state` (`feedId` INTEGER NOT NULL, `revision` TEXT NOT NULL, `indexedUntil` INTEGER NOT NULL, `partial` INTEGER NOT NULL, PRIMARY KEY(`feedId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_events_leagueId_homeTeamId_awayTeamId_startUtcMillis` ON `sports_events` (`leagueId`, `homeTeamId`, `awayTeamId`, `startUtcMillis`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_events_startUtcMillis` ON `sports_events` (`startUtcMillis`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_events_updatedAtMillis` ON `sports_events` (`updatedAtMillis`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_programmes_eventId` ON `sports_programmes` (`eventId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_programmes_feedId` ON `sports_programmes` (`feedId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_programmes_epgChannelId_startUtcMillis` ON `sports_programmes` (`epgChannelId`, `startUtcMillis`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sports_favorites_kind_rank` ON `sports_favorites` (`kind`, `rank`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_programmes_feedId_id` ON `programmes` (`feedId`, `id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_programmes_startUtcMillis` ON `programmes` (`startUtcMillis`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_channels_epgChannelId ON channels (epgChannelId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sports_decisions_eventId ON sports_decisions (eventId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_channels_matchedEpgId ON channels (matchedEpgId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_channels_epgOverrideId ON channels (epgOverrideId)")
+                db.execSQL("ALTER TABLE reminders ADD COLUMN sportsEventId TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reminders_sportsEventId ON reminders (sportsEventId)")
+            }
+        }
+
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
                 // Encrypt the complete cache: provider passwords and credential-bearing stream
@@ -300,7 +331,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                    MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                    MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                 )
                 .build()
     }

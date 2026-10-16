@@ -82,6 +82,7 @@ class EpgRepository(
     private val automaticEnabled: () -> Boolean = { true },
     private val feedSuppressed: (String) -> Boolean = { false },
     private val suppressFeed: (String, Boolean) -> Unit = { _, _ -> },
+    private val afterGuideSync: suspend (Long) -> Unit = {},
 ) {
 
     data class SyncSummary(
@@ -288,6 +289,9 @@ class EpgRepository(
             }
             if (succeeded > 0) programmeDao.deleteEndedBefore(nowUtcMillis - RETENTION_PAST_MILLIS)
             val (matched, total) = matchCached(nowUtcMillis)
+            try { afterGuideSync(nowUtcMillis) }
+            catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { Log.w(TAG, "Sports cache reconciliation deferred") }
             SyncSummary(succeeded, failed, written, matched, total, discoveryFailures)
         } }
 

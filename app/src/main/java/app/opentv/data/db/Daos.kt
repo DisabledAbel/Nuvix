@@ -890,6 +890,40 @@ interface SeriesRuleDao {
 
 @Dao
 interface ReminderDao {
+    @Query("SELECT * FROM reminders WHERE sportsEventId=:eventId LIMIT 1")
+    suspend fun forSportsEvent(eventId: String): Reminder?
+    @Update suspend fun update(reminder: Reminder)
+
+    /** A guide action can resolve the same game on a different provider without a second alarm. */
+    @Query("""SELECT DISTINCT COALESCE(d.eventId,sp.eventId) FROM sports_programmes sp
+        JOIN channels c ON (c.epgOverrideId=sp.epgChannelId OR c.epgChannelId=sp.epgChannelId OR c.matchedEpgId=sp.epgChannelId)
+        AND (sp.epgChannelId=c.epgOverrideId OR (sp.epgChannelId=c.epgChannelId AND NOT EXISTS (
+            SELECT 1 FROM programmes preferred JOIN epg_feeds preferredf ON preferredf.id=preferred.feedId AND preferredf.enabled=1
+            WHERE preferred.epgChannelId=c.epgOverrideId AND preferred.endUtcMillis>sp.startUtcMillis AND preferred.startUtcMillis<sp.endUtcMillis))
+            OR (sp.epgChannelId=c.matchedEpgId AND NOT EXISTS (
+            SELECT 1 FROM programmes preferred JOIN epg_feeds preferredf ON preferredf.id=preferred.feedId AND preferredf.enabled=1
+            WHERE (preferred.epgChannelId=c.epgOverrideId OR preferred.epgChannelId=c.epgChannelId)
+                AND preferred.endUtcMillis>sp.startUtcMillis AND preferred.startUtcMillis<sp.endUtcMillis)))
+        JOIN sources s ON s.id=c.sourceId AND s.enabled=1
+        JOIN epg_feeds f ON f.id=sp.feedId AND f.enabled=1
+        LEFT JOIN sports_decisions d ON d.programmeKey=sp.key AND d.sourceId=c.sourceId AND d.streamId=c.streamId
+        JOIN sports_events event ON event.id=COALESCE(d.eventId,sp.eventId)
+            AND sp.endUtcMillis>event.startUtcMillis AND sp.startUtcMillis<event.endUtcMillis AND event.status NOT IN ('CANCELED','POSTPONED')
+        WHERE c.id=:channelId AND c.hidden=0 AND sp.startUtcMillis=:startMillis
+        AND (d.accepted=1 OR (d.accepted IS NULL AND sp.confidence='CONFIRMED' AND sp.startUtcMillis=event.startUtcMillis)) LIMIT 2""")
+    suspend fun sportsIdentities(channelId: Long, startMillis: Long): List<String>
+
+    @Transaction
+    suspend fun forProgrammeOrSports(channelId: Long, startMillis: Long): Reminder? =
+        forProgramme(channelId, startMillis) ?: sportsIdentities(channelId, startMillis).singleOrNull()?.let { forSportsEvent(it) }
+
+    @Transaction
+    suspend fun insertDeduplicated(reminder: Reminder): Long {
+        forProgrammeOrSports(reminder.channelId, reminder.startUtcMillis)?.let { return it.id }
+        val eventId = reminder.sportsEventId ?: sportsIdentities(reminder.channelId, reminder.startUtcMillis).singleOrNull()
+        return insert(reminder.copy(sportsEventId = eventId))
+    }
+
     /** All reminders, soonest first — the reminders list and boot re-arm both read this. */
     @Query("SELECT * FROM reminders ORDER BY startUtcMillis")
     fun observeAll(): Flow<List<Reminder>>

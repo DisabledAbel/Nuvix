@@ -105,6 +105,7 @@ data class Category(
         Index(value = ["sourceId", "categoryId"]),
         Index(value = ["groupKey"]),
         Index(value = ["favourite"]),
+        Index(value = ["epgChannelId"]), Index(value = ["matchedEpgId"]), Index(value = ["epgOverrideId"]),
     ],
 )
 data class Channel(
@@ -232,6 +233,7 @@ data class EpgChannelAlias(
         Index(value = ["feedId", "epgChannelId", "startUtcMillis"], unique = true),
         Index(value = ["endUtcMillis"]),
         Index(value = ["epgChannelId"]),
+        Index(value = ["feedId", "id"]), Index(value = ["startUtcMillis"]),
     ],
 )
 data class Programme(
@@ -482,7 +484,7 @@ data class SeriesRule(
  */
 @Entity(
     tableName = "reminders",
-    indices = [Index(value = ["startUtcMillis"]), Index(value = ["channelId"])],
+    indices = [Index(value = ["startUtcMillis"]), Index(value = ["channelId"]), Index(value = ["sportsEventId"], unique = true)],
 )
 data class Reminder(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -498,4 +500,6 @@ data class Reminder(
     val createdAtMillis: Long = 0,
     /** Set once the alarm has fired, so a boot re-arm skips it and the list can grey it out. */
     val fired: Boolean = false,
+    /** One logical game may have many channels; nullable for existing guide reminders. */
+    val sportsEventId: String? = null,
 )

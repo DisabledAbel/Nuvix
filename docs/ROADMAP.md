@@ -17,8 +17,7 @@ See [guide instructions](automatic-epg.md#advanced-guide) and the
 rapid D-pad input, focus restoration, large text, artwork memory, single-connection recording
 handoff and persistent playback while browsing a large authorized guide. Automated bounds and
 synthetic data establish regression coverage; they do not establish frame rates or decoder
-performance on low-end televisions. Sports categories depend on feed metadata; broader verified
-event/team data remains future work.
+performance on low-end televisions. Sports metadata still depends on feed quality; permitted verified schedule adapters remain future work.
 
 Further playback work includes update transfer range resume, broader provider sports-event metadata, low-memory performance profiling, and a pluggable playback-engine contract. Broaden automated TV UI tests alongside each feature.
 
@@ -27,3 +26,13 @@ local settings, safe errors and bounded memory-only history. See [diagnostics](p
 The next acceptance milestone is real Android TV, Google TV and Fire TV verification at
 720p/1080p/4K, text scaling, repeated channel changes, PiP, persistent navigation and
 local/NAS/growing recordings; automated fake/Robolectric tests cannot certify those devices.
+
+
+Sports Hub now organizes EPG-derived events and provider choices with explicit confidence, local
+team/league/sport favorites, corrections, preferred broadcasts, search and game reminders in the
+existing Sports destination. See [Sports Hub](sports-hub.md) and [device checks](TESTING.md#sports-hub).
+Future schedule adapters require verified distribution terms, attribution, credentials/rate-limit
+handling and source-specific update integration; none is enabled by this change. Next acceptance
+is real remote/focus restoration and large-catalog performance on low-memory TVs, with authorized
+multi-provider playback and recording conflicts. Sports cloud sync remains a separate opt-in protocol
+extension for a future change; no provider data or local correction identifiers are exported.

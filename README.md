@@ -13,6 +13,8 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
 - Guide filters, channel sorting, hour/day jumps, bounded program search, and program details
   with existing reminders and recording actions. See the [guide instructions](docs/automatic-epg.md#advanced-guide).
+- Sports Hub with EPG-derived game grouping across providers, available-stream choices, local
+  favorite teams/leagues, manual match corrections and game reminders. See [Sports Hub](docs/sports-hub.md).
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
 - Real-time Stream Information with Compact/Detailed views, buffer health and safe errors. See [playback diagnostics](docs/playback-diagnostics.md).
@@ -42,6 +44,9 @@ Nuvix Home on an Android TV emulator, with no provider configured.
   density, artwork, progress and position preferences. Guide controls apply without restarting;
   D-pad and Select open programs, and Back returns to the guide. Filters use your existing
   favorites, recent channels, providers and custom groups. They do not change channel data.
+- **Sports:** Open **Sports**, select a game for all matching provider choices, or follow leagues
+  and teams in their shelves. Sports settings control sorting, suggestions, reminders and cache.
+  Schedules use your existing EPG; external scores are optional and no external sports API is enabled.
 - **Cloud sync:** Apply the supplied migrations to your own project, sign in under **Settings → Supabase cloud sync**, then enable sync and choose categories on each TV. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 
