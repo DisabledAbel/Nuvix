@@ -53,3 +53,25 @@ Join the [Nuvix Discord server](https://discord.gg/9tyVjwyNbq) to ask questions,
 **GPL-3.0.** Copyright (C) 2026 The OpenTV Contributors; Nuvix modifications Copyright (C) 2026 Nuvix Contributors.
 
 Original license and source notices are preserved. See [LICENSE](LICENSE), [COPYING.md](COPYING.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [upstream audit](docs/upstream-audit.md). Release APKs include the corresponding tagged source, build scripts, and migrations.
+
+### Customize home
+
+Open **Home → Customize home** with the TV remote. Choose Classic (balanced), Compact
+(smaller cards and spacing), or Cinema (larger artwork and hero). Select a section and
+use **Move up / Move down / Hide / Restore**; hidden sections retain their position.
+Custom channel groups share the same ordering using their existing UUIDs.
+
+Movie, series and channel sizes, card corners and secondary metadata are adjustable.
+Backgrounds include Default, three dark solid colors, Ocean/Dusk gradients and focused
+movie/show artwork with a dark overlay. Featured content can use automatic live selection,
+Continue Watching, recent/favorite channels, or be disabled. Empty selections retain
+navigation actions. D-pad changes focus, Select applies, Back returns one level, and
+closing customization returns focus to its button. Settings save immediately and work offline.
+
+Defaults preserve the existing Classic design: medium cards, soft corners, metadata,
+Default background, automatic hero, and all sections shown. **Reset order** only resets
+positions; **Restore home defaults** also resets presentation and visibility. App favorites,
+custom group contents, startup settings and playback are preserved. Existing visibility
+choices migrate without being cleared. Optional home-preferences sync requires the new
+[forward migration](docs/cloud-sync.md); see [testing](docs/TESTING.md#advanced-home-customization)
+for automated coverage and outstanding hardware checks.

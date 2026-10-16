@@ -7,6 +7,7 @@ Nuvix works without an account. Cloud sync is disabled until explicitly enabled.
 1. Create or use your own Supabase project. Review and apply these forward-only migrations **in order**, using your normal migration workflow:
    - `supabase/migrations/20261013185918_cloud_records.sql`
    - `supabase/migrations/20261015071424_advanced_cloud_sync.sql`
+   - `supabase/migrations/20261016032322_advanced_home_preferences.sql`
    The second migration requires the first; it preserves existing favorites/progress rows. Do not edit the original deployed migration or reset the database. Repository validation uses isolated PostgreSQL; it does not deploy to your hosted project.
 2. Enable email authentication and configure email delivery. The Supabase **Magic Link** template must contain the numeric `{{ .Token }}`, for example `<p>Your Nuvix sign-in code: {{ .Token }}</p>`. If signup is enabled, configure its confirmation template similarly. A clickable link alone cannot complete this TV code flow. Custom SMTP is usually needed for non-test recipients. CAPTCHA-required projects are not supported by this flow.
 3. Open **Settings → Supabase cloud sync**. Enter the project's HTTPS origin and publishable client key (or legacy `anon` key), then save. Secret and `service_role` keys are rejected. The origin cannot contain credentials, paths, query parameters or fragments; custom HTTPS origins are supported.
@@ -122,3 +123,31 @@ rows produce no reset or deletion, and saved cloud references reconcile when tho
 
 A remote record ahead of a TV's clock is structurally validated during download and deferred by
 the journal. It does not stop unrelated records or categories from syncing.
+
+## Advanced home preferences
+
+The third forward-only migration extends the existing validation trigger; it preserves
+all tables, records, grants, owner-only RLS and merge RPCs. Review/apply it through your
+normal deployment process before using home customization sync. Repository tests deploy
+only to disposable PostgreSQL. No production infrastructure is changed automatically.
+
+**Home preferences** remains opt-in and defaults off. When selected, its existing visibility
+records continue to sync alongside whole-list shelf order (`home_order:shelves_v1`), one
+strictly typed v1 presentation revision (`home_layout:presentation_v1`) and custom-group
+visibility (`home_group:group:<UUID>`). Layout, card sizes, corners, metadata, background
+preset and featured source are portable enums/booleans. Artwork URLs, providers, paths,
+authentication, permissions and playback state are never included.
+
+Orders contain at most 160 unique known section/group IDs. The presentation payload has
+exactly nine allowlisted entries, beginning with `v1`; extra/unknown values and incompatible
+versions fail validation on both client and server. Safe unknown local IDs are retained
+locally but not exported. Older clients query explicit known kinds and cannot see or write
+these new identities; their legacy visibility edits remain compatible. A future incompatible
+presentation format must use a new versioned identity. Missing migration errors retain
+local edits in the existing journal for retry after deployment.
+
+Ordering and presentation each resolve as one whole revision under the existing deterministic
+timestamp/device/payload rule. Concurrent edits to separate presentation controls therefore
+use the winning whole presentation. Existing offline capture, disabled-category filtering,
+account binding, retry and exact acknowledgement behavior apply without a second sync system.
+Reset authors normal preference changes and can synchronize when this category is enabled.

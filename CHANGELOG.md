@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add remote-friendly home shelf ordering/visibility, Classic/Compact/Cinema layouts,
+  card sizing/corners/metadata, solid/gradient/artwork backgrounds and featured-content
+  selection. Preserve existing preferences, UUID groups and persistent live playback.
+- Extend the opt-in home-preferences cloud category with validated whole-list order and
+  versioned presentation records; add forward-only SQL migration, JVM/Compose and RLS tests.
 - Extend optional Supabase sync with separate opt-ins for channel visibility, names and
   ordering; UUID custom groups and ordered membership; home shelf visibility; ordered
   pinned apps; and allowlisted appearance, subtitle, guide and startup preferences.

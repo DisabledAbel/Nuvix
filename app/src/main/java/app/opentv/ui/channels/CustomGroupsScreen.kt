@@ -140,23 +140,32 @@ fun CustomGroupsScreen(onBack: () -> Unit) {
 /** Only unambiguous, enabled-provider channels passing the guide's visibility rules may play. */
 @Composable
 fun CustomGroupShelves(onPlayChannel: (Channel) -> Unit, programmes: List<Programme>) {
-    val context = LocalContext.current
-    val graph = remember { ServiceLocator.get(context) }
-    val groups by remember { graph.database.customGroups().observeActive() }.collectAsState(initial = emptyList())
-    // Opening Home without groups does not materialize a provider's complete catalogue.
-    val channelFlow = remember(groups.isNotEmpty()) {
-        if (groups.isEmpty()) flowOf(emptyList()) else graph.database.customGroups().observeAuthorizedChannels()
-    }
-    val channels by channelFlow.collectAsState(initial = emptyList())
-    val categories by remember { graph.database.categories().observe(StreamKind.LIVE) }.collectAsState(initial = emptyList())
-    val hidden by graph.settings.hiddenCategories.collectAsState()
-    val unlocked by graph.settings.hiddenUnlocked.collectAsState()
-    val resolved = remember(groups, channels, categories, hidden, unlocked) {
-        groups.map { it to LocalCustomGroups.resolve(it, channels, categories, hidden, unlocked) }
-    }
+    val resolved = rememberCustomGroupShelves()
     Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
         resolved.forEach { (group, playable) ->
             if (playable.isNotEmpty()) ChannelShelf(group.name, playable, programmes, onPlayChannel)
         }
     }
+}
+
+/** Shared resolver: Home can position each UUID shelf without duplicating group data logic. */
+@Composable
+fun rememberCustomGroupShelves(isVisible: (CustomChannelGroup) -> Boolean = { true }): List<Pair<CustomChannelGroup, List<Channel>>> {
+    val context = LocalContext.current
+    val graph = remember { ServiceLocator.get(context) }
+    val groups by remember { graph.database.customGroups().observeActive() }.collectAsState(initial = emptyList())
+    val visibleIds = groups.filter { isVisible(it) && it.members.isNotEmpty() }.map { it.cloudId }.toSet()
+    // Empty/hidden groups do not materialize a provider's catalogue; reuse the existing resolver.
+    val channelFlow = remember(visibleIds.isNotEmpty()) {
+        if (visibleIds.isEmpty()) flowOf(emptyList()) else graph.database.customGroups().observeAuthorizedChannels()
+    }
+    val channels by channelFlow.collectAsState(initial = emptyList())
+    val categories by remember { graph.database.categories().observe(StreamKind.LIVE) }.collectAsState(initial = emptyList())
+    val hidden by graph.settings.hiddenCategories.collectAsState()
+    val unlocked by graph.settings.hiddenUnlocked.collectAsState()
+    val resolved = remember(groups, visibleIds, channels, categories, hidden, unlocked) {
+        groups.map { group -> group to if (group.cloudId in visibleIds)
+            LocalCustomGroups.resolve(group, channels, categories, hidden, unlocked) else emptyList() }
+    }
+    return resolved
 }

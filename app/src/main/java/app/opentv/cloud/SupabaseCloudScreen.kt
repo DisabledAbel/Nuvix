@@ -152,7 +152,7 @@ private fun CloudCategorySwitch(category: AdvancedSyncCategory, selected: Boolea
         AdvancedSyncCategory.CUSTOM_GROUPS -> "Custom groups" to
             "Your group names, channel fingerprints, membership and ordering."
         AdvancedSyncCategory.HOME_PREFERENCES -> "Home preferences" to
-            "Visibility of Continue watching, Recent, Favorites, On now, Movies, Shows and Apps shelves."
+            "Home layout, section order/visibility, card sizes, background and featured preferences. Artwork stays local."
         AdvancedSyncCategory.APP_FAVOURITES -> "App favourites" to
             "Package names and pin order. Only installed, launchable apps appear on each TV."
         AdvancedSyncCategory.COMPATIBLE_SETTINGS -> "Compatible settings" to
