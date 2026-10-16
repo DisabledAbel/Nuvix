@@ -128,6 +128,10 @@ class PlaybackDiagnosticsTest {
         t.failure("Safe error", false)
         assertThat(t.health()).isEqualTo(PlaybackHealth.ERROR)
         assertThat(t.interruptions).isEqualTo(1)
+        t.state(Player.STATE_READY, true, true)
+        t.state(Player.STATE_ENDED, true, false)
+        assertThat(t.health()).isEqualTo(PlaybackHealth.UNKNOWN)
+        assertThat(t.history()).isEmpty()
     }
     @Test fun `dropped frames throughput and bounded history reset for a new session`() {
         var now = 0L; val t = DiagnosticTimeline { now }
@@ -209,6 +213,26 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.audio.language).isEqualTo("fr")
         fake.audio = first; observer.sample()
         assertThat(observer.snapshot.value.audio.language).isEqualTo("en")
+        observer.close()
+    }
+    @Test fun `late callbacks from a previous channel cannot contaminate a new session`() {
+        val fake = DiagnosticPlayer().apply { video = Format.Builder().setSampleMimeType("video/avc").build() }
+        val observer = PlaybackDiagnostics(fake.player)
+        fun event(id: String): AnalyticsListener.EventTime {
+            val item = MediaItem.Builder().setMediaId(id).build()
+            val timeline = androidx.media3.exoplayer.source.SinglePeriodTimeline(1000, true, false, false, null, item)
+            return AnalyticsListener.EventTime(0, timeline, 0, null, 0, timeline, 0, null, 0, 0)
+        }
+        val listener = fake.analytics.single()
+        observer.beginSession("HLS", "new")
+        listener.onDroppedVideoFrames(event("old"), 20, 1000)
+        listener.onBandwidthEstimate(event("old"), 1000, 2000000, 1000000)
+        listener.onPlayerError(event("old"), PlaybackException("secret", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        listener.onDroppedVideoFrames(event("new"), 2, 1000)
+        observer.sample()
+        assertThat(observer.snapshot.value.droppedFrames).isEqualTo(2)
+        assertThat(observer.snapshot.value.throughputBps).isNull()
+        assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
         observer.close()
     }
     @Test fun `HTTP status is classified through wrapped causes without exposing request data`() {
