@@ -941,12 +941,15 @@ private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
 private fun formatTime(utcMillis: Long): String = timeFormat.format(Date(utcMillis))
 
-private fun guideFilterLabel(filter: GuideChannelFilter): String = when (filter) {
-    GuideChannelFilter.ALL -> "All Channels"
-    GuideChannelFilter.FAVOURITES -> "Favorite Channels"
-    GuideChannelFilter.RECENT -> "Recently Watched"
-    GuideChannelFilter.GROUP -> "Custom Channel Groups"
-    GuideChannelFilter.PROVIDER -> "Provider"
-    GuideChannelFilter.WITH_EPG -> "Channels With EPG Data"
-    GuideChannelFilter.AIRING -> "Currently Airing"
-}
+@Composable
+private fun guideFilterLabel(filter: GuideChannelFilter): String = stringResource(
+    when (filter) {
+        GuideChannelFilter.ALL -> R.string.advanced_guide_filter_all
+        GuideChannelFilter.FAVOURITES -> R.string.advanced_guide_filter_favourites
+        GuideChannelFilter.RECENT -> R.string.advanced_guide_filter_recent
+        GuideChannelFilter.GROUP -> R.string.advanced_guide_filter_group
+        GuideChannelFilter.PROVIDER -> R.string.advanced_guide_filter_provider
+        GuideChannelFilter.WITH_EPG -> R.string.advanced_guide_filter_epg
+        GuideChannelFilter.AIRING -> R.string.advanced_guide_filter_airing
+    },
+)
