@@ -27,6 +27,7 @@ jobs:
           # Manual runs also build the default branch, matching scheduled runs.
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Set nightly version
         id: version
         env:
