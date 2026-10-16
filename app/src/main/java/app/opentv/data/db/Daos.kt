@@ -7,9 +7,11 @@
 package app.opentv.data.db
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
@@ -380,8 +382,84 @@ interface EpgChannelAliasDao {
     suspend fun deleteForFeed(feedId: Long)
 }
 
+/** A bounded search row, with its playable channel resolved in one batched Room relation. */
+data class ProgrammeSearchResult(
+    @Embedded val programme: Programme,
+    val channelId: Long,
+    @Relation(parentColumn = "channelId", entityColumn = "id") val channel: Channel,
+)
+
 @Dao
 interface ProgrammeDao {
+    /** The visible channel batch only; callers keep ids below SQLite's legacy bind limit. */
+    @Query("""
+        SELECT * FROM programmes
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND epgChannelId IN (:channelIds)
+          AND endUtcMillis > :fromUtcMillis AND startUtcMillis < :toUtcMillis
+        ORDER BY epgChannelId, startUtcMillis, feedId
+    """)
+    fun observeWindowForChannels(channelIds: List<String>, fromUtcMillis: Long, toUtcMillis: Long): Flow<List<Programme>>
+
+    /** Lightweight metadata for full-lineup filters; never materialises programme descriptions. */
+    @Query("""
+        SELECT DISTINCT epgChannelId FROM programmes
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND endUtcMillis > :fromUtcMillis AND startUtcMillis < :toUtcMillis
+    """)
+    fun observeEpgChannelIds(fromUtcMillis: Long, toUtcMillis: Long): Flow<List<String>>
+
+    @Query("""
+        SELECT DISTINCT epgChannelId FROM programmes
+        WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
+          AND startUtcMillis <= :nowUtcMillis AND endUtcMillis > :nowUtcMillis
+    """)
+    fun observeAiringChannelIds(nowUtcMillis: Long): Flow<List<String>>
+
+    /**
+     * Search remains in Room, bounded by time and result count. Quality variants collapse to
+     * one result per logical channel; only provider metadata identifies sports/movies/series.
+     * CROSS JOIN fixes the loop order so SQLite uses the programme channel-id index instead of
+     * scanning the channel catalogue again for every programme in a large seven-day guide.
+     */
+    @Transaction
+    @Query("""
+        SELECT p.*, MIN(c.id) AS channelId FROM channels c
+        INNER JOIN sources s ON s.id = c.sourceId AND s.enabled = 1
+        CROSS JOIN programmes p
+        INNER JOIN epg_feeds f ON f.id = p.feedId AND f.enabled = 1
+        WHERE c.hidden = 0 AND p.epgChannelId IN (c.epgOverrideId, c.epgChannelId, c.matchedEpgId)
+          AND p.endUtcMillis > :nowUtcMillis AND p.startUtcMillis < :untilUtcMillis
+          AND (c.categoryId IS NULL OR instr(:excludedCategories, '|' || c.sourceId || ':' || hex(c.categoryId) || '|') = 0)
+          AND (p.epgChannelId = c.epgOverrideId
+            OR (p.epgChannelId = c.epgChannelId AND NOT EXISTS (
+              SELECT 1 FROM programmes preferred INNER JOIN epg_feeds pf ON pf.id = preferred.feedId AND pf.enabled = 1
+              WHERE preferred.epgChannelId = c.epgOverrideId AND preferred.endUtcMillis > :nowUtcMillis
+                AND preferred.startUtcMillis < :untilUtcMillis))
+            OR (p.epgChannelId = c.matchedEpgId AND NOT EXISTS (
+              SELECT 1 FROM programmes preferred INNER JOIN epg_feeds pf ON pf.id = preferred.feedId AND pf.enabled = 1
+              WHERE (preferred.epgChannelId = c.epgOverrideId OR preferred.epgChannelId = c.epgChannelId)
+                AND preferred.endUtcMillis > :nowUtcMillis AND preferred.startUtcMillis < :untilUtcMillis)))
+          AND (p.title LIKE :pattern ESCAPE '\' OR p.description LIKE :pattern ESCAPE '\'
+            OR p.category LIKE :pattern ESCAPE '\' OR c.name LIKE :pattern ESCAPE '\'
+            OR c.displayName LIKE :pattern ESCAPE '\' OR c.customName LIKE :pattern ESCAPE '\')
+          AND (:filter != 'CURRENTLY_AIRING' OR p.startUtcMillis <= :nowUtcMillis)
+          AND (:filter != 'UPCOMING' OR p.startUtcMillis > :nowUtcMillis)
+          AND (:filter != 'MOVIES' OR LOWER(p.category) LIKE '%movie%' OR LOWER(p.category) LIKE '%film%')
+          AND (:filter != 'SPORTS' OR LOWER(p.category) LIKE '%sport%' OR LOWER(p.category) LIKE '%football%'
+            OR LOWER(p.category) LIKE '%soccer%' OR LOWER(p.category) LIKE '%cricket%'
+            OR LOWER(p.category) LIKE '%basketball%' OR LOWER(p.category) LIKE '%baseball%'
+            OR LOWER(p.category) LIKE '%tennis%' OR LOWER(p.category) LIKE '%rugby%'
+            OR LOWER(p.category) LIKE '%hockey%' OR LOWER(p.category) LIKE '%athletics%')
+          AND (:filter != 'SERIES' OR p.season IS NOT NULL OR p.episode IS NOT NULL
+            OR LOWER(p.category) LIKE '%series%' OR LOWER(p.category) LIKE '%sitcom%')
+        GROUP BY p.id, c.sourceId, CASE WHEN c.groupKey = '' THEN 'id:' || c.id ELSE 'group:' || c.groupKey END
+        ORDER BY p.startUtcMillis, p.title, channelId
+        LIMIT :limit
+    """)
+    fun search(pattern: String, filter: String, nowUtcMillis: Long, untilUtcMillis: Long,
+        excludedCategories: String, limit: Int): Flow<List<ProgrammeSearchResult>>
+
     /**
      * The guide grid: everything overlapping the visible window.
      *

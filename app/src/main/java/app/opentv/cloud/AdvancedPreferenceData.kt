@@ -3,6 +3,10 @@ package app.opentv.cloud
 
 import android.content.Context
 import app.opentv.core.AppSettings
+import app.opentv.core.GuideChannelFilter
+import app.opentv.core.GuideChannelSort
+import app.opentv.core.GuideLayout
+import app.opentv.core.GuideTimelineDensity
 import app.opentv.launcher.LauncherSettingsStore
 import app.opentv.launcher.StartupDestination
 import app.opentv.ui.home.HomePreferencesStore
@@ -37,6 +41,21 @@ internal class AdvancedPreferenceData(context: Context) {
             AdvancedCloudRecord("subtitles_enabled", "setting", updatedAtMillis = now, deviceId = deviceId,
                 boolValue = runCatching { settingsStorage.getBoolean("subtitles_enabled", true) }.getOrDefault(true)),
         )
+        // Portable display choices only. Selected provider/group IDs and the remembered channel
+        // and timeline remain local; never export a guide position or preferences dump.
+        listOf(
+            Triple("guide_layout", GuideLayout.entries.map { it.name }, "STANDARD"),
+            Triple("guide_density", GuideTimelineDensity.entries.map { it.name }, "COMFORTABLE"),
+            Triple("guide_default_filter", GuideChannelFilter.entries.map { it.name }, "ALL"),
+            Triple("guide_sort", GuideChannelSort.entries.map { it.name }, "PROVIDER_ORDER"),
+        ).forEach { (key, values, default) ->
+            result += AdvancedCloudRecord(key, "guide_setting", updatedAtMillis = now, deviceId = deviceId,
+                textValue = readEnum(key, values, default))
+        }
+        listOf("guide_show_artwork", "guide_show_progress", "guide_remember_position").forEach { key ->
+            result += AdvancedCloudRecord(key, "guide_setting", updatedAtMillis = now, deviceId = deviceId,
+                boolValue = runCatching { settingsStorage.getBoolean(key, true) }.getOrDefault(true))
+        }
         HomeSection.entries.forEach { section ->
             result += AdvancedCloudRecord(section.key, "home_shelf", updatedAtMillis = now, deviceId = deviceId,
                 boolValue = homePreferences.isVisible(section))
@@ -60,6 +79,28 @@ internal class AdvancedPreferenceData(context: Context) {
             "home_layout" -> { home.setPresentation(HomePresentation.parse(record.entries) ?: return false); true }
             "home_group" -> { home.setVisible(record.recordKey, record.boolValue ?: return false); true }
             "home_shelf" -> record.boolValue?.let { home.applyRemoteVisibility(record.recordKey, it) } ?: false
+            "guide_setting" -> when (record.recordKey) {
+                "guide_layout" -> {
+                    settings.setGuideLayout(GuideLayout.entries.firstOrNull { it.name == record.textValue } ?: return false)
+                    true
+                }
+                "guide_density" -> {
+                    settings.setGuideDensity(GuideTimelineDensity.entries.firstOrNull { it.name == record.textValue } ?: return false)
+                    true
+                }
+                "guide_default_filter" -> {
+                    settings.setGuideDefaultFilter(GuideChannelFilter.entries.firstOrNull { it.name == record.textValue } ?: return false)
+                    true
+                }
+                "guide_sort" -> {
+                    settings.setGuideSort(GuideChannelSort.entries.firstOrNull { it.name == record.textValue } ?: return false)
+                    true
+                }
+                "guide_show_artwork" -> { settings.setShowGuideArtwork(record.boolValue ?: return false); true }
+                "guide_show_progress" -> { settings.setShowGuideProgress(record.boolValue ?: return false); true }
+                "guide_remember_position" -> { settings.setRememberGuidePosition(record.boolValue ?: return false); true }
+                else -> false
+            }
             "setting" -> when (record.recordKey) {
                 "theme_mode" -> {
                     val mode = AppSettings.ThemeMode.entries.firstOrNull { it.name == record.textValue } ?: return false
@@ -84,7 +125,7 @@ internal class AdvancedPreferenceData(context: Context) {
             }
             else -> false
         }
-        if (applied && record.kind == "setting" && record.recordKey != "startup_destination") {
+        if (applied && record.kind in setOf("setting", "guide_setting") && record.recordKey != "startup_destination") {
             check(settingsStorage.edit().commit()) { "Unable to persist synchronized preferences." }
         }
         return applied

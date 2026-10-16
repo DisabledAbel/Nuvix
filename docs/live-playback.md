@@ -18,8 +18,9 @@ and stay in the existing local `AppSettings` preferences; they are not cloud set
 
 Browsing mute does not change system volume or the user's pause choice. The existing
 **Live preview in the guide** preference also controls guide video. Without an active live
-session, the existing highlighted-channel guide preview and its independent **Preview sound**
-preference retain their behavior. With an active live session, guide highlighting cannot
+session, the optional guide preview and its independent **Preview sound** preference remain
+available. The initial/explicitly selected preview channel stays stable while D-pad focus changes
+program information. With an active live session, guide highlighting cannot
 start a competing preview player or change the channel being watched. The optional guide
 controller registers with the Activity session so notifications and startup tunes can
 release it synchronously before opening live playback.

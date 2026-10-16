@@ -6,25 +6,30 @@
  */
 package app.opentv.ui.channels
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,14 +39,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -49,33 +63,31 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.disabledabel.nuvix.R
-import app.opentv.data.model.Channel
+import app.opentv.core.GuideLayout
+import app.opentv.core.GuidePosition
+import app.opentv.core.GuideTimelineDensity
 import app.opentv.data.model.Programme
 import app.opentv.data.model.shownName
 import app.opentv.ui.ChannelsViewModel
 import coil.compose.AsyncImage
+import com.disabledabel.nuvix.R
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * The programme guide: channels down the left, a scrolling time-line to the right, with
- * each programme drawn as a block whose width is its duration. This is the "grid" a TV guide
- * is supposed to be — you can see what is on now, what is next, and read across the evening.
- *
- * ## How it lays out without a custom Layout
- *
- * Every row and the time header share one [horizontalScroll] state, so scrolling any of them
- * scrolls all of them in lock-step and the columns stay time-aligned. Within a row, blocks
- * are placed left to right at [MINUTE] width per minute; a leading spacer covers any gap
- * before the first programme, and gaps between programmes get their own spacer. No absolute
- * positioning, no measuring pass — just widths, which is cheap enough for a lazy list of
- * hundreds of channels on a weak TV box.
+ * Channel-lazy guide with a synchronized timeline. Programme cells outside the visible time
+ * range are omitted, and all cell widths remain exact so short shows cannot shift the schedule.
+ * Focusing a row only updates the host highlight; explicit selection owns playback as before.
  */
 @Composable
 fun GuideGrid(
@@ -86,24 +98,207 @@ fun GuideGrid(
     onFocusRow: (ChannelsViewModel.Row) -> Unit,
     onProgramme: (ChannelsViewModel.Row, Programme) -> Unit = { _, _ -> },
     onToggleFavourite: (ChannelsViewModel.Row) -> Unit = {},
-    // Returns true if it handled the key (rail was hidden, so consume it); false to let normal
-    // left-navigation carry focus into the already-visible rail.
     onExitLeftFromChannel: () -> Boolean = { false },
     dayOffset: Int = 0,
     modifier: Modifier = Modifier,
+    layout: GuideLayout = GuideLayout.STANDARD,
+    density: GuideTimelineDensity = GuideTimelineDensity.COMFORTABLE,
+    showProgress: Boolean = true,
+    showArtwork: Boolean = true,
+    rememberPosition: Boolean = true,
+    nowMillis: Long = System.currentTimeMillis(),
+    currentChannelId: Long? = null,
+    restorePosition: GuidePosition? = null,
+    onPositionChanged: (Long, Long) -> Unit = { _, _ -> },
+    onVisibleRowsChanged: (List<ChannelsViewModel.Row>) -> Unit = {},
+    onPrevDay: (() -> Unit)? = null,
+    onNextDay: (() -> Unit)? = null,
+    onJumpToNow: (() -> Unit)? = null,
+    canGoPrevDay: Boolean = true,
+    canGoNextDay: Boolean = true,
+    onReturnToCurrentChannel: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
-    val now = System.currentTimeMillis()
-    // Jumping to another day resets the horizontal scroll to that day's start; a within-day time
-    // drift (dayOffset unchanged) leaves the user's scroll position untouched.
-    androidx.compose.runtime.LaunchedEffect(dayOffset) { scroll.scrollTo(0) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val displayDensity = LocalDensity.current
+    val metrics = remember(layout, density) { guideLayoutMetrics(layout, density) }
+    val pixelsPerMinute = with(displayDensity) { metrics.minuteWidthDp.dp.toPx() }
+    val latestRows by rememberUpdatedState(rows)
+    val reportVisible by rememberUpdatedState(onVisibleRowsChanged)
+    var restored by rememberSaveable { mutableStateOf(false) }
+    var focusedChannelId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var focusedTime by rememberSaveable { mutableStateOf<Long?>(null) }
+    var requestSerial by remember { mutableStateOf(0) }
+    var focusRequest by remember { mutableStateOf<GuideFocusRequest?>(null) }
+    var pendingNow by remember { mutableStateOf(false) }
+    var pendingCurrentChannel by remember { mutableStateOf(false) }
+    var previousDay by remember { mutableStateOf(dayOffset) }
+    var previousWindowStart by remember { mutableStateOf(windowStartMillis) }
 
-    Column(modifier.fillMaxSize()) {
-        // No pager buttons: the programme blocks are d-pad focusable, so moving right along a row
-        // scrolls the whole timeline (header and every row in lock-step) on its own.
-        TimeHeader(windowStartMillis, scroll)
+    fun savePosition(channelId: Long, timeMillis: Long) {
+        focusedChannelId = channelId
+        focusedTime = timeMillis
+        if (rememberPosition) onPositionChanged(channelId, timeMillis)
+    }
+    fun scrollToTime(timeMillis: Long) {
+        scope.launch {
+            val target = ((timeMillis - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+            scroll.scrollTo(target.coerceIn(0, scroll.maxValue))
+        }
+    }
+    fun requestRow(index: Int, timeMillis: Long?, channelOnly: Boolean = false) {
+        val row = rows.getOrNull(index) ?: return
+        val programme = if (channelOnly) null else timeMillis?.let { guideProgrammeAt(row.programmes, it) }
+        savePosition(row.primary.id, timeMillis ?: windowStartMillis)
+        val request = GuideFocusRequest(row.key, programme?.startUtcMillis, ++requestSerial)
+        scope.launch {
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+            if (programme != null) {
+                val startPx = ((maxOf(programme.startUtcMillis, windowStartMillis) - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+                val endPx = ((programme.endUtcMillis - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+                if (startPx < scroll.value || endPx > scroll.value + scroll.viewportSize) {
+                    scroll.scrollTo(startPx.coerceIn(0, scroll.maxValue))
+                }
+            }
+            if (request.serial == requestSerial) focusRequest = request
+        }
+    }
+    fun moveRow(row: ChannelsViewModel.Row, delta: Int, timeMillis: Long?, channelOnly: Boolean): Boolean {
+        val index = rows.indexOfFirst { it.primary.id == focusedChannelId }.takeIf { it >= 0 }
+            ?: rows.indexOfFirst { it.key == row.key }
+        val target = index + delta
+        if (target !in rows.indices) return false
+        requestRow(target, timeMillis, channelOnly)
+        return true
+    }
 
+    // Report channel IDs only when the viewport changes. Programme updates for the same slice
+    // do not trigger another load. Even huge catalogues request at most 60 prefetched rows.
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val currentRows = latestRows
+            val range = guideVisibleRange(currentRows.size, listState.layoutInfo.visibleItemsInfo.map { it.index })
+            range.map { currentRows[it] }
+        }.distinctUntilChanged { previous, next ->
+            previous.map { it.guideLoadKey() } == next.map { it.guideLoadKey() }
+        }.collect { reportVisible(it) }
+    }
+    LaunchedEffect(dayOffset, pendingNow, windowStartMillis) {
+        val dayChanged = previousDay != dayOffset
+        val oldWindowStart = previousWindowStart
+        previousDay = dayOffset
+        previousWindowStart = windowStartMillis
+        if (pendingNow) {
+            if (nowMillis in windowStartMillis until windowStartMillis + GUIDE_WINDOW_MILLIS) {
+                scroll.scrollTo(((nowMillis - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt().coerceIn(0, scroll.maxValue))
+                pendingNow = false
+            }
+        } else if (dayChanged) {
+            scroll.scrollTo(0)
+        } else if (oldWindowStart != windowStartMillis && scroll.value > 0) {
+            val viewedTime = oldWindowStart + (scroll.value / pixelsPerMinute * 60_000.0).toLong()
+            val target = ((viewedTime - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+            scroll.scrollTo(target.coerceIn(0, scroll.maxValue))
+        }
+    }
+    LaunchedEffect(rows.isNotEmpty(), rememberPosition) {
+        if (rows.isEmpty() || restored) return@LaunchedEffect
+        restored = true
+        if (rememberPosition && restorePosition != null) {
+            val index = rows.indexOfFirst { row -> row.variants.any { it.id == restorePosition.channelId } }
+            if (index >= 0) {
+                listState.scrollToItem(index)
+                focusedChannelId = rows[index].primary.id
+                focusedTime = restorePosition.timeMs
+                focusRequest = GuideFocusRequest(rows[index].key, null, ++requestSerial)
+            }
+            val target = ((restorePosition.timeMs - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+            scroll.scrollTo(target.coerceIn(0, scroll.maxValue))
+        } else {
+            if (!rememberPosition) listState.scrollToItem(0)
+            val initialTime = nowMillis.takeIf { it in windowStartMillis until windowStartMillis + GUIDE_WINDOW_MILLIS }
+                ?: windowStartMillis
+            val target = ((initialTime - windowStartMillis) / 60_000.0 * pixelsPerMinute).toInt()
+            scroll.scrollTo(target.coerceIn(0, scroll.maxValue))
+        }
+    }
+    LaunchedEffect(pendingCurrentChannel, rows, currentChannelId) {
+        if (pendingCurrentChannel) {
+            val index = rows.indexOfFirst { row -> row.variants.any { it.id == currentChannelId } }
+            if (index >= 0) {
+                pendingCurrentChannel = false
+                requestRow(index, nowMillis, channelOnly = true)
+            }
+        }
+    }
+    // Keep the same timestamp visible when the user changes timeline density.
+    var previousMinuteWidth by remember { mutableStateOf(pixelsPerMinute) }
+    LaunchedEffect(pixelsPerMinute) {
+        val oldWidth = previousMinuteWidth
+        previousMinuteWidth = pixelsPerMinute
+        if (oldWidth != pixelsPerMinute && oldWidth > 0) {
+            scroll.scrollTo((scroll.value / oldWidth * pixelsPerMinute).toInt().coerceIn(0, scroll.maxValue))
+        }
+    }
+
+    Column(modifier.fillMaxSize().testTag("advanced-guide")) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onPrevDay != null) GuideNavigationButton(onClick = onPrevDay, enabled = canGoPrevDay) { Text("Previous day") }
+            GuideNavigationButton(
+                onClick = {
+                    val target = (scroll.value - 60 * pixelsPerMinute).toInt().coerceAtLeast(0)
+                    scope.launch {
+                        scroll.scrollTo(target)
+                        (focusedChannelId ?: rows.getOrNull(listState.firstVisibleItemIndex)?.primary?.id)?.let {
+                            savePosition(it, guideTimeAtOffset(windowStartMillis, scroll.value / displayDensity.density, metrics.minuteWidthDp))
+                        }
+                    }
+                },
+                enabled = scroll.value > 0,
+            ) { Text("Previous hour") }
+            GuideNavigationButton(onClick = {
+                pendingNow = true
+                onJumpToNow?.invoke()
+                if (nowMillis in windowStartMillis until windowStartMillis + GUIDE_WINDOW_MILLIS) scrollToTime(nowMillis)
+                focusedChannelId?.let { savePosition(it, nowMillis) }
+            }) { Text("Now") }
+            GuideNavigationButton(
+                onClick = {
+                    val target = (scroll.value + 60 * pixelsPerMinute).toInt().coerceAtMost(scroll.maxValue)
+                    scope.launch {
+                        scroll.scrollTo(target)
+                        (focusedChannelId ?: rows.getOrNull(listState.firstVisibleItemIndex)?.primary?.id)?.let {
+                            savePosition(it, guideTimeAtOffset(windowStartMillis, scroll.value / displayDensity.density, metrics.minuteWidthDp))
+                        }
+                    }
+                },
+                enabled = scroll.value < scroll.maxValue,
+            ) { Text("Next hour") }
+            if (onNextDay != null) GuideNavigationButton(onClick = onNextDay, enabled = canGoNextDay) { Text("Next day") }
+            val currentIndex = rows.indexOfFirst { row -> row.variants.any { it.id == currentChannelId } }
+            if (currentChannelId != null) GuideNavigationButton(onClick = {
+                pendingNow = true
+                onJumpToNow?.invoke()
+                if (currentIndex >= 0) requestRow(currentIndex, nowMillis, channelOnly = true)
+                else {
+                    pendingCurrentChannel = true
+                    onReturnToCurrentChannel()
+                }
+            }) { Text("Current channel") }
+        }
+        TimeHeader(windowStartMillis, scroll, metrics.minuteWidthDp, nowMillis)
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text("No channels match this guide filter.", style = MaterialTheme.typography.bodyLarge)
+            }
+        }
         LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -111,12 +306,23 @@ fun GuideGrid(
                 GuideRow(
                     row = row,
                     windowStartMillis = windowStartMillis,
-                    nowMillis = now,
+                    nowMillis = nowMillis,
                     scroll = scroll,
+                    layout = layout,
+                    metrics = metrics,
+                    showProgress = showProgress,
+                    showArtwork = showArtwork,
                     isSelected = row.key == selectedKey,
+                    focusRequest = focusRequest?.takeIf { it.rowKey == row.key },
+                    onFocusRequested = { serial -> if (focusRequest?.serial == serial) focusRequest = null },
                     onSelect = { onSelectRow(row) },
-                    onFocus = { onFocusRow(row) },
-                    onProgramme = { programme -> onProgramme(row, programme) },
+                    onFocus = { time ->
+                        savePosition(row.primary.id, time ?: guideTimeAtOffset(windowStartMillis, scroll.value / displayDensity.density, metrics.minuteWidthDp))
+                        onFocusRow(row)
+                    },
+                    onProgramme = { onProgramme(row, it) },
+                    onMoveRow = { delta, time, channelOnly -> moveRow(row, delta, time, channelOnly) },
+                    onMoveProgramme = { programme -> requestRow(rows.indexOf(row), programme.startUtcMillis) },
                     onToggleFavourite = { onToggleFavourite(row) },
                     onExitLeft = onExitLeftFromChannel,
                 )
@@ -124,6 +330,23 @@ fun GuideGrid(
         }
     }
 }
+
+@Composable
+private fun GuideNavigationButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.heightIn(min = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .then(if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier),
+    ) { content() }
+}
+
+private data class GuideFocusRequest(val rowKey: Any, val programmeStart: Long?, val serial: Int)
+
+// Include matching inputs so a provider refresh can reload visible programmes without a scroll.
+private fun ChannelsViewModel.Row.guideLoadKey() = primary.id to variants.map { it.id to it.epgCandidates }
 
 /**
  * The live channels as a plain vertical list instead of the time-grid — one channel per row with
@@ -141,9 +364,33 @@ fun ChannelList(
     onToggleFavourite: (ChannelsViewModel.Row) -> Unit = {},
     onExitLeftFromChannel: () -> Boolean = { false },
     modifier: Modifier = Modifier,
+    nowMillis: Long = System.currentTimeMillis(),
+    onVisibleRowsChanged: (List<ChannelsViewModel.Row>) -> Unit = {},
+    rememberPosition: Boolean = true,
+    restorePosition: GuidePosition? = null,
+    onPositionChanged: (Long, Long) -> Unit = { _, _ -> },
 ) {
-    val now = System.currentTimeMillis()
+    val listState = rememberLazyListState()
+    val latestRows by rememberUpdatedState(rows)
+    val reportVisible by rememberUpdatedState(onVisibleRowsChanged)
+    var restored by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val currentRows = latestRows
+            guideVisibleRange(currentRows.size, listState.layoutInfo.visibleItemsInfo.map { it.index }).map { currentRows[it] }
+        }.distinctUntilChanged { previous, next -> previous.map { it.guideLoadKey() } == next.map { it.guideLoadKey() } }
+            .collect { reportVisible(it) }
+    }
+    LaunchedEffect(rows.isNotEmpty(), rememberPosition) {
+        if (rows.isEmpty() || restored) return@LaunchedEffect
+        restored = true
+        if (rememberPosition && restorePosition != null) {
+            rows.indexOfFirst { row -> row.variants.any { it.id == restorePosition.channelId } }
+                .takeIf { it >= 0 }?.let { listState.scrollToItem(it) }
+        } else if (!rememberPosition) listState.scrollToItem(0)
+    }
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -151,10 +398,13 @@ fun ChannelList(
         items(rows, key = { it.key }) { row ->
             ChannelListRow(
                 row = row,
-                nowMillis = now,
+                nowMillis = nowMillis,
                 isSelected = row.key == selectedKey,
                 onSelect = { onSelectRow(row) },
-                onFocus = { onFocusRow(row) },
+                onFocus = {
+                    if (rememberPosition) onPositionChanged(row.primary.id, nowMillis)
+                    onFocusRow(row)
+                },
                 onToggleFavourite = { onToggleFavourite(row) },
                 onExitLeft = onExitLeftFromChannel,
             )
@@ -282,29 +532,20 @@ private fun ChannelListRow(
 }
 
 @Composable
-private fun TimeHeader(windowStartMillis: Long, scroll: androidx.compose.foundation.ScrollState) {
-    Row(Modifier.fillMaxWidth().height(28.dp)) {
-        // Empty corner above the channel column.
-        Box(Modifier.width(CHANNEL_COLUMN))
-        Row(
-            Modifier
-                .horizontalScroll(scroll)
-                .background(MaterialTheme.colorScheme.surface),
-        ) {
-            // A label every half hour across the whole window.
-            repeat(HOURS_IN_WINDOW * 2) { i ->
-                val slotStart = windowStartMillis + i * HALF_HOUR_MS
-                Box(
-                    Modifier.width(HALF_HOUR_WIDTH).height(28.dp).padding(start = 6.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text(
-                        clockFormat.format(Date(slotStart)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+private fun TimeHeader(windowStartMillis: Long, scroll: ScrollState, minuteWidthDp: Float, nowMillis: Long) {
+    Row(Modifier.fillMaxWidth().height(32.dp)) {
+        Box(Modifier.width(CHANNEL_COLUMN + 3.dp).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+            Text("Channel", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelLarge)
+        }
+        Box(Modifier.horizontalScroll(scroll).background(MaterialTheme.colorScheme.surface)) {
+            Row {
+                repeat(48) { i ->
+                    Box(Modifier.width((30 * minuteWidthDp).dp).height(32.dp).padding(start = 6.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(clockFormat.format(Date(windowStartMillis + i * 30 * 60_000L)), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
+            CurrentTimeMarker(windowStartMillis, nowMillis, minuteWidthDp)
         }
     }
 }
@@ -314,225 +555,200 @@ private fun GuideRow(
     row: ChannelsViewModel.Row,
     windowStartMillis: Long,
     nowMillis: Long,
-    scroll: androidx.compose.foundation.ScrollState,
+    scroll: ScrollState,
+    layout: GuideLayout,
+    metrics: GuideLayoutMetrics,
+    showProgress: Boolean,
+    showArtwork: Boolean,
     isSelected: Boolean,
+    focusRequest: GuideFocusRequest?,
+    onFocusRequested: (Int) -> Unit,
     onSelect: () -> Unit,
-    onFocus: () -> Unit,
+    onFocus: (Long?) -> Unit,
     onProgramme: (Programme) -> Unit,
-    onToggleFavourite: () -> Unit = {},
-    onExitLeft: () -> Boolean = { false },
+    onMoveRow: (Int, Long?, Boolean) -> Boolean,
+    onMoveProgramme: (Programme) -> Unit,
+    onToggleFavourite: () -> Unit,
+    onExitLeft: () -> Boolean,
 ) {
-    // Focus (the d-pad border) just moves the highlight. Selection (the filled cell) is the
-    // channel the preview is playing — it only changes when you press OK.
     var focused by remember { mutableStateOf(false) }
-
-    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
-
-        // ---- Fixed channel cell (does not scroll) --------------------------------------
+    val channelFocus = remember { FocusRequester() }
+    val slices = remember(row.programmes, windowStartMillis) { guideProgrammeSlices(row.programmes, windowStartMillis) }
+    val localDensity = LocalDensity.current
+    // Honour font scaling instead of clipping large accessibility text into a fixed-height row.
+    val rowHeight = (metrics.rowHeightDp * localDensity.fontScale.coerceAtLeast(1f)).dp
+    LaunchedEffect(focusRequest) {
+        val request = focusRequest ?: return@LaunchedEffect
+        if (request.programmeStart == null || slices.none { it.programme.startUtcMillis == request.programmeStart }) {
+            channelFocus.requestFocus()
+            onFocusRequested(request.serial)
+        }
+    }
+    Row(Modifier.fillMaxWidth().height(rowHeight)) {
         Row(
-            Modifier
-                .width(CHANNEL_COLUMN)
-                .fillMaxSize()
+            Modifier.width(CHANNEL_COLUMN).fillMaxHeight()
                 .clip(RoundedCornerShape(8.dp))
-                .background(
-                    if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surface,
-                )
-                .then(
-                    if (focused) Modifier.border(
-                        2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp),
-                    ) else Modifier,
-                )
-                // LEFT from this leftmost column asks the host to reopen the collapsed category
-                // rail; onExitLeft consumes the key only when it handled it (rail was hidden), so
-                // moving left onto programme blocks and into an already-visible rail still works.
-                .onPreviewKeyEvent { e ->
-                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) onExitLeft()
-                    else false
+                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                .then(if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier)
+                .focusRequester(channelFocus)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) false else when (event.key) {
+                        Key.DirectionLeft -> onExitLeft()
+                        Key.DirectionUp -> onMoveRow(-1, null, true)
+                        Key.DirectionDown -> onMoveRow(1, null, true)
+                        else -> false
+                    }
                 }
-                .onFocusChanged {
-                    focused = it.isFocused
-                    if (it.isFocused) onFocus()
-                }
+                .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus(null) }
                 .clickable(onClick = onSelect)
-                .padding(horizontal = 10.dp),
+                .testTag("guide-channel-${row.primary.id}")
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            row.primary.number?.let { num ->
-                Text(
-                    "$num",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.width(28.dp),
-                )
-            }
-            AsyncImage(
-                model = row.primary.logoUrl,
-                contentDescription = null,
-                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(4.dp)),
-            )
-            Spacer(Modifier.width(8.dp))
+            row.primary.number?.let { Text("$it", style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.width(28.dp)) }
+            AsyncImage(model = row.primary.logoUrl, contentDescription = null, modifier = Modifier.size(if (layout == GuideLayout.COMPACT) 28.dp else 34.dp))
+            Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    row.primary.shownName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (row.variants.size > 1) {
-                    Text(
-                        stringResource(R.string.guide_qualities_count, row.variants.size),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                    )
+                Text(row.primary.shownName, style = if (layout == GuideLayout.COMPACT) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+                    maxLines = if (layout == GuideLayout.EXPANDED) 2 else 1, overflow = TextOverflow.Ellipsis)
+                if (row.variants.size > 1 && layout != GuideLayout.COMPACT) {
+                    Text(stringResource(R.string.guide_qualities_count, row.variants.size), style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary, maxLines = 1)
                 }
             }
-            // Favourite toggle. Phone/tablet users had no visible way to favourite from the guide
-            // (only the Channel Manager) — this puts a tappable star on every row; it stays d-pad
-            // focusable so it works from a TV remote too.
-            IconButton(
-                onClick = onToggleFavourite,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    imageVector = if (row.primary.favourite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                    contentDescription = if (row.primary.favourite) stringResource(R.string.common_remove_favourite)
-                    else stringResource(R.string.common_favourite),
-                    tint = if (row.primary.favourite) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            IconButton(onClick = onToggleFavourite, modifier = Modifier.size(40.dp)) {
+                Icon(if (row.primary.favourite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                    contentDescription = if (row.primary.favourite) stringResource(R.string.common_remove_favourite) else stringResource(R.string.common_favourite),
+                    tint = if (row.primary.favourite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
         Spacer(Modifier.width(3.dp))
-
-        // ---- Scrolling programme strip -------------------------------------------------
-        Row(Modifier.horizontalScroll(scroll)) {
-            val programmes = row.programmes
-            if (programmes.isEmpty()) {
-                // Honest placeholder spanning the window, so a guide-less channel reads as
-                // "no guide" rather than as a suspiciously empty gap.
-                Box(
-                    Modifier
-                        .width(HALF_HOUR_WIDTH * HOURS_IN_WINDOW.toFloat() * 2)
-                        .fillMaxSize()
-                        .padding(end = 3.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text(
-                        stringResource(R.string.guide_no_info),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                var cursor = windowStartMillis
-                // A programme almost over (or a very short one) would otherwise be a sliver too
-                // thin to read its name — the "Poi n..." problem. We floor each block at
-                // [MIN_BLOCK_WIDTH] so the title stays legible, then carry the borrowed width as
-                // `debt` and repay it out of the following gaps, so everything downstream stays
-                // aligned with the time header instead of drifting right.
-                var debt = 0.dp
-                for (programme in programmes) {
-                    // Clamp to the window's left edge; a programme that started earlier is
-                    // drawn from `windowStart` so its block does not push everything right.
-                    val start = programme.startUtcMillis.coerceAtLeast(windowStartMillis)
-                    val gap = widthFor(cursor, start)
-                    val repaid = minOf(debt, gap)
-                    debt -= repaid
-                    val spacer = gap - repaid
-                    if (spacer > 0.dp) {
-                        Spacer(Modifier.width(spacer))
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            val viewportWidth = maxWidth
+            val visibleStart = guideTimeAtOffset(windowStartMillis, scroll.value / localDensity.density, metrics.minuteWidthDp)
+            val visibleEnd = guideTimeAtOffset(windowStartMillis, scroll.value / localDensity.density + viewportWidth.value, metrics.minuteWidthDp)
+            val visible = visibleGuideSlices(slices, visibleStart, visibleEnd)
+            Box(Modifier.horizontalScroll(scroll).width((24 * 60 * metrics.minuteWidthDp).dp).fillMaxHeight()) {
+                if (slices.isEmpty()) {
+                    Box(Modifier.offset(x = (scroll.value / localDensity.density).dp).width(viewportWidth).fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart) {
+                        Text(stringResource(R.string.guide_no_info), style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    val end = programme.endUtcMillis
-                    val isNow = nowMillis in programme.startUtcMillis until end
-                    val trueWidth = widthFor(start, end)
-                    val drawnWidth = maxOf(trueWidth, MIN_BLOCK_WIDTH)
-                    debt += drawnWidth - trueWidth
-                    ProgrammeBlock(
-                        title = programme.title,
-                        width = drawnWidth,
-                        isNow = isNow,
-                        progress = if (isNow) programme.progressAt(nowMillis) else 0f,
-                        onClick = { onProgramme(programme) },
-                    )
-                    cursor = end
                 }
+                visible.forEach { slice ->
+                    key(slice.programme.feedId, slice.programme.epgChannelId, slice.programme.startUtcMillis) {
+                        val programme = slice.programme
+                        val index = slices.indexOf(slice)
+                        ProgrammeBlock(
+                            programme = programme,
+                            channelName = row.primary.shownName,
+                            widthDp = ((slice.endMillis - slice.startMillis) / 60_000.0 * metrics.minuteWidthDp).toFloat(),
+                            modifier = Modifier.offset(x = guideOffsetDp(windowStartMillis, slice.startMillis, metrics.minuteWidthDp).dp),
+                            layout = layout,
+                            metrics = metrics,
+                            nowMillis = nowMillis,
+                            showProgress = showProgress,
+                            showArtwork = showArtwork,
+                            request = focusRequest?.takeIf { it.programmeStart == programme.startUtcMillis },
+                            onFocusRequested = onFocusRequested,
+                            onFocus = { onFocus(programme.startUtcMillis) },
+                            onMoveRow = { delta -> onMoveRow(delta, programme.startUtcMillis, false) },
+                            onMoveProgramme = { delta -> slices.getOrNull(index + delta)?.let { onMoveProgramme(it.programme); true } ?: false },
+                            onClick = { onProgramme(programme) },
+                        )
+                    }
+                }
+                CurrentTimeMarker(windowStartMillis, nowMillis, metrics.minuteWidthDp)
             }
         }
     }
 }
 
 @Composable
-private fun ProgrammeBlock(title: String, width: Dp, isNow: Boolean, progress: Float, onClick: () -> Unit) {
+private fun ProgrammeBlock(
+    programme: Programme,
+    channelName: String,
+    widthDp: Float,
+    modifier: Modifier,
+    layout: GuideLayout,
+    metrics: GuideLayoutMetrics,
+    nowMillis: Long,
+    showProgress: Boolean,
+    showArtwork: Boolean,
+    request: GuideFocusRequest?,
+    onFocusRequested: (Int) -> Unit,
+    onFocus: () -> Unit,
+    onMoveRow: (Int) -> Boolean,
+    onMoveProgramme: (Int) -> Boolean,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
+    val requester = remember { FocusRequester() }
+    val isNow = programme.isLiveAt(nowMillis)
+    val foreground = when {
+        focused -> MaterialTheme.colorScheme.onPrimary
+        isNow -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val timeRange = "${clockFormat.format(Date(programme.startUtcMillis))}–${clockFormat.format(Date(programme.endUtcMillis))}"
+    LaunchedEffect(request) {
+        if (request != null) { requester.requestFocus(); onFocusRequested(request.serial) }
+    }
     Box(
-        Modifier
-            .width(width)
-            .fillMaxSize()
-            .padding(end = 3.dp)
+        modifier.width(widthDp.coerceAtLeast(1f).dp).fillMaxHeight().padding(end = if (widthDp >= 8f) 3.dp else 0.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(
-                when {
-                    focused -> MaterialTheme.colorScheme.primary
-                    isNow -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                },
-            )
-            .then(
-                if (focused || isNow) Modifier.border(
-                    if (focused) 2.dp else 1.dp,
-                    MaterialTheme.colorScheme.primary,
-                    RoundedCornerShape(6.dp),
-                ) else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable(onClick = onClick),
+            .background(when { focused -> MaterialTheme.colorScheme.primary; isNow -> MaterialTheme.colorScheme.primaryContainer; else -> MaterialTheme.colorScheme.surfaceVariant })
+            .then(if (focused || isNow) Modifier.border(if (focused) 2.dp else 1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)) else Modifier)
+            .focusRequester(requester)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) false else when (event.key) {
+                    Key.DirectionUp -> onMoveRow(-1)
+                    Key.DirectionDown -> onMoveRow(1)
+                    Key.DirectionLeft -> onMoveProgramme(-1)
+                    Key.DirectionRight -> onMoveProgramme(1)
+                    else -> false
+                }
+            }
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "${programme.title}, $timeRange, $channelName" }
+            .testTag("guide-programme-${programme.feedId}-${programme.epgChannelId}-${programme.startUtcMillis}"),
     ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = when {
-                focused -> MaterialTheme.colorScheme.onPrimary
-                isNow -> MaterialTheme.colorScheme.onPrimaryContainer
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.CenterStart).padding(horizontal = 8.dp),
-        )
-        // How far through the current programme we are — a live fill along the bottom edge.
-        if (isNow && progress > 0f) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .height(3.dp)
-                    .background(MaterialTheme.colorScheme.primary),
-            )
+        Row(Modifier.fillMaxSize().padding(horizontal = if (widthDp >= 24) 8.dp else 0.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (layout == GuideLayout.EXPANDED && showArtwork && widthDp >= 180f && !programme.iconUrl.isNullOrBlank()) {
+                ProgrammeArtwork(programme.iconUrl, Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)))
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                if (layout != GuideLayout.COMPACT && widthDp >= 72f) {
+                    Text(timeRange, style = MaterialTheme.typography.labelSmall, color = foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(programme.title, style = MaterialTheme.typography.bodyMedium, color = foreground,
+                    maxLines = metrics.titleLines, overflow = TextOverflow.Ellipsis)
+                if (layout == GuideLayout.EXPANDED && widthDp >= 120f) {
+                    (programme.category?.takeIf { it.isNotBlank() } ?: programme.description?.takeIf { it.isNotBlank() })?.let {
+                        Text(it, style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        if (showProgress && isNow) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(programme.progressAt(nowMillis)).height(3.dp)
+                .background(if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary))
         }
     }
 }
 
-/** Minutes between two instants, as guide width. Never negative; tiny slots stay legible. */
-private fun widthFor(fromMillis: Long, toMillis: Long): Dp {
-    val minutes = ((toMillis - fromMillis) / 60_000L).coerceAtLeast(0)
-    return (minutes * MINUTE_DP).dp
+@Composable
+private fun CurrentTimeMarker(windowStartMillis: Long, nowMillis: Long, minuteWidthDp: Float) {
+    if (nowMillis in windowStartMillis until windowStartMillis + GUIDE_WINDOW_MILLIS) {
+        Box(Modifier.offset(x = guideOffsetDp(windowStartMillis, nowMillis, minuteWidthDp).dp)
+            .width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.error)
+            .semantics { contentDescription = "Current time ${clockFormat.format(Date(nowMillis))}" })
+    }
 }
 
-// A weak TV box will happily scroll this; the whole strip is ~12h * 60 * 4dp = ~2880dp wide.
-private const val MINUTE_DP = 4f
-private const val HOURS_IN_WINDOW = 24
-private const val HALF_HOUR_MS = 30 * 60 * 1000L
-private val CHANNEL_COLUMN = 220.dp
-private val ROW_HEIGHT = 64.dp
-// Floor for a programme block so a nearly-finished or very short show still shows its name.
-private val MIN_BLOCK_WIDTH = 72.dp
-private val HALF_HOUR_WIDTH: Dp = (30 * MINUTE_DP).dp
-
+private val CHANNEL_COLUMN = 236.dp
 private val clockFormat = SimpleDateFormat("HH:mm", Locale.getDefault())

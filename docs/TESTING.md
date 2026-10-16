@@ -2,6 +2,94 @@
 
 # Testing OpenTV
 
+## Advanced EPG
+
+Run the existing Gradle/Python tasks below and `bash scripts/test-supabase.sh` when validating
+portable preference changes. New guide tests are discovered by the existing JVM task, including
+Robolectric Compose tests; no real IPTV credentials or public XMLTV services are required.
+Deterministic data covers preference defaults/migration/recreation, layout/density, filters and
+sorting, timeline hour/day/Now operations, missing metadata, action eligibility, search bounds,
+artwork fallback and focus behavior. Existing live ownership, reminder/recording paths, automatic
+discovery and failed-refresh preservation remain part of regression validation.
+
+`AppSettingsGuidePreferencesTest` covers safe defaults, every enum round-trip, malformed stored
+values, legacy grid/list preservation, local filter targets and clearing remembered position.
+`GuidePreferencesUiTest` sends D-pad/Select/Back to the real preference controls, verifies layout,
+sort/density and switch changes, and checks focus returns to the setting after its choice closes.
+
+`GuideChannelSelectionTest` covers every filter/sort, favorites, local recent order, custom group
+order/unresolved references, hidden channels and a 20,000-channel catalog. `GuidePresentationTest`
+covers exact timeline geometry, overlap/invalid-data clipping, visible-cell/prefetch bounds,
+missing-data focus fallback and calendar-day navigation across daylight saving.
+`AdvancedGuideUiTest` sends remote events to the grid, checks layout and lazy-row focus,
+hour/Now/Current Channel actions, saved position, rapid input, empty filters, legacy list loading
+beyond the initial slice and changed automatic matches without scrolling.
+`AdvancedGuideViewModelTest` uses the actual Room/view-model path for live preference changes,
+provider/group restoration, category reset, restricted/empty groups, bounded viewport hydration
+and isolation from playback/history. These tests do not allocate a live decoder.
+
+`GuideProgrammeActionsTest` checks timing boundaries, malformed windows, supported recording
+sources, busy providers, catch-up credentials/retention and series eligibility. It tests UI policy,
+not recording bytes. `GuideReminderIntegrationTest` uses the existing reminder repository/helper
+with in-memory Room and Robolectric AlarmManager: metadata persistence, deduplication, immutable
+broadcasts, independent cancellation and future/unfired rearm eligibility. Notification delivery
+and actual background alarms still need hardware. `ProgrammeDetailsMetadataTest` renders available
+and malformed metadata/fallbacks in Compose; it does not certify the full dialog's focus or actions.
+`ProgrammeArtworkTest` checks supplied HTTP(S) artwork and missing/invalid URL fallback; actual
+network/image decoding and failure recovery remain device checks.
+
+`EpgSearchTest` uses in-memory Room for result/time limits, minimum/escaped text, metadata-only
+categories, hidden/disabled sources and feeds, manual matching precedence and parental exclusion
+before the result cap. Its deterministic 2,000-channel fixture materializes 60 viewport program
+rows instead of 2,000 for the full window, a 97% reduction in that fixture's returned rows. A
+1,201-ID case verifies queries chunk below the legacy 999-bind limit; a 210-locked-result case
+verifies restricted content cannot consume the allowed result cap. This is row-count evidence,
+not a hardware timing or heap benchmark.
+
+A host SQLite diagnostic using the existing indexes, 2,000 channels and 96,000 synthetic
+programs returned the 200-result cap in approximately 0.116–0.263 seconds across runs of a common title query.
+`EXPLAIN QUERY PLAN` confirmed program lookup through `index_programmes_epgChannelId` after
+channel filtering. Rerun the deterministic fixture with `python3 scripts/benchmark_epg_queries.py`;
+the script prints the SQLite version, current schema, result count, timing and query plan.
+These host measurements are diagnostic evidence, not a CI threshold or
+a TV benchmark; hardware performance and lower-memory acceptance remain unverified.
+
+`GuideCloudPreferencesTest` covers the seven allowlisted `guide_setting` keys, malformed values,
+category mapping and rejection of local identifiers/URLs. `supabase/tests/guide_preferences.sql`
+checks the additive migration with owner-only RLS and the existing invoker merge RPC against
+disposable PostgreSQL. Cloud preference tests do not apply migrations to a hosted project.
+
+Synthetic large-catalog/query tests establish result and window bounds. They do not measure TV
+frame time, real heap usage, image decoding, provider connection counts or decoder continuity.
+Record actual query timings, row counts, allocations and device specifications when profiling;
+do not claim a measured performance improvement from a bounded query alone.
+
+Hardware acceptance requires **Android TV, Google TV and Fire TV**, authorized streams and a
+provider feed with current/upcoming/missing programs. **These physical-TV checks have not been run
+for this feature.** Record model, OS, resolution, text scale,
+guide size, provider connection limit and pass/fail evidence for each row.
+
+| Check | Expected result |
+|---|---|
+| Apply Standard, Compact and Expanded, every density, artwork/progress switches; restart offline | Preferences apply immediately and survive restart; existing grid/list choice and old settings survive upgrade |
+| Filter All, Favorites, Recent, EPG Data, Currently Airing, provider/category and custom groups | Correct visible channels; empty states remain navigable; hidden/parental channels stay restricted; no channel/group data changes |
+| Apply each sort with duplicate/missing numbers and names and multiple quality variants | Stable understandable order; provider IDs/numbers and custom order remain intact |
+| Hold D-pad up/down and left/right; switch layout/filter; open/close details repeatedly | Selected cell stays visible, focus has clear contrast, no trap or unexpected tune; removed focused rows have a useful fallback |
+| Use Now, previous/next hour/day and Current Channel across midnight and a daylight-saving transition | Correct local dates/times and bounded window; explicit Current Channel switches an excluding filter to All Channels and restores focus at Now without tuning |
+| Leave/return, restart with Remember Last Position on/off, remove remembered channel, expire guide data | Valid position restores; invalid state falls back safely; disabling remembering follows current guide defaults |
+| Search by title, channel, genre and description; use each status/category filter, long text and no matches | Remote entry works, results remain bounded and restricted to visible content, empty/limited states are useful |
+| Open details with long descriptions, missing times/genre/episode/artwork and failed images | Readable scrollable content, local artwork fallback, accessible labels and no private URL in UI/errors |
+| Set/remove a future reminder, deny exact alarms/notifications, restart, let it fire | Existing repository/alarm behavior remains usable; unavailable permissions do not claim guaranteed exact delivery |
+| Record current/future programs, stop, handle conflicts; test unsupported/expired catch-up | Only eligible actions appear; existing padding/clash/storage handling works; no retrospective capture claim |
+| Browse/filter/search/details while an authorized live stream plays; return via preview and View Channel | Same session and tracks persist, only explicit channel changes tune, no competing preview player/audio focus loss |
+| Repeat while a recording starts, play a growing/local/NAS/USB recording, enter/exit PiP | Existing ownership handoffs and recordings continue; one active viewing surface; no second provider connection from browsing |
+| Test 720p/1080p/4K, large text, accessibility services and remote Select/Back without touch | All controls reachable, clear focus/readability, dialog closes before guide and returns focus predictably |
+| Browse a large guide rapidly on a low-memory device, fail network/images, background/recreate Activity | Bounded loading, responsive controls and existing recovery; optional preview/artwork can be disabled without losing guide access |
+| Opt into compatible-setting sync on two disposable-project clients, change portable guide preferences offline, reconnect | Only validated portable preferences converge; provider/group IDs, position, streams and playback state remain local |
+
+No screenshots or hardware certification are implied by JVM, Compose or SQL success. Keep
+source credentials and private stream/artwork query parameters out of captured test evidence.
+
 ## Persistent live playback
 
 The normal Android JVM suite includes credential-free session ownership, navigation policy,
@@ -109,7 +197,7 @@ git diff --check
 ```
 
 The SQL harness creates a disposable PostgreSQL Docker container, bootstraps only the Auth
-primitives used by RLS, applies all migrations in order, and runs both security suites. It also
+primitives used by RLS, applies all migrations in order, and runs all security suites. It also
 uses overlapping connections to test atomic conflict resolution. It accepts no hosted database
 URL or production credentials. The Build workflow runs this as **Supabase migrations and security**,
 separately from Android validation; repository administrators can require both jobs in branch rules.
@@ -123,7 +211,7 @@ Launcher/home tests cover desired app order, missing installations and actual sh
 
 Before deployment, use a disposable Supabase project and two isolated Android TV clients:
 
-1. Apply both migrations in order. Sign in on both clients with the existing email-code flow.
+1. Apply all migrations in order. Sign in on both clients with the existing email-code flow.
 2. Enable cloud sync and the desired categories on each TV; verify new categories started off.
 3. Configure matching authorized content independently. Create a custom group on A and sync;
    confirm B receives it. Rename on B, change membership on A, and confirm both changes survive.

@@ -156,7 +156,7 @@ private fun CloudCategorySwitch(category: AdvancedSyncCategory, selected: Boolea
         AdvancedSyncCategory.APP_FAVOURITES -> "App favourites" to
             "Package names and pin order. Only installed, launchable apps appear on each TV."
         AdvancedSyncCategory.COMPATIBLE_SETTINGS -> "Compatible settings" to
-            "Theme, subtitle default, guide layout and startup destination. Hardware and security settings stay local."
+            "Theme, subtitles, guide display/filter/sort preferences and startup destination. Guide positions and provider selections stay local."
         AdvancedSyncCategory.FAVOURITE_REMOVALS -> "Synchronize favourite removals" to
             "Optional two-way favourite state. Removing a favourite will also remove it on your other TVs. Starts off."
     }

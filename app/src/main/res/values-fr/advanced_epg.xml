@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. -->
+<resources>
+    <string name="advanced_guide_customization">Personnalisation du guide</string>
+    <string name="advanced_guide_layout">Disposition du guide</string>
+    <string name="advanced_guide_standard">Standard</string>
+    <string name="advanced_guide_compact">Compacte</string>
+    <string name="advanced_guide_expanded">Étendue</string>
+    <string name="advanced_guide_filter">Filtre de chaînes par défaut</string>
+    <string name="advanced_guide_filter_all">Toutes les chaînes</string>
+    <string name="advanced_guide_filter_favourites">Chaînes favorites</string>
+    <string name="advanced_guide_filter_recent">Vues récemment</string>
+    <string name="advanced_guide_filter_group">Groupe de chaînes personnalisé</string>
+    <string name="advanced_guide_filter_provider">Fournisseur</string>
+    <string name="advanced_guide_filter_epg">Chaînes avec données de programme</string>
+    <string name="advanced_guide_filter_airing">En cours de diffusion</string>
+    <string name="advanced_guide_filter_target_hint">Choisissez le groupe ou le fournisseur dans le guide. Cette sélection reste sur cet appareil.</string>
+    <string name="advanced_guide_sort">Tri des chaînes</string>
+    <string name="advanced_guide_sort_provider">Ordre du fournisseur</string>
+    <string name="advanced_guide_sort_number">Numéro de chaîne</string>
+    <string name="advanced_guide_sort_alpha">Ordre alphabétique</string>
+    <string name="advanced_guide_sort_favourites">Favoris en premier</string>
+    <string name="advanced_guide_sort_custom">Ordre des chaînes personnalisé</string>
+    <string name="advanced_guide_density">Densité de la chronologie</string>
+    <string name="advanced_guide_density_comfortable">Confortable</string>
+    <string name="advanced_guide_density_dense">Plus de temps visible</string>
+    <string name="advanced_guide_density_wide">Cases de programmes plus grandes</string>
+    <string name="advanced_guide_artwork">Images des programmes</string>
+    <string name="advanced_guide_progress">Indicateurs de progression des programmes</string>
+    <string name="advanced_guide_remember">Mémoriser la dernière position dans le guide</string>
+    <string name="guide_details_title">Détails du programme</string>
+    <string name="guide_details_timing_unavailable">Horaires du programme indisponibles</string>
+    <string name="guide_details_airing">En cours de diffusion</string>
+    <string name="guide_details_upcoming">À venir</string>
+    <string name="guide_details_ended">Terminé</string>
+    <string name="guide_details_no_description">Aucune description du programme disponible.</string>
+    <string name="guide_details_watch_now">Regarder maintenant</string>
+    <string name="guide_details_back">Retour au guide</string>
+    <string name="guide_details_action_failed">Cette action n\'a pas pu être effectuée. Vérifiez que le programme et la source sont toujours disponibles.</string>
+    <string name="guide_details_starting_recording">Démarrage de l\'enregistrement : %1$s</string>
+    <string name="guide_details_stopping_recording">Arrêt de l\'enregistrement</string>
+    <string name="epg_search_catalogue">Chaînes et bibliothèque</string>
+    <string name="epg_search_programmes">Programmes</string>
+    <string name="epg_search_hint">Recherchez des titres, chaînes, genres ou descriptions pour les 7 prochains jours.</string>
+    <string name="epg_search_loading">Recherche dans le guide…</string>
+    <string name="epg_search_empty">Aucun programme ne correspond à « %1$s » avec ce filtre. Essayez un autre filtre ou mettez à jour le guide dans les paramètres.</string>
+    <string name="epg_search_limit">200 premiers résultats · 7 prochains jours</string>
+    <string name="epg_search_all">Tous les programmes</string>
+    <string name="epg_search_airing">En cours de diffusion</string>
+    <string name="epg_search_upcoming">À venir</string>
+    <string name="epg_search_movies">Films</string>
+    <string name="epg_search_sports">Sport</string>
+    <string name="epg_search_series">Séries</string>
+    <string name="epg_search_now">En ce moment</string>
+</resources>

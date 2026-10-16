@@ -47,7 +47,7 @@ data class AdvancedCloudRecord(
             "channel_favourite_state", "movie_favourite_state", "series_favourite_state" -> AdvancedSyncCategory.FAVOURITE_REMOVALS
             "app_order" -> AdvancedSyncCategory.APP_FAVOURITES
             "home_shelf", "home_order", "home_layout", "home_group" -> AdvancedSyncCategory.HOME_PREFERENCES
-            "setting" -> AdvancedSyncCategory.COMPATIBLE_SETTINGS
+            "setting", "guide_setting" -> AdvancedSyncCategory.COMPATIBLE_SETTINGS
             else -> throw IllegalArgumentException("Unsupported advanced cloud record kind.")
         }
 
@@ -84,6 +84,15 @@ data class AdvancedCloudRecord(
                 "subtitles_enabled" -> boolean()
                 else -> false
             }
+            // Separate kind keeps these additions out of older clients' explicit kind queries.
+            "guide_setting" -> when (recordKey) {
+                "guide_layout" -> textValue in setOf("STANDARD", "COMPACT", "EXPANDED") && text()
+                "guide_density" -> textValue in setOf("COMFORTABLE", "DENSE", "WIDE") && text()
+                "guide_default_filter" -> textValue in setOf("ALL", "FAVOURITES", "RECENT", "GROUP", "PROVIDER", "WITH_EPG", "AIRING") && text()
+                "guide_sort" -> textValue in setOf("PROVIDER_ORDER", "CHANNEL_NUMBER", "ALPHABETICAL", "FAVOURITES_FIRST", "CUSTOM") && text()
+                "guide_show_artwork", "guide_show_progress", "guide_remember_position" -> boolean()
+                else -> false
+            }
             else -> false
         }
     }
@@ -106,7 +115,7 @@ data class AdvancedCloudRecord(
         const val MAX_GROUP_MEMBERS = 2_000
         const val MAX_APPS = 200
         val KINDS = setOf("group_name", "group_rank", "group_members", "channel_hidden", "channel_name", "channel_order",
-            "channel_favourite_state", "movie_favourite_state", "series_favourite_state", "app_order", "home_shelf", "home_order", "home_layout", "home_group", "setting")
+            "channel_favourite_state", "movie_favourite_state", "series_favourite_state", "app_order", "home_shelf", "home_order", "home_layout", "home_group", "setting", "guide_setting")
         val HOME_SHELVES = setOf("continue", "recent", "favourites", "on_now", "movies", "series", "apps")
         private val HASH = Regex("[a-f0-9]{64}")
         private val PACKAGE = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")

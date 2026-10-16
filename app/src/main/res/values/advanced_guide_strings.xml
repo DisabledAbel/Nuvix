@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="advanced_guide_customization">Guide customization</string>
+    <string name="advanced_guide_layout">Guide layout</string>
+    <string name="advanced_guide_standard">Standard</string>
+    <string name="advanced_guide_compact">Compact</string>
+    <string name="advanced_guide_expanded">Expanded</string>
+    <string name="advanced_guide_filter">Default channel filter</string>
+    <string name="advanced_guide_filter_all">All channels</string>
+    <string name="advanced_guide_filter_favourites">Favorite channels</string>
+    <string name="advanced_guide_filter_recent">Recently watched</string>
+    <string name="advanced_guide_filter_group">Custom channel group</string>
+    <string name="advanced_guide_filter_provider">Provider</string>
+    <string name="advanced_guide_filter_epg">Channels with guide data</string>
+    <string name="advanced_guide_filter_airing">Currently airing</string>
+    <string name="advanced_guide_filter_target_hint">Choose the group or provider in the guide. That selection stays on this device.</string>
+    <string name="advanced_guide_sort">Channel sorting</string>
+    <string name="advanced_guide_sort_provider">Provider order</string>
+    <string name="advanced_guide_sort_number">Channel number</string>
+    <string name="advanced_guide_sort_alpha">Alphabetical</string>
+    <string name="advanced_guide_sort_favourites">Favorites first</string>
+    <string name="advanced_guide_sort_custom">Custom channel order</string>
+    <string name="advanced_guide_density">Timeline density</string>
+    <string name="advanced_guide_density_comfortable">Comfortable</string>
+    <string name="advanced_guide_density_dense">More time visible</string>
+    <string name="advanced_guide_density_wide">Larger program cells</string>
+    <string name="advanced_guide_artwork">Program artwork</string>
+    <string name="advanced_guide_progress">Program progress indicators</string>
+    <string name="advanced_guide_remember">Remember last guide position</string>
+</resources>

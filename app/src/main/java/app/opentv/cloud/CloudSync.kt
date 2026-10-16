@@ -301,7 +301,9 @@ class CloudSync private constructor(context: Context) {
         val keys = mapOf(
             "nuvix_launcher" to setOf("favorite_packages", "startup_destination"),
             "nuvix_home" to (AdvancedCloudRecord.HOME_SHELVES + setOf("shelf_order_v1", "presentation_v1")),
-            "opentv_settings" to setOf("theme_mode", "channel_layout", "subtitles_enabled"),
+            "opentv_settings" to setOf("theme_mode", "channel_layout", "subtitles_enabled",
+                "guide_layout", "guide_density", "guide_default_filter", "guide_sort",
+                "guide_show_artwork", "guide_show_progress", "guide_remember_position"),
         )
         for ((name, allowed) in keys) {
             val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)

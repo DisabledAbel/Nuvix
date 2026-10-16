@@ -6,6 +6,34 @@ New code has explicit boundaries: `launcher/` wraps PackageManager, optional HOM
 
 The guide downloads and validates an XML feed off the main thread before replacing a feed inside a Room transaction. Parsing or database failure rolls back previous programs/aliases. Catalog and VOD loading continue through the original repositories. Home channel/sports shelves use bounded database queries instead of loading full playlists.
 
+Advanced EPG extends that guide rather than replacing its import/matcher or introducing another
+channel store. Typed local guide preferences feed the existing channel view model and guide
+composables. Filters reuse favorite flags, local recent IDs, provider/category selection and
+custom-group membership. Sorting changes the displayed order without writing channel numbers,
+provider identifiers or custom-group membership. Existing hidden-channel and parental checks
+remain in the shared visibility path.
+
+The visible guide observes a 24-hour time window for at most 60 visible/prefetched channel rows,
+with today's window extending from six hours before the current half-hour to eighteen hours ahead,
+with ID queries chunked at 300 and channel grouping off the main thread. Grid and list viewports
+both report their visible slice; metadata changes for the same channel refresh its EPG candidates.
+Stable channel/program identities support lazy rendering and focus restoration. Program search
+uses Room queries over cached programs and authorized local channels, bounded to 200 rows in the
+upcoming week, with cancellation when the query changes, 200 ms input debounce and a minute tick
+for airing/upcoming status. Parental exclusions and matching precedence apply before the result
+limit. It does not create a full-guide in-memory search index. Artwork is an
+optional bounded Coil request from existing metadata, with local fallback and no new service.
+Program details call the existing reminder scheduler/repository, recording engine and playback
+handoff. UI presentation and focus changes do not allocate a playback controller or tune a stream.
+
+Guide presentation preferences remain usable offline. Remembered local channel/time position
+is excluded from cloud transfer, along with provider-specific references, URLs, playback state
+and hardware settings. Seven enum/boolean values use the additive `guide_setting` record kind
+under the existing opt-in `COMPATIBLE_SETTINGS` category. The forward-only guide migration extends
+the existing validation guard without changing RLS, grants, merge RPCs or old records. Older
+clients' explicit kind queries exclude the new kind. See [guide instructions](automatic-epg.md#advanced-guide),
+[cloud sync](cloud-sync.md), and [guide testing](TESTING.md#advanced-epg).
+
 Cloud sync deliberately does not serialize the legacy LAN/NAS `SyncBundle`: that bundle contains stream URLs, which can contain provider credentials. The original `CloudRecord` protocol and `nuvix_sync_records` table continue to carry additive favorites and watch progress. A separate versioned `AdvancedCloudRecord` protocol and bounded `nuvix_advanced_records` table carry allowlisted channel organization, UUID groups, home preferences, ordered app packages, compatible settings and opt-in favorite booleans. Each preference key or independent group field has its own identity; ordered member/package lists are whole-list merge units. This keeps a rename independent of membership changes.
 
 Local Room rows and preference stores remain usable without a connection. Custom groups persist a UUID-to-local-ID mapping; cloud channel fingerprints resolve only to one authorized local channel, with unresolved references retained rather than converted into playable rows. Launcher state retains the desired package order independently of the installed subset. Remote settings enter existing typed setters rather than an arbitrary preferences import.
