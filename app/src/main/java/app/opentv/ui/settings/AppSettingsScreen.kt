@@ -56,7 +56,7 @@ import app.opentv.data.work.SyncWorker
  * [AppSettings] and takes effect immediately.
  */
 @Composable
-fun AppSettingsScreen(onBack: () -> Unit) {
+fun AppSettingsScreen(onBack: () -> Unit, onClearDiagnostics: () -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember { AppSettings.get(context) }
     val themeMode by settings.themeMode.collectAsState()
@@ -66,6 +66,9 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     val persistentLivePlayback by settings.persistentLivePlayback.collectAsState()
     val livePreview by settings.livePreview.collectAsState()
     val browsingAudio by settings.continueAudioWhileBrowsing.collectAsState()
+    val diagnosticsEnabled by settings.diagnosticsEnabled.collectAsState()
+    val diagnosticsDetailed by settings.diagnosticsDetailed.collectAsState()
+    val diagnosticsTechnical by settings.diagnosticsTechnical.collectAsState()
     val captions by settings.subtitlesEnabled.collectAsState()
     val resumeLast by settings.resumeLastChannel.collectAsState()
     val language by settings.languageTag.collectAsState()
@@ -229,6 +232,18 @@ fun AppSettingsScreen(onBack: () -> Unit) {
             )
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        SettingsSection("Playback Diagnostics") {
+            ToggleRow("Enable diagnostics overlay", "Show Stream Information in playback controls.", diagnosticsEnabled, settings::setDiagnosticsEnabled)
+            ThemeOption("Default view: Compact", !diagnosticsDetailed) { settings.setDiagnosticsDetailed(false) }
+            ThemeOption("Default view: Detailed", diagnosticsDetailed) { settings.setDiagnosticsDetailed(true) }
+            ToggleRow("Show technical measurements", "Include codec, renderer, audio and network information.", diagnosticsTechnical, settings::setDiagnosticsTechnical)
+            OutlinedButton(onClick = {
+                onClearDiagnostics()
+                Toast.makeText(context, "Current-session diagnostics cleared", Toast.LENGTH_SHORT).show()
+            }) { Text("Clear current-session diagnostics") }
+        }
         Spacer(Modifier.height(16.dp))
 
         TmdbKeySection(settings)

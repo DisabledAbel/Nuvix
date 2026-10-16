@@ -7,6 +7,12 @@
   selection. Preserve existing preferences, UUID groups and persistent live playback.
 - Extend the opt-in home-preferences cloud category with validated whole-list order and
   versioned presentation records; add forward-only SQL migration, JVM/Compose and RLS tests.
+- Add passive real-time playback diagnostics to live TV, movies, episodes and supported
+  recordings, with remote-accessible Compact/Detailed panels, local preferences, bounded
+  session history, documented health rules and sanitized playback errors.
+- Add fake-player and Robolectric Compose diagnostics tests to the existing JVM/CI suite.
+  Device playback, PiP and 720p/1080p/4K remote acceptance still require hardware testing.
+
 - Extend optional Supabase sync with separate opt-ins for channel visibility, names and
   ordering; UUID custom groups and ordered membership; home shelf visibility; ordered
   pinned apps; and allowlisted appearance, subtitle, guide and startup preferences.

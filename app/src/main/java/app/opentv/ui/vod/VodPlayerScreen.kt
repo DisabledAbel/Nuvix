@@ -12,6 +12,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
@@ -92,6 +94,7 @@ import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.player.LivePlaybackSession
+import app.opentv.ui.player.StreamInformation
 import app.opentv.player.PlayerController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -163,6 +166,8 @@ fun VodPlayerScreen(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
 
+    val diagnosticsEnabled by graph.settings.diagnosticsEnabled.collectAsState()
+    var diagnosticsVisible by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var interaction by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val barFocus = remember { FocusRequester() }
@@ -244,16 +249,17 @@ fun VodPlayerScreen(
     // Auto-hide when playing and not paused/scrubbing and no picker open. A growing recording dips in
     // and out of Buffering as it rides the write head, so for that case Buffering counts as "playing"
     // here — otherwise a single hiccup would pin the transport bar on screen for the rest of the watch.
-    LaunchedEffect(controlsVisible, interaction, state, paused, scrubbing, vodPanel) {
+    LaunchedEffect(controlsVisible, interaction, state, paused, scrubbing, vodPanel, diagnosticsVisible) {
         val activelyPlaying = state is PlayerController.State.Playing ||
             (growingRec && state is PlayerController.State.Buffering)
-        if (controlsVisible && !paused && !scrubbing && vodPanel == VodPanel.NONE && activelyPlaying) {
+        if (!diagnosticsVisible && controlsVisible && !paused && !scrubbing && vodPanel == VodPanel.NONE && activelyPlaying) {
             delay(5_000)
             controlsVisible = false
         }
     }
 
-    LaunchedEffect(controlsVisible, vodPanel) {
+    LaunchedEffect(controlsVisible, vodPanel, diagnosticsVisible) {
+        if (diagnosticsVisible) return@LaunchedEffect
         if (controlsVisible) {
             delay(40)
             runCatching { if (vodPanel != VodPanel.NONE) panelFocus.requestFocus() else barFocus.requestFocus() }
@@ -270,6 +276,14 @@ fun VodPlayerScreen(
             controlsVisible && activelyPlaying && !paused -> controlsVisible = false
             else -> onBack()
         }
+    }
+
+    LaunchedEffect(diagnosticsEnabled) {
+        if (!diagnosticsEnabled) diagnosticsVisible = false
+    }
+
+    if (diagnosticsVisible && diagnosticsEnabled) {
+        StreamInformation(controller.diagnostics) { diagnosticsVisible = false; reveal() }
     }
 
     Box(
@@ -407,7 +421,7 @@ fun VodPlayerScreen(
 
                 Spacer(Modifier.height(10.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                     VodChip(Icons.Filled.FastRewind, stringResource(R.string.player_rewind)) {
                         if (growingRec) seekRelative(-15_000) else controller.seekBackward(); interaction++
                     }
@@ -434,6 +448,12 @@ fun VodPlayerScreen(
                     VodChip(Icons.Filled.Audiotrack, stringResource(R.string.player_audio)) {
                         vodPanel = if (vodPanel == VodPanel.AUDIO) VodPanel.NONE else VodPanel.AUDIO
                         interaction++
+                    }
+                    if (diagnosticsEnabled) {
+                        Spacer(Modifier.width(10.dp))
+                        VodChip(Icons.Filled.Info, "Stream Information") {
+                            vodPanel = VodPanel.NONE; diagnosticsVisible = true; interaction++
+                        }
                     }
                 }
             }

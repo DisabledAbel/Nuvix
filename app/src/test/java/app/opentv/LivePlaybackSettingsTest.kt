@@ -76,6 +76,19 @@ class LivePlaybackSettingsTest {
         assertThat(restored.lastChannelId).isEqualTo(42L)
     }
 
+    @Test fun `diagnostic choices persist locally with compact hidden by default`() {
+        val settings = freshSettings()
+        assertThat(settings.diagnosticsEnabled.value).isTrue()
+        assertThat(settings.diagnosticsDetailed.value).isFalse()
+        settings.setDiagnosticsEnabled(false)
+        settings.setDiagnosticsDetailed(true)
+        settings.setDiagnosticsTechnical(false)
+        val restored = freshSettings()
+        assertThat(restored.diagnosticsEnabled.value).isFalse()
+        assertThat(restored.diagnosticsDetailed.value).isTrue()
+        assertThat(restored.diagnosticsTechnical.value).isFalse()
+    }
+
     // Reconstruct the store without modifying the production singleton or its ownership model.
     private fun freshSettings(): AppSettings = AppSettings::class.java
         .getDeclaredConstructor(Context::class.java)

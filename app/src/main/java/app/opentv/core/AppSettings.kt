@@ -51,6 +51,23 @@ class AppSettings private constructor(context: Context) {
     private val _channelLayout = MutableStateFlow(readChannelLayout())
     val channelLayout: StateFlow<ChannelLayout> = _channelLayout.asStateFlow()
 
+    // Local-only diagnostics preferences. Live measurements never enter cloud records.
+    private val _diagnosticsEnabled = MutableStateFlow(prefs.getBoolean("diagnostics_enabled", true))
+    val diagnosticsEnabled = _diagnosticsEnabled.asStateFlow()
+    private val _diagnosticsDetailed = MutableStateFlow(prefs.getBoolean("diagnostics_detailed", false))
+    val diagnosticsDetailed = _diagnosticsDetailed.asStateFlow()
+    private val _diagnosticsTechnical = MutableStateFlow(prefs.getBoolean("diagnostics_technical", true))
+    val diagnosticsTechnical = _diagnosticsTechnical.asStateFlow()
+    fun setDiagnosticsEnabled(value: Boolean) {
+        prefs.edit().putBoolean("diagnostics_enabled", value).apply(); _diagnosticsEnabled.value = value
+    }
+    fun setDiagnosticsDetailed(value: Boolean) {
+        prefs.edit().putBoolean("diagnostics_detailed", value).apply(); _diagnosticsDetailed.value = value
+    }
+    fun setDiagnosticsTechnical(value: Boolean) {
+        prefs.edit().putBoolean("diagnostics_technical", value).apply(); _diagnosticsTechnical.value = value
+    }
+
     /** Whether embedded subtitles/closed captions are shown when a stream carries them. */
     private val _subtitlesEnabled = MutableStateFlow(prefs.getBoolean(KEY_SUBTITLES, true))
     val subtitlesEnabled: StateFlow<Boolean> = _subtitlesEnabled.asStateFlow()

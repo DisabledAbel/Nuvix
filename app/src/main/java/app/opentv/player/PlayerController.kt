@@ -277,6 +277,8 @@ class PlayerController(
             })
         }
 
+    val diagnostics = PlaybackDiagnostics(player)
+
     private val bufferJob = scope.launch {
         bufferSettings.configuration.collectLatest { loadControl.update(effectiveBuffer(it)) }
     }
@@ -327,6 +329,9 @@ class PlayerController(
                 // stop() rather than release(): keeps the codec and the surface alive.
                 stop()
                 clearMediaItems()
+                if (loadedRequest?.url != request.url || loadedRequest?.title != request.title) {
+                    diagnostics.beginSession(DiagnosticProtocol.identify(mediaItem))
+                }
                 setMediaItem(mediaItem)
                 if (!request.isLive && request.startPositionMillis > 0) {
                     seekTo(request.startPositionMillis)
@@ -441,6 +446,7 @@ class PlayerController(
         loadedRequest = null
         player.stop()
         player.clearMediaItems()
+        diagnostics.beginSession(null)
         _state.value = State.Idle
     }
 
@@ -452,6 +458,7 @@ class PlayerController(
         bufferJob.cancel()
         switchJob?.cancel()
         retryJob?.cancel()
+        diagnostics.close()
         player.release()
     }
 

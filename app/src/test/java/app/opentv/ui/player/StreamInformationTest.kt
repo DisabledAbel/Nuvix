@@ -1,0 +1,83 @@
+/* Copyright (C) 2026 Nuvix Contributors. Licensed under GPL-3.0-or-later. */
+package app.opentv.ui.player
+
+import android.app.Application
+import android.os.Looper
+import org.robolectric.Shadows.shadowOf
+import java.util.concurrent.TimeUnit
+import androidx.annotation.OptIn
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import app.opentv.core.AppSettings
+import app.opentv.player.*
+import com.google.common.truth.Truth.assertThat
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+
+@OptIn(UnstableApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, sdk = [34], qualifiers = "w960dp-h540dp-land")
+@kotlin.OptIn(ExperimentalTestApi::class)
+class StreamInformationTest {
+    @get:Rule val compose = createComposeRule()
+    private lateinit var settings: AppSettings
+    @Before fun reset() {
+        settings = AppSettings.get(RuntimeEnvironment.getApplication())
+        settings.setDiagnosticsEnabled(true); settings.setDiagnosticsDetailed(false); settings.setDiagnosticsTechnical(true)
+    }
+    @Test fun `compact and detailed honor technical preference and mark unsupported values`() {
+        val rows = diagnosticRows(DiagnosticSnapshot(), false, true).toMap()
+        assertThat(rows["Resolution"]).isEqualTo("Unavailable")
+        assertThat(rows).doesNotContainKey("Audio codec")
+        val detailed = diagnosticRows(DiagnosticSnapshot(), true, true).toMap()
+        assertThat(detailed["Video bitrate (measured)"]).isEqualTo("Unavailable")
+        assertThat(detailed["Available bandwidth (estimate)"]).isEqualTo("Unavailable")
+        assertThat(diagnosticRows(DiagnosticSnapshot(), true, false).toMap()).doesNotContainKey("Audio codec")
+    }
+    @Test fun `hidden until opened focus close and back never mutate playback or add listeners`() {
+        val fake = DiagnosticPlayer().apply { state = Player.STATE_READY; playing = true }
+        val observer = PlaybackDiagnostics(fake.player)
+        compose.setContent {
+            var visible by remember { mutableStateOf(false) }
+            MaterialTheme {
+                Button(onClick = { visible = true }) { Text("Open diagnostics") }
+                if (visible) StreamInformation(observer) { visible = false }
+            }
+        }
+        compose.onNodeWithText("Stream Information").assertDoesNotExist()
+        compose.onNodeWithText("Open diagnostics").performClick()
+        compose.onNodeWithText("Close").assertIsFocused()
+        compose.onNodeWithText("View: Compact").performClick()
+        compose.onNodeWithText("View: Detailed").assertExists()
+        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Clear").assertIsFocused()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Stream Information").assertDoesNotExist()
+        compose.runOnIdle {
+            assertThat(fake.samples).isGreaterThan(0)
+            val samples = fake.samples
+            shadowOf(Looper.getMainLooper()).idleFor(2100, TimeUnit.MILLISECONDS)
+            assertThat(fake.samples).isEqualTo(samples)
+        }
+        compose.onNodeWithText("Open diagnostics").performClick()
+        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.Back) }
+        compose.onNodeWithText("Stream Information").assertDoesNotExist()
+        assertThat(fake.playing).isTrue()
+        assertThat(fake.listeners).hasSize(1)
+        assertThat(fake.analytics).hasSize(1)
+        compose.runOnIdle { observer.close() }
+        assertThat(fake.listeners).isEmpty()
+    }
+}
