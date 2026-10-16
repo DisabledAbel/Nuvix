@@ -126,6 +126,7 @@ class PlayerController(
     internal val isReleased: Boolean get() = released
     private var explicitTextSelection = false
     private var generation = 0L
+    private var diagnosticMediaId = 0L
     private val _userPaused = MutableStateFlow(false)
     val userPaused: StateFlow<Boolean> = _userPaused.asStateFlow()
 
@@ -311,7 +312,10 @@ class PlayerController(
             httpFactory.setDefaultRequestProperties(mapOf("User-Agent" to request.userAgent))
             _state.value = State.Buffering(request.title)
 
+            val newDiagnosticSession = loadedRequest?.url != request.url || loadedRequest?.title != request.title
+            if (newDiagnosticSession) diagnosticMediaId++
             val mediaItem = MediaItem.Builder()
+                .setMediaId("diagnostics-$diagnosticMediaId")
                 .setUri(request.url)
                 .apply {
                     // Only meaningful for live streams; setting it on VOD skews seeking.
@@ -329,8 +333,8 @@ class PlayerController(
                 // stop() rather than release(): keeps the codec and the surface alive.
                 stop()
                 clearMediaItems()
-                if (loadedRequest?.url != request.url || loadedRequest?.title != request.title) {
-                    diagnostics.beginSession(DiagnosticProtocol.identify(mediaItem))
+                if (newDiagnosticSession) {
+                    diagnostics.beginSession(DiagnosticProtocol.identify(mediaItem), mediaItem.mediaId)
                 }
                 setMediaItem(mediaItem)
                 if (!request.isLive && request.startPositionMillis > 0) {
@@ -446,7 +450,7 @@ class PlayerController(
         loadedRequest = null
         player.stop()
         player.clearMediaItems()
-        diagnostics.beginSession(null)
+        diagnostics.beginSession(null, "stopped")
         _state.value = State.Idle
     }
 

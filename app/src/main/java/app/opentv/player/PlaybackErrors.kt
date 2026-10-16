@@ -53,6 +53,9 @@ object PlaybackErrors {
             PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ->
                 "This device has no decoder for that format."
 
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
             PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ->
                 "This device can't decode that video format. A different quality may work."
 

@@ -134,6 +134,7 @@ internal class DiagnosticTimeline(private val clock: () -> Long) {
     fun recoverableDecoderError() { decoderErrors++; lastInterruption = clock(); record("Decoder error") }
     fun health(): PlaybackHealth = when {
         error != null -> PlaybackHealth.ERROR
+        stateCode == Player.STATE_IDLE || stateCode == Player.STATE_ENDED -> PlaybackHealth.UNKNOWN
         stateCode == Player.STATE_BUFFERING && playWhenReady -> PlaybackHealth.BUFFERING
         lastInterruption?.let { clock() - it < 30_000 } == true -> PlaybackHealth.INTERRUPTED
         played -> PlaybackHealth.NORMAL
@@ -170,6 +171,8 @@ class PlaybackDiagnostics internal constructor(
     private val _snapshot = MutableStateFlow(DiagnosticSnapshot())
     val snapshot = _snapshot.asStateFlow()
     private var closed = false
+    private var mediaId: String? = null
+    private val eventWindow = androidx.media3.common.Timeline.Window()
     private var decoder: String? = null
     private var renderedTotal = 0L
     private var currentCounters: DecoderCounters? = null
@@ -186,18 +189,21 @@ class PlaybackDiagnostics internal constructor(
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) timeline.seek()
         }
-        override fun onPlayerError(error: PlaybackException) {
-            timeline.failure(PlaybackErrors.describe(error), error.errorCode in 4000..4999 || error.errorCode in 5000..5999)
-        }
     }
     private val analytics = object : AnalyticsListener {
-        override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { video = format }
-        override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { audio = format }
-        override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) { decoder = DiagnosticFormats.token(decoderName) }
+        override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
+            if (!accepts(eventTime)) return
+            timeline.failure(PlaybackErrors.describe(error), error.errorCode in 4000..5999)
+        }
+        override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { if (accepts(eventTime)) video = format }
+        override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { if (accepts(eventTime)) audio = format }
+        override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) { if (accepts(eventTime)) decoder = DiagnosticFormats.token(decoderName) }
         override fun onVideoEnabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+            if (!accepts(eventTime)) return
             currentCounters = decoderCounters; counterBaseline = 0
         }
         override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+            if (!accepts(eventTime)) return
             if (currentCounters === decoderCounters) {
                 decoderCounters.ensureUpdated()
                 renderedTotal += (decoderCounters.renderedOutputBufferCount - counterBaseline).coerceAtLeast(0)
@@ -205,20 +211,31 @@ class PlaybackDiagnostics internal constructor(
             }
             decoder = null; video = null
         }
-        override fun onAudioDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) { audio = null }
-        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) { timeline.dropped(droppedFrames) }
+        override fun onAudioDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) { if (accepts(eventTime)) audio = null }
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) { if (accepts(eventTime)) timeline.dropped(droppedFrames) }
         override fun onBandwidthEstimate(eventTime: AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+            if (!accepts(eventTime)) return
             timeline.bandwidth(totalLoadTimeMs, totalBytesLoaded)
             estimate = bitrateEstimate.takeIf { it > 0 }; estimateAt = clock()
         }
-        override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) { timeline.recoverableDecoderError() }
-        override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) { timeline.recoverableDecoderError() }
+        override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) { if (accepts(eventTime)) timeline.recoverableDecoderError() }
+        override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) { if (accepts(eventTime)) timeline.recoverableDecoderError() }
     }
     init { player.addListener(listener); exoPlayer?.addAnalyticsListener(analytics) }
 
+    // Renderer callbacks can arrive after a fast channel change. Match an opaque owner ID,
+    // never a stream URL, so a late callback cannot contaminate the new session.
+    private fun accepts(event: AnalyticsListener.EventTime): Boolean {
+        if (closed) return false
+        val expected = mediaId ?: return true
+        return event.windowIndex in 0 until event.timeline.windowCount &&
+            event.timeline.getWindow(event.windowIndex, eventWindow).mediaItem.mediaId == expected
+    }
+
     /** Called by the existing owner after stopping the old item and before preparing a new one. */
-    fun beginSession(streamProtocol: String?) {
+    fun beginSession(streamProtocol: String?, mediaId: String? = null) {
         if (closed) return
+        this.mediaId = mediaId
         protocol = streamProtocol; video = null; audio = null; decoder = null
         currentCounters = null; renderedTotal = 0; counterBaseline = 0
         estimate = null; estimateAt = null; timeline.reset(); _snapshot.value = DiagnosticSnapshot()
@@ -260,6 +277,7 @@ class PlaybackDiagnostics internal constructor(
         if (closed) return
         closed = true; player.removeListener(listener); exoPlayer?.removeAnalyticsListener(analytics)
         timeline.reset(); _snapshot.value = DiagnosticSnapshot()
+        video = null; audio = null; decoder = null; currentCounters = null; mediaId = null
     }
 }
 

@@ -41,11 +41,12 @@ New interface text uses English fallback in other locales.
 These are simple status rules, not a numerical quality score, evaluated in this order:
 
 1. A current terminal playback error: **Playback error**.
-2. Media3 BUFFERING while playback is requested: **Buffering**.
-3. A rebuffer, decoder error, or terminal stream failure within 30 seconds:
+2. Idle or ended playback: **Insufficient measurement data**.
+3. Media3 BUFFERING while playback is requested: **Buffering**.
+4. A rebuffer, decoder error, or terminal stream failure within 30 seconds:
    **Experiencing interruptions**.
-4. Playback has produced a playing event: **Playing normally**.
-5. Otherwise: **Insufficient measurement data**.
+5. Playback has produced a playing event: **Playing normally**.
+6. Otherwise: **Insufficient measurement data**.
 
 A rebuffer/stall is a new BUFFERING transition after playback has started, while playback is
 requested, excluding explicit seeks and initial startup. Repeated events during the same
@@ -77,7 +78,8 @@ One `PlaybackDiagnostics` observer belongs to each existing `PlayerController`. 
 one Player listener and one AnalyticsListener on that controller's ExoPlayer. No new player,
 source, stream connection, recording job, or network request is constructed. The shared live
 session retains the observer across navigation/configuration changes. Its listeners are
-removed before player release. Preview/low-memory playback uses the same passive observer.
+removed before player release. Opaque media IDs reject late renderer events from a previous
+channel without retaining playback URLs. Preview/low-memory playback uses the same passive observer.
 
 Only the visible panel samples position, buffers, formats and counters, once per second while
 the Activity lifecycle is STARTED. Closing it cancels sampling. Event counters remain cheap
