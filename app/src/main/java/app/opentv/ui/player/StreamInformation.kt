@@ -4,6 +4,8 @@ package app.opentv.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -53,22 +56,19 @@ fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
     }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val closeFocus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { closeFocus.requestFocus() }
         Column(Modifier.widthIn(max = 960.dp).fillMaxWidth(0.92f).fillMaxHeight(0.88f)
             .onPreviewKeyEvent {
                 if ((it.key == Key.Back || it.key == Key.Escape) && it.type == KeyEventType.KeyDown) {
                     onClose(); true
                 } else false
             }.background(Color(0xF2111721)).padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Stream Information", Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.titleLarge)
-                Button(onClick = onClose, modifier = Modifier.focusRequester(closeFocus)) { Text("Close") }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { settings.setDiagnosticsDetailed(!detailed) }) {
-                    Text(if (detailed) "View: Detailed" else "View: Compact")
+            Text("Stream Information", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DiagnosticButton(if (detailed) "View: Detailed" else "View: Compact") {
+                    settings.setDiagnosticsDetailed(!detailed)
                 }
-                Button(onClick = diagnostics::clear) { Text("Clear") }
+                DiagnosticButton("Clear", onClick = diagnostics::clear)
+                DiagnosticButton("Close", Modifier.focusRequester(closeFocus), onClose)
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(diagnosticRows(snapshot, detailed, technical), key = { it.first }) { (label, value) ->
@@ -83,6 +83,7 @@ fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
                 }
             }
         }
+        LaunchedEffect(Unit) { closeFocus.requestFocus() }
     }
 }
 
@@ -90,6 +91,15 @@ fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
 private fun rememberSettings(): AppSettings {
     val context = LocalContext.current
     return remember(context) { AppSettings.get(context) }
+}
+
+@Composable
+private fun DiagnosticButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Button(onClick = onClick, modifier = modifier.focusProperties { canFocus = true }.onFocusChanged { focused = it.isFocused }
+        .border(2.dp, if (focused) Color.White else Color.Transparent, MaterialTheme.shapes.extraLarge)) {
+        Text(label)
+    }
 }
 
 @Composable

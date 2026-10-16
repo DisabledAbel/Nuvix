@@ -11,6 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.media3.common.Player
@@ -37,6 +38,10 @@ class StreamInformationTest {
         settings = AppSettings.get(RuntimeEnvironment.getApplication())
         settings.setDiagnosticsEnabled(true); settings.setDiagnosticsDetailed(false); settings.setDiagnosticsTechnical(true)
     }
+    private fun select(label: String) {
+        compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithText(label).performKeyInput { pressKey(Key.DirectionCenter) }
+    }
     @Test fun `compact and detailed honor technical preference and mark unsupported values`() {
         val rows = diagnosticRows(DiagnosticSnapshot(), false, true).toMap()
         assertThat(rows["Resolution"]).isEqualTo("Unavailable")
@@ -57,13 +62,13 @@ class StreamInformationTest {
             }
         }
         compose.onNodeWithText("Stream Information").assertDoesNotExist()
-        compose.onNodeWithText("Open diagnostics").performClick()
+        select("Open diagnostics")
         compose.onNodeWithText("Close").assertIsFocused()
-        compose.onNodeWithText("View: Compact").performClick()
-        compose.onNodeWithText("View: Detailed").assertExists()
-        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.DirectionLeft) }
         compose.onNodeWithText("Clear").assertIsFocused()
-        compose.onNodeWithText("Close").performClick()
+        select("View: Compact")
+        compose.onNodeWithText("View: Detailed").assertExists()
+        select("Close")
         compose.onNodeWithText("Stream Information").assertDoesNotExist()
         compose.runOnIdle {
             assertThat(fake.samples).isGreaterThan(0)
@@ -71,7 +76,7 @@ class StreamInformationTest {
             shadowOf(Looper.getMainLooper()).idleFor(2100, TimeUnit.MILLISECONDS)
             assertThat(fake.samples).isEqualTo(samples)
         }
-        compose.onNodeWithText("Open diagnostics").performClick()
+        select("Open diagnostics")
         compose.onNodeWithText("Close").performKeyInput { pressKey(Key.Back) }
         compose.onNodeWithText("Stream Information").assertDoesNotExist()
         assertThat(fake.playing).isTrue()
