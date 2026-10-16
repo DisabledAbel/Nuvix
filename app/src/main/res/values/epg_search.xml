@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="epg_search_catalogue">Channels &amp; library</string>
+    <string name="epg_search_programmes">Programs</string>
+    <string name="epg_search_hint">Search titles, channels, genres or descriptions in the next 7 days.</string>
+    <string name="epg_search_loading">Searching the guide…</string>
+    <string name="epg_search_empty">No programs match “%1$s” and this filter. Try another filter, or update your guide in Settings.</string>
+    <string name="epg_search_limit">First 200 matches · Next 7 days</string>
+    <string name="epg_search_all">All programs</string>
+    <string name="epg_search_airing">Currently airing</string>
+    <string name="epg_search_upcoming">Upcoming</string>
+    <string name="epg_search_movies">Movies</string>
+    <string name="epg_search_sports">Sports</string>
+    <string name="epg_search_series">Series</string>
+    <string name="epg_search_now">On now</string>
+</resources>

@@ -51,6 +51,106 @@ class AppSettings private constructor(context: Context) {
     private val _channelLayout = MutableStateFlow(readChannelLayout())
     val channelLayout: StateFlow<ChannelLayout> = _channelLayout.asStateFlow()
 
+    // Full-guide presentation is independent of the longstanding GRID/LIST channel-list choice.
+    // Reading only known types makes older/newer or malformed preference files recover safely.
+    private val _guideLayout = MutableStateFlow(readGuideEnum(KEY_GUIDE_LAYOUT, GuideLayout.STANDARD))
+    val guideLayout: StateFlow<GuideLayout> = _guideLayout.asStateFlow()
+    private val _guideDensity = MutableStateFlow(readGuideEnum(KEY_GUIDE_DENSITY, GuideTimelineDensity.COMFORTABLE))
+    val guideDensity: StateFlow<GuideTimelineDensity> = _guideDensity.asStateFlow()
+    private val _guideDefaultFilter = MutableStateFlow(readGuideEnum(KEY_GUIDE_FILTER, GuideChannelFilter.ALL))
+    val guideDefaultFilter: StateFlow<GuideChannelFilter> = _guideDefaultFilter.asStateFlow()
+    private val _guideSort = MutableStateFlow(readGuideEnum(KEY_GUIDE_SORT, GuideChannelSort.PROVIDER_ORDER))
+    val guideSort: StateFlow<GuideChannelSort> = _guideSort.asStateFlow()
+    private val _showGuideArtwork = MutableStateFlow(readGuideBoolean(KEY_GUIDE_ARTWORK, true))
+    val showGuideArtwork: StateFlow<Boolean> = _showGuideArtwork.asStateFlow()
+    private val _showGuideProgress = MutableStateFlow(readGuideBoolean(KEY_GUIDE_PROGRESS, true))
+    val showGuideProgress: StateFlow<Boolean> = _showGuideProgress.asStateFlow()
+    private val _rememberGuidePosition = MutableStateFlow(readGuideBoolean(KEY_GUIDE_REMEMBER, true))
+    val rememberGuidePosition: StateFlow<Boolean> = _rememberGuidePosition.asStateFlow()
+    private val _guideFilterGroupId = MutableStateFlow(readGuideId(KEY_GUIDE_GROUP))
+    val guideFilterGroupId: StateFlow<Long?> = _guideFilterGroupId.asStateFlow()
+    private val _guideFilterProviderId = MutableStateFlow(readGuideId(KEY_GUIDE_PROVIDER))
+    val guideFilterProviderId: StateFlow<Long?> = _guideFilterProviderId.asStateFlow()
+    private val _lastGuidePosition = MutableStateFlow(readGuidePosition())
+    val lastGuidePosition: StateFlow<GuidePosition?> = _lastGuidePosition.asStateFlow()
+
+    fun setGuideLayout(layout: GuideLayout) {
+        prefs.edit().putString(KEY_GUIDE_LAYOUT, layout.name).apply()
+        _guideLayout.value = layout
+    }
+
+    fun setGuideDensity(density: GuideTimelineDensity) {
+        prefs.edit().putString(KEY_GUIDE_DENSITY, density.name).apply()
+        _guideDensity.value = density
+    }
+
+    /** Also used by portable cloud preferences; it never changes device-local filter targets. */
+    fun setGuideDefaultFilter(filter: GuideChannelFilter) {
+        prefs.edit().putString(KEY_GUIDE_FILTER, filter.name).apply()
+        _guideDefaultFilter.value = filter
+    }
+
+    /** Keep the last group/provider selection available when switching to another filter. */
+    fun setGuideFilter(filter: GuideChannelFilter, groupId: Long? = null, providerId: Long? = null) {
+        val editor = prefs.edit().putString(KEY_GUIDE_FILTER, filter.name)
+        val group = groupId?.takeIf { it > 0 }
+        val provider = providerId?.takeIf { it > 0 }
+        group?.let { editor.putLong(KEY_GUIDE_GROUP, it) }
+        provider?.let { editor.putLong(KEY_GUIDE_PROVIDER, it) }
+        editor.apply()
+        group?.let { _guideFilterGroupId.value = it }
+        provider?.let { _guideFilterProviderId.value = it }
+        _guideDefaultFilter.value = filter
+    }
+
+    fun setGuideSort(sort: GuideChannelSort) {
+        prefs.edit().putString(KEY_GUIDE_SORT, sort.name).apply()
+        _guideSort.value = sort
+    }
+
+    fun setShowGuideArtwork(visible: Boolean) {
+        prefs.edit().putBoolean(KEY_GUIDE_ARTWORK, visible).apply()
+        _showGuideArtwork.value = visible
+    }
+
+    fun setShowGuideProgress(visible: Boolean) {
+        prefs.edit().putBoolean(KEY_GUIDE_PROGRESS, visible).apply()
+        _showGuideProgress.value = visible
+    }
+
+    fun setRememberGuidePosition(remember: Boolean) {
+        val editor = prefs.edit().putBoolean(KEY_GUIDE_REMEMBER, remember)
+        if (!remember) editor.remove(KEY_GUIDE_POSITION_CHANNEL).remove(KEY_GUIDE_POSITION_TIME)
+        editor.apply()
+        _rememberGuidePosition.value = remember
+        if (!remember) _lastGuidePosition.value = null
+    }
+
+    /** Focus movement never changes the saved live playback channel. */
+    fun setGuidePosition(channelId: Long, timeMs: Long) {
+        if (!_rememberGuidePosition.value || channelId <= 0 || timeMs < 0) return
+        val position = GuidePosition(channelId, timeMs)
+        if (_lastGuidePosition.value == position) return
+        prefs.edit().putLong(KEY_GUIDE_POSITION_CHANNEL, channelId)
+            .putLong(KEY_GUIDE_POSITION_TIME, timeMs).apply()
+        _lastGuidePosition.value = position
+    }
+
+    private inline fun <reified T : Enum<T>> readGuideEnum(key: String, fallback: T): T {
+        val saved = prefs.all[key] as? String
+        return enumValues<T>().firstOrNull { it.name == saved } ?: fallback
+    }
+
+    private fun readGuideBoolean(key: String, fallback: Boolean): Boolean = prefs.all[key] as? Boolean ?: fallback
+    private fun readGuideId(key: String): Long? = (prefs.all[key] as? Long)?.takeIf { it > 0 }
+
+    private fun readGuidePosition(): GuidePosition? {
+        if (!_rememberGuidePosition.value) return null
+        val channel = readGuideId(KEY_GUIDE_POSITION_CHANNEL) ?: return null
+        val time = (prefs.all[KEY_GUIDE_POSITION_TIME] as? Long)?.takeIf { it >= 0 } ?: return null
+        return GuidePosition(channel, time)
+    }
+
     // Local-only diagnostics preferences. Live measurements never enter cloud records.
     private val _diagnosticsEnabled = MutableStateFlow(prefs.getBoolean("diagnostics_enabled", true))
     val diagnosticsEnabled = _diagnosticsEnabled.asStateFlow()
@@ -501,6 +601,17 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_EPG_SUPPRESSED = "epg_suppressed_feed_hashes"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_CHANNEL_LAYOUT = "channel_layout"
+        private const val KEY_GUIDE_LAYOUT = "guide_layout"
+        private const val KEY_GUIDE_DENSITY = "guide_density"
+        private const val KEY_GUIDE_FILTER = "guide_default_filter"
+        private const val KEY_GUIDE_SORT = "guide_sort"
+        private const val KEY_GUIDE_ARTWORK = "guide_show_artwork"
+        private const val KEY_GUIDE_PROGRESS = "guide_show_progress"
+        private const val KEY_GUIDE_REMEMBER = "guide_remember_position"
+        private const val KEY_GUIDE_GROUP = "guide_filter_group_id"
+        private const val KEY_GUIDE_PROVIDER = "guide_filter_provider_id"
+        private const val KEY_GUIDE_POSITION_CHANNEL = "guide_position_channel_id"
+        private const val KEY_GUIDE_POSITION_TIME = "guide_position_time_ms"
         private const val KEY_SUBTITLES = "subtitles_enabled"
         private const val KEY_PREVIEW_VIDEO = "guide_preview_video"
         private const val KEY_PREVIEW_SOUND = "guide_preview_sound"

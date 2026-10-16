@@ -93,6 +93,8 @@ fun GuidePreview(
     onPrevDay: () -> Unit = {},
     onNextDay: () -> Unit = {},
     modifier: Modifier = Modifier,
+    canGoNextDay: Boolean = true,
+    recordAvailable: Boolean = true,
 ) {
     Row(
         modifier
@@ -187,7 +189,7 @@ fun GuidePreview(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
-                    IconButton(onClick = onNextDay) {
+                    IconButton(onClick = onNextDay, enabled = canGoNextDay) {
                         Icon(
                             Icons.Default.KeyboardArrowRight,
                             contentDescription = stringResource(R.string.guide_next_day),
@@ -195,7 +197,7 @@ fun GuidePreview(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (row != null) {
+                if (row != null && (recordAvailable || isRecording)) {
                     IconButton(onClick = onRecord) {
                         // Red throughout — the record convention — but the glyph switches to a
                         // stop square while a recording is running, so a press visibly does

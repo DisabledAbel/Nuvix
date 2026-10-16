@@ -10,7 +10,9 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 
 ## Features
 
-- Live TV, time-grid guide, movies, TV shows, and remote-friendly navigation.
+- Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
+- Guide filters, channel sorting, hour/day jumps, bounded program search, and program details
+  with existing reminders and recording actions. See the [guide instructions](docs/automatic-epg.md#advanced-guide).
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
 - Real-time Stream Information with Compact/Detailed views, buffer health and safe errors. See [playback diagnostics](docs/playback-diagnostics.md).
@@ -36,6 +38,10 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
 - **Launcher:** Open **Settings → Home launcher** and enable the HOME entry. Use your device's default-home selector where supported. Restore the original default launcher before disabling the entry. See [device compatibility](docs/launcher-compatibility.md).
 - **Live playback:** Under **Settings → Display & playback → Playback**, choose **Persistent Live Playback**, **Live Preview**, and **Continue Audio While Browsing**. Select the preview to return to fullscreen. Disable persistence on devices that struggle to retain video while browsing.
+- **Guide:** Open **Guide settings** to choose the layout, default filter, sorting, timeline
+  density, artwork, progress and position preferences. Guide controls apply without restarting;
+  D-pad and Select open programs, and Back returns to the guide. Filters use your existing
+  favorites, recent channels, providers and custom groups. They do not change channel data.
 - **Cloud sync:** Apply the supplied migrations to your own project, sign in under **Settings → Supabase cloud sync**, then enable sync and choose categories on each TV. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 

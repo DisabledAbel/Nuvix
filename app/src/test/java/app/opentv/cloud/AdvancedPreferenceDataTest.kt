@@ -48,7 +48,7 @@ class AdvancedPreferenceDataTest {
             .commit()
         val records = data.snapshot(device, 1_000)
 
-        assertThat(records).hasSize(14)
+        assertThat(records).hasSize(21)
         assertThat(records.filter { it.kind == "setting" }.map { it.recordKey })
             .containsExactly("theme_mode", "channel_layout", "subtitles_enabled", "startup_destination")
         assertThat(records.first { it.recordKey == "theme_mode" }.textValue).isEqualTo("LIGHT")

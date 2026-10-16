@@ -8,14 +8,15 @@ Nuvix works without an account. Cloud sync is disabled until explicitly enabled.
    - `supabase/migrations/20261013185918_cloud_records.sql`
    - `supabase/migrations/20261015071424_advanced_cloud_sync.sql`
    - `supabase/migrations/20261016032322_advanced_home_preferences.sql`
-   The second migration requires the first and preserves existing favorites/progress rows; apply the third after the second. Do not edit the original deployed migration or reset the database. Repository validation uses isolated PostgreSQL; it does not deploy to your hosted project.
+   - `supabase/migrations/20261016054742_advanced_guide_preferences.sql`
+   Each migration requires its predecessors and preserves existing rows. Do not edit the original deployed migration or reset the database. Repository validation uses isolated PostgreSQL; it does not deploy to your hosted project.
 2. Enable email authentication and configure email delivery. The Supabase **Magic Link** template must contain the numeric `{{ .Token }}`, for example `<p>Your Nuvix sign-in code: {{ .Token }}</p>`. If signup is enabled, configure its confirmation template similarly. A clickable link alone cannot complete this TV code flow. Custom SMTP is usually needed for non-test recipients. CAPTCHA-required projects are not supported by this flow.
 3. Open **Settings → Supabase cloud sync**. Enter the project's HTTPS origin and publishable client key (or legacy `anon` key), then save. Secret and `service_role` keys are rejected. The origin cannot contain credentials, paths, query parameters or fragments; custom HTTPS origins are supported.
 4. Request an email code and enter it on the TV. This may create an Auth user if your project allows signup. The existing email-code flow is retained; no browser/QR device authorization is introduced.
 5. Enable cloud sync. Select each additional category you want to share, on **each TV**. New categories default off, including for existing cloud users. Favorites/watch progress retain the original category behavior. Favorite removals require their own additional opt-in.
 6. Repeat with the same Supabase project and email account on another TV. Use **Sync Now** to validate the session, capture pending permitted changes, upload, pull, apply and update status.
 
-Deploy all three migrations in order before enabling advanced categories in updated clients. Older clients can continue using the original records. Older clients do not understand favorite removals; use updated clients on all TVs for that category. No production migration is applied automatically by the app or CI.
+Deploy all four migrations in order before enabling advanced categories in updated clients. Older clients can continue using the original records. Older clients do not understand favorite removals; use updated clients on all TVs for that category. No production migration is applied automatically by the app or CI.
 
 ## Categories and supported data
 
@@ -26,7 +27,7 @@ Deploy all three migrations in order before enabling advanced categories in upda
 | Custom groups | UUID identity, name/deletion, display rank, ordered channel membership | Off; name 1–120 code points, rank 0–1,000,000, up to 2,000 unique references per group |
 | Home preferences | Shelf and custom-group visibility, shelf order, and v1 presentation: layout, card sizes/corners/metadata, background preset and featured source | Off; one boolean per shelf/group, up to 160 unique section/group IDs per order, strictly typed v1 presentation |
 | App favorites | Desired ordered package list, including explicit unpins | Off; up to 200 unique packages, at most 255 characters each |
-| Compatible settings | Theme, subtitle default, guide channel layout, startup destination | Off; strict key/value allowlist below |
+| Compatible settings | Theme, subtitle default, guide channel layout and display/filter/sort preferences, startup destination | Off; strict key/value allowlist below |
 | Favorite removals | Explicit true/false channel/movie/series favorite state | Off; additional opt-in, with versioned conflict resolution |
 
 Home preferences synchronize shelf/custom-group visibility, whole-list shelf order and v1 presentation through the existing optional category. Live-preview/audio/persistence preferences and hardware-specific buffer tuning stay local.
@@ -39,6 +40,13 @@ The compatible-settings allowlist is exact:
 | `subtitles_enabled` | Boolean |
 | `channel_layout` | `GRID`, `LIST` |
 | `startup_destination` | `HOME`, `LIVE_TV`, `GUIDE`, `LAST_WATCHED`, `APPS` |
+| `guide_layout` | `STANDARD`, `COMPACT`, `EXPANDED` |
+| `guide_density` | `COMFORTABLE`, `DENSE`, `WIDE` |
+| `guide_default_filter` | `ALL`, `FAVOURITES`, `RECENT`, `GROUP`, `PROVIDER`, `WITH_EPG`, `AIRING` |
+| `guide_sort` | `PROVIDER_ORDER`, `CHANNEL_NUMBER`, `ALPHABETICAL`, `FAVOURITES_FIRST`, `CUSTOM` |
+| `guide_show_artwork`, `guide_show_progress`, `guide_remember_position` | Boolean |
+
+Guide keys use the additive `guide_setting` kind in this same opt-in category. Older clients query explicit known kinds and never receive these new identities. Only the filter enum is portable: the selected provider/group, remembered channel/timeline, program artwork URLs and playback session remain local. A received `GROUP` or `PROVIDER` filter uses that TV's own selection; guide browsing remains available without cloud setup. Disabling remember-position can clear that TV's local saved guide position through the normal settings setter.
 
 Unknown keys, unexpected fields, wrong types, control characters in names and unsupported schema versions are rejected. No arbitrary SharedPreferences JSON is uploaded. Turning a category off stops its uploads/downloads, retaining local data and existing cloud rows. Retained pending edits are eligible again when that category is re-enabled; re-enabling does not create an account-wide reset.
 
@@ -60,7 +68,7 @@ App favorites retain the complete desired cloud package order independently of t
 
 The original `nuvix_sync_records` table and `nuvix_merge_records` RPC remain compatible. The original DTO has exactly `record_key`, `kind`, `profile_key`, `position_ms`, `duration_ms`, `updated_at_ms` and `device_id`. Allowed kinds remain `channel_favourite`, `movie_favourite`, `series_favourite`, `movie_progress` and `episode_progress`. Unrelated configuration is never stored in progress fields.
 
-The additive `nuvix_advanced_records` table and `nuvix_merge_advanced_records` RPC use strict, typed version-1 records. Each logical identity belongs to one authenticated owner and one kind/key. Accepted kinds are `channel_hidden`, `channel_name`, `channel_order`, `group_name`, `group_rank`, `group_members`, `home_shelf`, `home_order`, `home_layout`, `home_group`, `app_order`, `setting`, `channel_favourite_state`, `movie_favourite_state` and `series_favourite_state`. Upload batches contain at most 200 records.
+The additive `nuvix_advanced_records` table and `nuvix_merge_advanced_records` RPC use strict, typed version-1 records. Each logical identity belongs to one authenticated owner and one kind/key. Accepted kinds are `channel_hidden`, `channel_name`, `channel_order`, `group_name`, `group_rank`, `group_members`, `home_shelf`, `home_order`, `home_layout`, `home_group`, `app_order`, `setting`, `guide_setting`, `channel_favourite_state`, `movie_favourite_state` and `series_favourite_state`. Upload batches contain at most 200 records.
 
 Initial local values use low-priority seed revisions. Before their first upload, a pull gives an existing cloud value priority over a receiving TV’s defaults. Subsequent deliberate edits use a monotonic per-record timestamp.
 
@@ -99,7 +107,7 @@ Run `bash scripts/test-supabase.sh` against its isolated Docker PostgreSQL harne
 | Symptom | Check or action |
 |---|---|
 | Code never arrives or only opens a link | Check email delivery/SMTP, signup policy and numeric `{{ .Token }}` templates; CAPTCHA is unsupported |
-| Advanced schema/RPC unavailable | Apply all three migrations in order to the configured project; check Data API schema exposure and migration grants |
+| Advanced schema/RPC unavailable | Apply all four migrations in order to the configured project; check Data API schema exposure and migration grants |
 | Signed in but nothing transfers | Enable full sync and the same category on both TVs, then use Sync Now; check pending/error status |
 | Clock error or edits remain pending | Set both TVs to accurate automatic date/time; timestamps over five minutes ahead are rejected |
 | Channel/group entry is missing | Check authorized local content, original name/EPG fingerprints, duplicates and visibility restrictions; refresh catalogs and sync again |
@@ -151,3 +159,9 @@ timestamp/device/payload rule. Concurrent edits to separate presentation control
 use the winning whole presentation. Existing offline capture, disabled-category filtering,
 account binding, retry and exact acknowledgement behavior apply without a second sync system.
 Reset authors normal preference changes and can synchronize when this category is enabled.
+
+## Advanced guide preferences
+
+The fourth forward-only migration extends the existing `SECURITY INVOKER` validation trigger with the exact guide allowlist above. It changes no tables, existing records, grants, owner-only RLS or merge RPCs. Review and apply it through the project's normal deployment workflow before enabling compatible-settings sync on updated clients; the app and repository tests never modify production Supabase automatically.
+
+Each guide setting is one independent scalar revision under the existing timestamp/device/payload conflict rule. Offline capture, concurrent-local-edit protection, disabled-category filtering, account binding and retry use the existing journal. Unknown keys, provider or position identifiers, URLs, extra payload fields and invalid enum/boolean types are rejected by both client and server, including direct REST writes. `GuideCloudPreferencesTest` covers portable export/application and journal behavior; `supabase/tests/guide_preferences.sql` validates strict shapes, legacy-kind isolation, stale-write handling and cross-account/anonymous access in disposable PostgreSQL.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add Standard, Compact and Expanded guide layouts, local guide customization, filters using
+  existing channel organization, stable channel sorting, timeline controls and remembered position.
+- Add bounded local EPG search and a remote-friendly program details panel with optional
+  feed artwork, metadata-based categories and the existing reminder/recording/playback actions.
+  Preserve automatic EPG discovery, atomic refresh and persistent live ownership.
+- Add deterministic guide preference, navigation, database and Compose regressions to the existing
+  test workflow; document remaining Android TV, Google TV and Fire TV hardware acceptance.
 - Add remote-friendly home shelf ordering/visibility, Classic/Compact/Cinema layouts,
   card sizing/corners/metadata, solid/gradient/artwork backgrounds and featured-content
   selection. Preserve existing preferences, UUID groups and persistent live playback.

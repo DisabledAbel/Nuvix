@@ -22,11 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -37,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +55,9 @@ import com.disabledabel.nuvix.R
 import app.opentv.data.model.Channel
 import app.opentv.data.model.Movie
 import app.opentv.data.model.Series
+import app.opentv.data.model.Programme
+import app.opentv.data.db.ProgrammeSearchResult
+import app.opentv.data.repo.EpgSearchFilter
 import app.opentv.data.model.shownName
 import app.opentv.data.parser.displayTitle
 import app.opentv.ui.ChannelsViewModel
@@ -76,16 +82,22 @@ fun SearchScreen(
     onBack: () -> Unit,
     viewModel: ChannelsViewModel = viewModel(),
     vodViewModel: VodViewModel = viewModel(),
+    onOpenProgramme: ((Channel, Programme) -> Unit)? = null,
+    epgViewModel: EpgSearchViewModel = viewModel(),
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var programsMode by rememberSaveable { mutableStateOf(false) }
+    var programFilter by rememberSaveable { mutableStateOf(EpgSearchFilter.ALL) }
     val channelResults by viewModel.searchResults.collectAsState()
     val movieResults by vodViewModel.movieResults.collectAsState()
     val seriesResults by vodViewModel.seriesResults.collectAsState()
+    val epgState by epgViewModel.state.collectAsState()
     val anyResults = channelResults.isNotEmpty() || movieResults.isNotEmpty() || seriesResults.isNotEmpty()
 
-    LaunchedEffect(query) {
-        viewModel.setSearchQuery(query)
-        vodViewModel.setVodSearchQuery(query)
+    LaunchedEffect(query, programsMode, programFilter) {
+        viewModel.setSearchQuery(if (programsMode) "" else query)
+        vodViewModel.setVodSearchQuery(if (programsMode) "" else query)
+        epgViewModel.search(if (programsMode) query else "", programFilter)
     }
     BackHandler { onBack() }
 
@@ -100,19 +112,31 @@ fun SearchScreen(
             Text(
                 query.ifEmpty { stringResource(R.string.search_type_name) },
                 style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
                 color = if (query.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant
                 else MaterialTheme.colorScheme.primary,
             )
-            Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_done)) }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SearchChoiceChip(
+                selected = !programsMode, onClick = { programsMode = false },
+                label = stringResource(R.string.epg_search_catalogue),
+            )
+            SearchChoiceChip(
+                selected = programsMode, onClick = { programsMode = true },
+                label = stringResource(R.string.epg_search_programmes),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
 
         Row(Modifier.fillMaxSize()) {
             OnScreenKeyboard(
-                onKey = { if (query.length < 40) query += it },
-                onSpace = { if (query.length < 40) query += " " },
+                onKey = { query = (query + it).take(120) },
+                onSpace = { if (query.length < 120) query += " " },
                 onBackspace = { query = query.dropLast(1) },
                 onClear = { query = "" },
             )
@@ -120,30 +144,61 @@ fun SearchScreen(
             Spacer(Modifier.width(28.dp))
 
             Column(Modifier.weight(1f).fillMaxSize()) {
-                when {
-                    query.isBlank() -> Hint(stringResource(R.string.search_start_hint))
-                    query.trim().length < 2 -> Hint(stringResource(R.string.common_keep_typing))
-                    !anyResults -> Hint(stringResource(R.string.search_no_results, query))
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (channelResults.isNotEmpty()) {
-                            item { SectionHeader(stringResource(R.string.common_channels)) }
-                            items(channelResults, key = { "c${it.key}" }) { row ->
-                                SearchResultRow(row = row, onClick = { onPlayChannel(row.primary) })
-                            }
+                if (programsMode) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(EpgSearchFilter.entries, key = { it.name }) { filter ->
+                            SearchChoiceChip(
+                                selected = programFilter == filter,
+                                onClick = { programFilter = filter },
+                                label = stringResource(epgFilterLabel(filter)),
+                            )
                         }
-                        if (movieResults.isNotEmpty()) {
-                            item { SectionHeader(stringResource(R.string.nav_movies)) }
-                            items(movieResults, key = { "m${it.id}" }) { movie ->
-                                VodResultRow(movie.displayTitle, movie.posterUrl, movie.year?.toString()) {
-                                    onPlayMovie(movie)
+                    }
+                    Text(
+                        stringResource(R.string.epg_search_limit),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    when {
+                        query.isBlank() -> Hint(stringResource(R.string.epg_search_hint))
+                        query.trim().length < 2 -> Hint(stringResource(R.string.common_keep_typing))
+                        epgState.loading -> Hint(stringResource(R.string.epg_search_loading))
+                        epgState.results.isEmpty() -> Hint(stringResource(R.string.epg_search_empty, query))
+                        else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(epgState.results, key = { "p${it.programme.id}c${it.channelId}" }) { result ->
+                                ProgrammeResultRow(result) {
+                                    if (onOpenProgramme != null) onOpenProgramme(result.channel, result.programme)
+                                    else onPlayChannel(result.channel)
                                 }
                             }
                         }
-                        if (seriesResults.isNotEmpty()) {
-                            item { SectionHeader(stringResource(R.string.nav_shows)) }
-                            items(seriesResults, key = { "s${it.id}" }) { show ->
-                                VodResultRow(show.displayTitle, show.posterUrl, show.year?.toString()) {
-                                    onOpenSeries(show)
+                    }
+                } else {
+                    when {
+                        query.isBlank() -> Hint(stringResource(R.string.search_start_hint))
+                        query.trim().length < 2 -> Hint(stringResource(R.string.common_keep_typing))
+                        !anyResults -> Hint(stringResource(R.string.search_no_results, query))
+                        else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (channelResults.isNotEmpty()) {
+                                item { SectionHeader(stringResource(R.string.common_channels)) }
+                                items(channelResults, key = { "c${it.key}" }) { row ->
+                                    SearchResultRow(row = row, onClick = { onPlayChannel(row.primary) })
+                                }
+                            }
+                            if (movieResults.isNotEmpty()) {
+                                item { SectionHeader(stringResource(R.string.nav_movies)) }
+                                items(movieResults, key = { "m${it.id}" }) { movie ->
+                                    VodResultRow(movie.displayTitle, movie.posterUrl, movie.year?.toString()) {
+                                        onPlayMovie(movie)
+                                    }
+                                }
+                            }
+                            if (seriesResults.isNotEmpty()) {
+                                item { SectionHeader(stringResource(R.string.nav_shows)) }
+                                items(seriesResults, key = { "s${it.id}" }) { show ->
+                                    VodResultRow(show.displayTitle, show.posterUrl, show.year?.toString()) {
+                                        onOpenSeries(show)
+                                    }
                                 }
                             }
                         }
@@ -162,6 +217,18 @@ private fun Hint(text: String) {
 }
 
 @Composable
+private fun SearchChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    FilterChip(
+        selected = selected, onClick = onClick, label = { Text(label) },
+        modifier = Modifier.onFocusChanged { focused = it.isFocused }.then(
+            if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+            else Modifier,
+        ),
+    )
+}
+
+@Composable
 private fun SectionHeader(title: String) {
     Text(
         title,
@@ -169,6 +236,28 @@ private fun SectionHeader(title: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
     )
+}
+
+private fun epgFilterLabel(filter: EpgSearchFilter): Int = when (filter) {
+    EpgSearchFilter.ALL -> R.string.epg_search_all
+    EpgSearchFilter.CURRENTLY_AIRING -> R.string.epg_search_airing
+    EpgSearchFilter.UPCOMING -> R.string.epg_search_upcoming
+    EpgSearchFilter.MOVIES -> R.string.epg_search_movies
+    EpgSearchFilter.SPORTS -> R.string.epg_search_sports
+    EpgSearchFilter.SERIES -> R.string.epg_search_series
+}
+
+@Composable
+private fun ProgrammeResultRow(result: ProgrammeSearchResult, onClick: () -> Unit) {
+    val programme = result.programme
+    val status = if (programme.isLiveAt(System.currentTimeMillis())) stringResource(R.string.epg_search_now) else null
+    val subtitle = listOfNotNull(
+        result.channel.shownName,
+        "${programmeSearchDate.format(Date(programme.startUtcMillis))}–${searchTime(programme.endUtcMillis)}",
+        status,
+        programme.category?.takeIf { it.isNotBlank() },
+    ).joinToString(" · ")
+    VodResultRow(programme.title, result.channel.logoUrl, subtitle, onClick)
 }
 
 @Composable
@@ -245,4 +334,5 @@ private fun SearchResultRow(row: ChannelsViewModel.Row, onClick: () -> Unit) {
 }
 
 private val searchTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+private val programmeSearchDate = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault())
 private fun searchTime(utcMillis: Long): String = searchTimeFormat.format(Date(utcMillis))

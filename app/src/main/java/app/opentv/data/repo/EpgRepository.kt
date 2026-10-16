@@ -14,6 +14,7 @@ import app.opentv.data.db.ChannelDao
 import app.opentv.data.db.EpgChannelAliasDao
 import app.opentv.data.db.EpgFeedDao
 import app.opentv.data.db.ProgrammeDao
+import app.opentv.data.db.ProgrammeSearchResult
 import app.opentv.data.db.SourceDao
 import app.opentv.data.model.Channel
 import app.opentv.data.model.EpgChannelAlias
@@ -31,6 +32,9 @@ import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -103,6 +107,40 @@ class EpgRepository(
 
     fun observeNow(nowUtcMillis: Long): Flow<List<Programme>> =
         programmeDao.observeNow(nowUtcMillis)
+
+    /**
+     * Queries only the visible guide rows. Chunking keeps even unusual multi-variant channels
+     * below SQLite's 999-variable limit without discarding channels or their programmes.
+     */
+    fun observeWindowForChannels(
+        epgChannelIds: List<String>, fromUtcMillis: Long, toUtcMillis: Long,
+    ): Flow<List<Programme>> {
+        val batches = epgChannelIds.filter { it.isNotBlank() }.distinct().chunked(300)
+        if (batches.isEmpty() || toUtcMillis <= fromUtcMillis) return flowOf(emptyList())
+        val queries = batches.map { programmeDao.observeWindowForChannels(it, fromUtcMillis, toUtcMillis) }
+        return if (queries.size == 1) queries.first() else combine(queries) { results -> results.flatMap { it } }
+    }
+
+    fun observeEpgChannelIds(fromUtcMillis: Long, toUtcMillis: Long): Flow<Set<String>> =
+        programmeDao.observeEpgChannelIds(fromUtcMillis, toUtcMillis).map { it.toSet() }
+
+    fun observeAiringChannelIds(nowUtcMillis: Long): Flow<Set<String>> =
+        programmeDao.observeAiringChannelIds(nowUtcMillis).map { it.toSet() }
+
+    /** Search the current/upcoming week without bringing the full guide into the UI heap. */
+    fun programmeSearch(
+        query: String,
+        filter: EpgSearchFilter,
+        nowUtcMillis: Long,
+        limit: Int = 200,
+        excludedCategories: Set<Pair<Long, String>> = emptySet(),
+    ): Flow<List<ProgrammeSearchResult>> {
+        if (query.trim().length < 2) return flowOf(emptyList())
+        return programmeDao.search(
+            epgSearchPattern(query), filter.name, nowUtcMillis,
+            nowUtcMillis + TimeUnit.DAYS.toMillis(7), epgExcludedCategories(excludedCategories), limit.coerceIn(1, 200),
+        )
+    }
 
     suspend fun upcoming(epgChannelId: String, nowUtcMillis: Long, limit: Int = 12): List<Programme> =
         programmeDao.upcoming(epgChannelId, nowUtcMillis, limit)

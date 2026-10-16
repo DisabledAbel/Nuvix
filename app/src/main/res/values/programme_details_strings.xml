@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guide_details_title">Program details</string>
+    <string name="guide_details_timing_unavailable">Program timing unavailable</string>
+    <string name="guide_details_airing">Currently airing</string>
+    <string name="guide_details_upcoming">Upcoming</string>
+    <string name="guide_details_ended">Ended</string>
+    <string name="guide_details_no_description">No program description available.</string>
+    <string name="guide_details_watch_now">Watch Now</string>
+    <string name="guide_details_back">Back to Guide</string>
+    <string name="guide_details_action_failed">This action could not be completed. Check that the program and source are still available.</string>
+    <string name="guide_details_starting_recording">Starting recording: %1$s</string>
+    <string name="guide_details_stopping_recording">Stopping recording</string>
+</resources>

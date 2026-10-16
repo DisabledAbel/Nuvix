@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. -->
+<resources>
+    <string name="advanced_guide_customization">Programmführer anpassen</string>
+    <string name="advanced_guide_layout">Programmführerlayout</string>
+    <string name="advanced_guide_standard">Standard</string>
+    <string name="advanced_guide_compact">Kompakt</string>
+    <string name="advanced_guide_expanded">Erweitert</string>
+    <string name="advanced_guide_filter">Standard-Senderfilter</string>
+    <string name="advanced_guide_filter_all">Alle Sender</string>
+    <string name="advanced_guide_filter_favourites">Favoritensender</string>
+    <string name="advanced_guide_filter_recent">Zuletzt angesehen</string>
+    <string name="advanced_guide_filter_group">Eigene Sendergruppe</string>
+    <string name="advanced_guide_filter_provider">Anbieter</string>
+    <string name="advanced_guide_filter_epg">Sender mit Programmdaten</string>
+    <string name="advanced_guide_filter_airing">Läuft gerade</string>
+    <string name="advanced_guide_filter_target_hint">Wähle die Gruppe oder den Anbieter im Programmführer. Diese Auswahl bleibt auf diesem Gerät.</string>
+    <string name="advanced_guide_sort">Sendersortierung</string>
+    <string name="advanced_guide_sort_provider">Anbieterreihenfolge</string>
+    <string name="advanced_guide_sort_number">Sendernummer</string>
+    <string name="advanced_guide_sort_alpha">Alphabetisch</string>
+    <string name="advanced_guide_sort_favourites">Favoriten zuerst</string>
+    <string name="advanced_guide_sort_custom">Eigene Senderreihenfolge</string>
+    <string name="advanced_guide_density">Zeitleistendichte</string>
+    <string name="advanced_guide_density_comfortable">Ausgewogen</string>
+    <string name="advanced_guide_density_dense">Mehr Zeit anzeigen</string>
+    <string name="advanced_guide_density_wide">Größere Sendungsfelder</string>
+    <string name="advanced_guide_artwork">Sendungsbilder</string>
+    <string name="advanced_guide_progress">Fortschrittsanzeigen für Sendungen</string>
+    <string name="advanced_guide_remember">Letzte Position im Programmführer merken</string>
+    <string name="guide_details_title">Sendungsdetails</string>
+    <string name="guide_details_timing_unavailable">Sendezeiten nicht verfügbar</string>
+    <string name="guide_details_airing">Läuft gerade</string>
+    <string name="guide_details_upcoming">Demnächst</string>
+    <string name="guide_details_ended">Beendet</string>
+    <string name="guide_details_no_description">Keine Beschreibung der Sendung verfügbar.</string>
+    <string name="guide_details_watch_now">Jetzt ansehen</string>
+    <string name="guide_details_back">Zurück zum Programmführer</string>
+    <string name="guide_details_action_failed">Diese Aktion konnte nicht abgeschlossen werden. Prüfe, ob die Sendung und die Quelle noch verfügbar sind.</string>
+    <string name="guide_details_starting_recording">Aufnahme wird gestartet: %1$s</string>
+    <string name="guide_details_stopping_recording">Aufnahme wird beendet</string>
+    <string name="epg_search_catalogue">Sender und Mediathek</string>
+    <string name="epg_search_programmes">Sendungen</string>
+    <string name="epg_search_hint">Suche nach Titeln, Sendern, Genres oder Beschreibungen für die nächsten 7 Tage.</string>
+    <string name="epg_search_loading">Programmführer wird durchsucht…</string>
+    <string name="epg_search_empty">Keine Sendungen passen zu „%1$s“ und diesem Filter. Wähle einen anderen Filter oder aktualisiere den Programmführer in den Einstellungen.</string>
+    <string name="epg_search_limit">Erste 200 Treffer · Nächste 7 Tage</string>
+    <string name="epg_search_all">Alle Sendungen</string>
+    <string name="epg_search_airing">Läuft gerade</string>
+    <string name="epg_search_upcoming">Demnächst</string>
+    <string name="epg_search_movies">Filme</string>
+    <string name="epg_search_sports">Sport</string>
+    <string name="epg_search_series">Serien</string>
+    <string name="epg_search_now">Jetzt im Programm</string>
+</resources>

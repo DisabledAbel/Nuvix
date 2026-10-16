@@ -10,6 +10,16 @@ Advanced home customization now provides remote shelf ordering, three layouts, c
 
 Shared live playback and a current-channel preview now span main navigation; see [live playback](live-playback.md) for ownership, preferences, and fallback behavior. Device acceptance must verify surface transfers, decoder recovery, PiP, audio focus, and low-memory behavior with authorized streams on Android TV, Google TV, and Fire TV hardware.
 
+Advanced EPG adds three guide layouts, local presentation preferences, filters/sorting over
+existing channel organization, timeline jumps, bounded program search and program details.
+See [guide instructions](automatic-epg.md#advanced-guide) and the
+[acceptance checklist](TESTING.md#advanced-epg). The next milestone is device verification of
+rapid D-pad input, focus restoration, large text, artwork memory, single-connection recording
+handoff and persistent playback while browsing a large authorized guide. Automated bounds and
+synthetic data establish regression coverage; they do not establish frame rates or decoder
+performance on low-end televisions. Sports categories depend on feed metadata; broader verified
+event/team data remains future work.
+
 Further playback work includes update transfer range resume, broader provider sports-event metadata, low-memory performance profiling, and a pluggable playback-engine contract. Broaden automated TV UI tests alongside each feature.
 
 Advanced playback diagnostics now observe the existing player with Compact/Detailed views,

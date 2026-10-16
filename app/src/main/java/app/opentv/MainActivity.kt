@@ -74,6 +74,8 @@ import app.opentv.ui.MainScreen
 import app.opentv.ui.ProfilesViewModel
 import app.opentv.ui.SourcesViewModel
 import app.opentv.ui.channels.ChannelManagerScreen
+import app.opentv.ui.channels.ProgrammeDetailsDialog
+import app.opentv.ui.ChannelsViewModel
 import app.opentv.ui.channels.SearchScreen
 import app.opentv.ui.VodViewModel
 import app.opentv.ui.onboarding.AddSourceScreen
@@ -606,11 +608,27 @@ private fun NuvixNavigation(
             }
 
             composable(Routes.SEARCH) {
+                var selectedProgramme by remember { mutableStateOf<Pair<app.opentv.data.model.Channel, app.opentv.data.model.Programme>?>(null) }
+                val programmeActionScope = androidx.compose.runtime.rememberCoroutineScope()
+                val searchGraph = remember { ServiceLocator.get(bootContext) }
+                val searchRecordings by searchGraph.recordingRepository.observeActive().collectAsState(initial = emptyList())
+                val searchSources by searchGraph.sourceRepository.observeAll().collectAsState(initial = emptyList())
+                selectedProgramme?.let { (channel, programme) ->
+                    ProgrammeDetailsDialog(
+                        targetRow = ChannelsViewModel.Row(channel, listOf(channel), null, null, listOf(programme)),
+                        programme = programme, nowMillis = System.currentTimeMillis(), sources = searchSources,
+                        activeRecordings = searchRecordings, liveSession = liveSession, actionScope = programmeActionScope,
+                        onWatch = { openLive(it.id) },
+                        onPlayCatchup = { key, url, title, ua -> openVod(Routes.vodPlayer(key, url, title, ua)) },
+                        onDismiss = { selectedProgramme = null },
+                    )
+                }
                 androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
                     LivePlaybackPreview(liveSession, onFullscreen = {
                         liveSession.currentChannel.value?.id?.let { openLive(it) }
                     })
                     SearchScreen(
+                        onOpenProgramme = { channel, programme -> selectedProgramme = channel to programme },
                         onPlayChannel = { channel -> openLive(channel.id) },
                         onPlayMovie = { movie ->
                             openVod(
