@@ -13,6 +13,7 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - Live TV, time-grid guide, movies, TV shows, and remote-friendly navigation.
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
+- Real-time Stream Information with Compact/Detailed views, buffer health and safe errors. See [playback diagnostics](docs/playback-diagnostics.md).
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.
 - Persistent live TV across Home, Guide, Sports, and Search, with an optional current-channel preview. See [live playback](docs/live-playback.md).
 - Optional home launcher with installed-app shortcuts and customizable startup destinations.

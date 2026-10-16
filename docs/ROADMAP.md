@@ -11,3 +11,9 @@ Advanced home customization now provides remote shelf ordering, three layouts, c
 Shared live playback and a current-channel preview now span main navigation; see [live playback](live-playback.md) for ownership, preferences, and fallback behavior. Device acceptance must verify surface transfers, decoder recovery, PiP, audio focus, and low-memory behavior with authorized streams on Android TV, Google TV, and Fire TV hardware.
 
 Further playback work includes update transfer range resume, broader provider sports-event metadata, low-memory performance profiling, and a pluggable playback-engine contract. Broaden automated TV UI tests alongside each feature.
+
+Advanced playback diagnostics now observe the existing player with Compact/Detailed views,
+local settings, safe errors and bounded memory-only history. See [diagnostics](playback-diagnostics.md).
+The next acceptance milestone is real Android TV, Google TV and Fire TV verification at
+720p/1080p/4K, text scaling, repeated channel changes, PiP, persistent navigation and
+local/NAS/growing recordings; automated fake/Robolectric tests cannot certify those devices.

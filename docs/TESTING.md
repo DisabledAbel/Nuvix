@@ -191,3 +191,32 @@ Hardware acceptance remains required on **Android TV, Google TV and Fire TV**:
       category pauses and account switches. Repeat with an older client after migration.
 
 No TV-device, decoder, screenshot or low-end memory validation is implied by JVM/SQL checks.
+
+## Playback diagnostics
+
+The existing `:app:testDebugUnitTest` discovery includes `PlaybackDiagnosticsTest`,
+`StreamInformationTest`, local settings persistence and persistent-playback regressions.
+A strict fake rejects all unexpected player operations: observer sampling and overlay
+open/close cannot prepare, seek, pause or restart it. Tests cover formats/unavailable fields,
+buffer duration, health/state, startup/rebuffer/seek handling, dropped-frame accumulation,
+session reset, listener balance, bounded/aged history, nested error privacy, protocol
+identification, Compact/Detailed rows, hidden-until-open, initial Close focus, D-pad movement,
+Close and Back. Compose tests run under Robolectric with the normal JVM suite, not a stream.
+Run the Gradle/Python commands above and `bash scripts/test-supabase.sh` for existing SQL checks.
+
+Hardware acceptance (requires authorized media; record device/OS/resolution/results):
+
+| Check | Expected result |
+|---|---|
+| Live, movie, episode, local/USB/NAS and growing recording | Same playback continues as the panel opens/closes; unsupported fields say Unavailable |
+| Compact/Detailed; restart app; disable entry/technical measurements | View and local settings persist; disabled panel stays hidden |
+| 720p, 1080p, 4K and large system font on Android TV/Google TV/Fire TV | High-contrast readable text, visible focus, scrollable rows/actions with D-pad only |
+| Back/Close, volume, audio/subtitle picks, channel changes | Panel dismisses first, focus returns to controls, unrelated controls retain behavior |
+| Initial buffering, repeated stalls, seek, pause, channel switch | Startup/seek do not inflate rebuffer count; new channel resets metrics; bounded history |
+| Navigate persistent playback, rotate/recreate Activity, background/foreground, PiP | Same owner and stream; sampling stops when hidden/stopped; no decoder or focus interference |
+| Network/HTTP/decoder errors; recording begins; low-memory pressure | Safe guidance, existing retry/recording ownership, no secrets in panel/history/logs |
+
+Automated UI tests cannot measure hardware decoder counters, real transfer throughput,
+provider connection limits, vendor PiP behavior or prove display readability. Do not claim
+hardware verification from these tests. No diagnostics screenshots are included until a
+representative device/emulator capture is available.

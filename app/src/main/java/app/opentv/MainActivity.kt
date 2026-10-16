@@ -702,7 +702,7 @@ private fun NuvixNavigation(
             }
 
             composable(Routes.APP_SETTINGS) {
-                AppSettingsScreen(onBack = { navController.popBackStack() })
+                AppSettingsScreen(onBack = { navController.popBackStack() }, onClearDiagnostics = liveSession::clearDiagnostics)
             }
 
             composable(

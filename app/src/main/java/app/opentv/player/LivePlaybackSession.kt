@@ -147,6 +147,10 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
 
     fun openChannel(id: Long) { releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id) }
     fun tune(channel: Channel) { releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel) }
+    fun clearDiagnostics() {
+        implementation?.controller?.diagnostics?.clear()
+        nonLivePlayback?.diagnostics?.clear()
+    }
     fun retry() = coordinator.retry()
     fun stop() { releaseGuidePreview(); coordinator.stopForOtherPlayback() }
     /** Close live's provider connection before capture; this job belongs to the Activity owner. */

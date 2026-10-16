@@ -34,7 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
       - name: Validate Gradle configuration
         run: ./gradlew help --stacktrace
-      - name: Compile, run unit tests, lint and assemble debug
+      - name: Compile, run unit and diagnostics UI tests, lint and assemble debug
         run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v7

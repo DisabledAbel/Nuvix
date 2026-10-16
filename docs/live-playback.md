@@ -115,3 +115,13 @@ PiP entry/exit, Activity/process recreation, memory pressure, encrypted/local/NA
 recordings, and authorized single-connection providers. See [testing](TESTING.md) for the
 validation commands and device checklist. New preference and preview text currently uses
 English fallback in other locales.
+
+## Playback diagnostics
+
+`PlayerController` owns one passive `PlaybackDiagnostics` observer, which stays with the
+shared live session across screen/surface changes. `StreamInformation` uses a separate
+Compose dialog focus window and samples at 1 Hz only while visible and STARTED. Listener
+cleanup precedes player release. Selecting a new media URL resets the diagnostic session;
+existing retries and surface transfers retain its counters. Settings clear the existing
+observer without allocating a player. The same panel serves VOD/episode/recording controllers.
+See [measurements and health rules](playback-diagnostics.md) for limitations and privacy.

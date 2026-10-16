@@ -12,6 +12,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +43,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
@@ -164,6 +166,8 @@ fun PlayerScreen(
     var surfaceAvailable by remember { mutableStateOf(true) }
     val videoView = remember { arrayOfNulls<PlayerView>(1) }
 
+    val diagnosticsEnabled by graph.settings.diagnosticsEnabled.collectAsState()
+    var diagnosticsVisible by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var panel by remember { mutableStateOf(Panel.NONE) }
     var channelListVisible by remember { mutableStateOf(false) }
@@ -236,8 +240,8 @@ fun PlayerScreen(
     }
 
     // Auto-hide the bar after a few seconds — but never while paused or with a picker open.
-    LaunchedEffect(controlsVisible, interaction, state, paused, panel) {
-        if (controlsVisible && !paused && panel == Panel.NONE &&
+    LaunchedEffect(controlsVisible, interaction, state, paused, panel, diagnosticsVisible) {
+        if (!diagnosticsVisible && controlsVisible && !paused && panel == Panel.NONE &&
             state is PlayerController.State.Playing
         ) {
             delay(CONTROLS_TIMEOUT_MILLIS)
@@ -247,7 +251,8 @@ fun PlayerScreen(
 
     // Focus: a picker's first row when one is open, otherwise the bar, otherwise the full-screen
     // catcher (so the next remote press brings the bar back).
-    LaunchedEffect(controlsVisible, panel) {
+    LaunchedEffect(controlsVisible, panel, diagnosticsVisible) {
+        if (diagnosticsVisible) return@LaunchedEffect
         if (controlsVisible) {
             delay(40)
             runCatching { if (panel != Panel.NONE) panelFocus.requestFocus() else barFocus.requestFocus() }
@@ -287,6 +292,14 @@ fun PlayerScreen(
         } else if (!controlsVisible) {
             runCatching { rootFocus.requestFocus() }
         }
+    }
+
+    LaunchedEffect(diagnosticsEnabled, inPip) {
+        if (!diagnosticsEnabled || inPip) diagnosticsVisible = false
+    }
+
+    if (diagnosticsVisible && diagnosticsEnabled && !inPip) {
+        StreamInformation(controller.diagnostics) { diagnosticsVisible = false; reveal() }
     }
 
     Box(
@@ -480,7 +493,13 @@ fun PlayerScreen(
                     Spacer(Modifier.height(12.dp))
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    if (diagnosticsEnabled) {
+                        BarChip(Icons.Filled.Info, "Stream Information", false) {
+                            panel = Panel.NONE; channelListVisible = false; diagnosticsVisible = true; interaction++
+                        }
+                        Spacer(Modifier.width(10.dp))
+                    }
                     if (controller.isSeekable) {
                         BarChip(Icons.Filled.FastRewind, stringResource(R.string.player_rewind), false) {
                             controller.seekBackward(); interaction++

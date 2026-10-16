@@ -24,20 +24,23 @@ import java.net.UnknownHostException
 object PlaybackErrors {
 
     fun describe(error: PlaybackException): String {
-        (error.cause as? HttpDataSource.InvalidResponseCodeException)?.let {
+        val causes = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
+        causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.let {
             return describeHttpStatus(it.responseCode)
         }
-        if (error.cause is UnknownHostException) {
+        if (causes.any { it is UnknownHostException }) {
             return "Can't reach the server. Check this device is online and the address is right."
         }
-        if (error.cause is SocketTimeoutException) {
+        if (causes.any { it is SocketTimeoutException }) {
             return "The server stopped responding. It may be overloaded — try again in a moment."
         }
 
         return when (error.errorCode) {
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                "Lost connection to the server."
+                "Playback timed out. Check the connection and try again."
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+                "Lost connection to the server. Check the network and try again."
 
             PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE ->
                 "The server sent a web page instead of a stream. The link may have expired."
@@ -53,10 +56,20 @@ object PlaybackErrors {
             PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ->
                 "This device can't decode that video format. A different quality may work."
 
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED ->
+                "Audio playback failed. Try another audio track or restart playback."
+            PlaybackException.ERROR_CODE_DECODING_FAILED ->
+                if ((error as? androidx.media3.exoplayer.ExoPlaybackException)?.rendererFormat?.sampleMimeType?.startsWith("audio/") == true)
+                    "The audio decoder failed. Try another audio track or supported format."
+                else "The video decoder failed. Try another quality or supported format."
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                "The playback source is unavailable. Check access to the stream or recording."
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ->
                 "Playback fell too far behind the live edge. Reloading."
 
-            else -> "Playback failed (${error.errorCodeName})."
+            else -> "Playback failed. Try another stream or check source access."
         }
     }
 
