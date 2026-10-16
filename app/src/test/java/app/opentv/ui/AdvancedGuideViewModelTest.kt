@@ -205,7 +205,7 @@ class AdvancedGuideViewModelTest {
         val vm = viewModel()
         awaitIds(vm, 1)
         listOf(GuideChannelFilter.FAVOURITES, GuideChannelFilter.RECENT, GuideChannelFilter.GROUP,
-            GuideChannelFilter.WITH_EPG, GuideChannelFilter.AIRING).forEach { filter ->
+            GuideChannelFilter.PROVIDER, GuideChannelFilter.WITH_EPG, GuideChannelFilter.AIRING).forEach { filter ->
             vm.selectGuideFilter(filter, groupId = 999)
             awaitIds(vm)
             assertThat(vm.guideLoaded.value).isTrue()

@@ -336,7 +336,7 @@ fun HomeScreen(
             ) {
                 // Provider switch — only when there's more than one source. Lets the user keep
                 // several playlists and flip between them (cardiodoc's request); "All" folds them.
-                if (sources.size > 1) {
+                if (sources.size > 1 || guideFilter == GuideChannelFilter.PROVIDER) {
                     item(key = "provider-header") {
                         Text(
                             stringResource(R.string.channels_manager_source_header),
