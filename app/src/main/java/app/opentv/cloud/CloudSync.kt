@@ -245,9 +245,7 @@ class CloudSync private constructor(context: Context) {
             val current = preferenceData.snapshot(settings.deviceId, System.currentTimeMillis()).associateBy { it.identity() }
             val before = expected.associateBy { it.identity() }
             winners.count { record ->
-                val prior = before[record.identity()]
-                val unchanged = prior != null && current[record.identity()]?.samePayload(prior) == true
-                unchanged && preferenceData.apply(record)
+                preferenceData.applyIfUnchanged(record, before[record.identity()], current[record.identity()])
             }
         }
         return changed
@@ -302,13 +300,13 @@ class CloudSync private constructor(context: Context) {
         })
         val keys = mapOf(
             "nuvix_launcher" to setOf("favorite_packages", "startup_destination"),
-            "nuvix_home" to AdvancedCloudRecord.HOME_SHELVES,
+            "nuvix_home" to (AdvancedCloudRecord.HOME_SHELVES + setOf("shelf_order_v1", "presentation_v1")),
             "opentv_settings" to setOf("theme_mode", "channel_layout", "subtitles_enabled"),
         )
         for ((name, allowed) in keys) {
             val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
             val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                if (key in allowed) localChanged()
+                if (key in allowed || (name == "nuvix_home" && key != null && app.opentv.ui.home.HomeShelfOrder.isGroup(key))) localChanged()
             }
             preferences.registerOnSharedPreferenceChangeListener(listener)
             preferenceListeners += preferences to listener

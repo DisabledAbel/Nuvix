@@ -32,7 +32,7 @@ python3 -m unittest discover -s scripts/tests -v
 git diff --check
 ```
 
-The existing Build workflow runs on pushes and pull requests, keeps read-only repository
+The existing Build workflow runs on pull requests and manual dispatch, keeps read-only repository
 permissions, and uploads JVM test/lint reports and the debug APK. A JVM fake cannot prove
 decoder behavior, provider connection counts, audio focus, or vendor PiP behavior; use the
 following device checks with an authorized stream before a release.
@@ -157,3 +157,37 @@ CodeRabbit regression coverage includes a 33,400-channel untouched catalog produ
 journal seeds, explicit default resets surviving provider refresh (including separator visibility),
 sparse optimistic application protecting a concurrent local edit, and a future-dated remote record
 leaving other pulled records usable.
+
+## Advanced home customization
+
+The standard `:app:testDebugUnitTest` discovery includes preference migration/recreation,
+order deduplication/movement, hidden positions, UUID groups, resets, malformed storage,
+layout/card validation, background fallback, featured selection, portable cloud records,
+offline journal replay, deterministic whole-list merges, category pauses and account binding.
+Robolectric Compose tests send D-pad/Select key events to the real customization controls,
+check movement/focus, Back and return focus, and apply layouts/metadata with a card displayed.
+The card callback count proves these controls do not invoke it; it does not prove decoder
+continuity on hardware. Existing live-session lifecycle tests remain part of the same suite.
+
+Run `bash scripts/test-supabase.sh` for all migrations, old-record preservation, owner-only
+RLS, home payload bounds/allowlists and deterministic merge tests on disposable PostgreSQL.
+The Build workflow retains all Android, Python and security jobs and APK/report artifacts.
+
+Hardware acceptance remains required on **Android TV, Google TV and Fire TV**:
+
+- [ ] D-pad through every menu; move first/last shelves; hide/restore each section and a group;
+      close with Back and verify visible return focus. Repeat with all shelves hidden/empty.
+- [ ] Apply Classic, Compact and Cinema and every card size at 720p/1080p/4K and large text;
+      check clipping, focus contrast, spacing and long names.
+- [ ] Focus movies/shows rapidly with Dynamic artwork, then missing/failed artwork; verify
+      fallback, readability, bounded memory and reduced-motion behavior on low-end hardware.
+- [ ] Select every featured source with/without matching content and use resume/live/guide/provider
+      actions; disable the hero and confirm navigation remains reachable.
+- [ ] Start an authorized live stream, customize repeatedly, return to fullscreen; verify no
+      reconnect, duplicate session, release, unexpected audio change or preview surface loss.
+- [ ] Kill/relaunch after edits; upgrade from visibility-only preferences; verify app favorites,
+      custom group membership/order, startup/launcher settings and LAN/NAS sync remain intact.
+- [ ] Use two disposable-project accounts/TVs to verify opted-in home sync, offline conflicts,
+      category pauses and account switches. Repeat with an older client after migration.
+
+No TV-device, decoder, screenshot or low-end memory validation is implied by JVM/SQL checks.

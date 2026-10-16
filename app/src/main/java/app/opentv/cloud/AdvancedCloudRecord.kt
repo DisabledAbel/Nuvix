@@ -2,6 +2,8 @@
 package app.opentv.cloud
 
 import java.util.UUID
+import app.opentv.ui.home.HomePresentation
+import app.opentv.ui.home.HomeShelfOrder
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,7 +46,7 @@ data class AdvancedCloudRecord(
             "channel_hidden", "channel_name", "channel_order" -> AdvancedSyncCategory.CHANNEL_ORGANIZATION
             "channel_favourite_state", "movie_favourite_state", "series_favourite_state" -> AdvancedSyncCategory.FAVOURITE_REMOVALS
             "app_order" -> AdvancedSyncCategory.APP_FAVOURITES
-            "home_shelf" -> AdvancedSyncCategory.HOME_PREFERENCES
+            "home_shelf", "home_order", "home_layout", "home_group" -> AdvancedSyncCategory.HOME_PREFERENCES
             "setting" -> AdvancedSyncCategory.COMPATIBLE_SETTINGS
             else -> throw IllegalArgumentException("Unsupported advanced cloud record kind.")
         }
@@ -71,6 +73,10 @@ data class AdvancedCloudRecord(
             "channel_order" -> HASH.matches(recordKey) && rank()
             "app_order" -> recordKey == "apps" && collection(MAX_APPS) { it.length <= 255 && PACKAGE.matches(it) }
             "home_shelf" -> recordKey in HOME_SHELVES && boolean()
+            "home_group" -> HomeShelfOrder.isGroup(recordKey) && boolean()
+            "home_order" -> recordKey == "shelves_v1" && collection(HomeShelfOrder.MAX_SHELVES, HomeShelfOrder::portable)
+            "home_layout" -> recordKey == "presentation_v1" && textValue == null && boolValue == null && intValue == null &&
+                HomePresentation.parse(entries) != null
             "setting" -> when (recordKey) {
                 "theme_mode" -> textValue in setOf("SYSTEM", "DARK", "LIGHT") && text()
                 "channel_layout" -> textValue in setOf("GRID", "LIST") && text()
@@ -100,7 +106,7 @@ data class AdvancedCloudRecord(
         const val MAX_GROUP_MEMBERS = 2_000
         const val MAX_APPS = 200
         val KINDS = setOf("group_name", "group_rank", "group_members", "channel_hidden", "channel_name", "channel_order",
-            "channel_favourite_state", "movie_favourite_state", "series_favourite_state", "app_order", "home_shelf", "setting")
+            "channel_favourite_state", "movie_favourite_state", "series_favourite_state", "app_order", "home_shelf", "home_order", "home_layout", "home_group", "setting")
         val HOME_SHELVES = setOf("continue", "recent", "favourites", "on_now", "movies", "series", "apps")
         private val HASH = Regex("[a-f0-9]{64}")
         private val PACKAGE = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")

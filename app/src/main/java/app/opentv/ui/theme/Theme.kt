@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 private val Accent = Color(0xFF58A6FF)
 private val AccentDim = Color(0xFF173E77)
 
-private val DarkScheme = darkColorScheme(
+internal val DarkScheme = darkColorScheme(
     primary = Accent,
     onPrimary = Color(0xFF0A0C14),
     primaryContainer = AccentDim,

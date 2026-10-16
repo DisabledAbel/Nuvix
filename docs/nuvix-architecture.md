@@ -17,3 +17,23 @@ Owner-scoped RLS is enabled and forced on both cloud tables. Merge RPCs execute 
 Player playback behavior remains derived from OpenTV. An Activity-scoped live session retains the existing `PlayerController` across navigation and transfers a single video surface between fullscreen and preview; VOD/catch-up/recording playback takes exclusive playback ownership. Changes to buffer settings do not recreate the player. Playback, preview, and browsing-audio preferences remain local. See [live playback](live-playback.md) for lifecycle, recovery, PiP, and low-memory behavior. Automatic updates perform background work and show notifications only with permission.
 
 See the separate original `ARCHITECTURE.md` for historical upstream implementation notes; this document and feature-specific documents describe Nuvix changes.
+
+Home presentation is local-first in `HomePreferencesStore` (`nuvix_home`). Legacy per-section
+visibility keys remain authoritative. Versioned order and presentation values are bounded,
+validated, and recover independently from malformed storage. Safe future local shelf keys
+are retained. The fixed header and navigation actions are outside the customizable order.
+`HomeCustomizationAccess` owns dialog/return focus; rearrangement keeps controls mounted
+and focusable at boundaries. `TelevisionHomeScreen` retains its existing feed flows and
+keyed lazy shelves. The existing group resolver is shared for individually positioned UUID
+shelves. No playback controller or stream is created by customization.
+
+Dynamic backgrounds debounce focus, decode one provider artwork request to at most 640×360,
+retain the last successful painter while loading, and crossfade under a dark overlay.
+Missing/failed artwork falls back to the default; Android's animator scale controls motion.
+Presentation flows feed the same cards rather than reloading provider feeds.
+
+The existing HOME_PREFERENCES category now also carries `home_order:shelves_v1`,
+`home_layout:presentation_v1` and UUID-keyed `home_group` visibility. New kind identities
+isolate these values from older clients' explicit kind queries. Order and presentation
+are each one atomic merge revision with the existing timestamp/device/payload tie-breaker.
+Existing visibility records, owner binding, durable journal and worker are reused.
