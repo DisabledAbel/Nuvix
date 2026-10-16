@@ -38,6 +38,7 @@ import app.opentv.data.model.shownName
 import app.opentv.sports.*
 import app.opentv.ui.channels.OnScreenKeyboard
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -59,6 +60,9 @@ fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = view
     val hubContentState = rememberSaveableStateHolder()
     var restoreCard by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(league, team, sport) { model.browse(league, team, sport) }
+    LaunchedEffect(state.message) {
+        if (state.message != null) { delay(5_000); model.consumeMessage() }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) selectedId?.let(model::remind)
         else model.notify("Notifications are disabled. Enable Nuvix notifications in device settings to receive reminders.")
@@ -87,7 +91,7 @@ fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = view
                 if (event == null) {
                     SportsAction("Back to Sports") { model.select(null) }
                     Text("Game unavailable or no longer visible. Return to Sports or refresh the guide.")
-                } else SportsDetails(state, event, reminders.any { it.sportsEventId == event.id && !it.fired },
+                } else SportsDetails(state, event, sportsReminderForEvent(reminders, event.id, state.streams)?.fired == false,
                     onBack = { model.select(null) }, onPlay = { stream -> model.play(stream, onPlayChannel) }, onRemind = { remind(event.id) },
                     onCancelReminder = { model.cancelReminder(event.id) }, onFavorite = model::favorite,
                     onFavoriteChannel = model::favoriteChannel, onDecide = model::decide, onUndo = model::undo,

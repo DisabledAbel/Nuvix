@@ -217,6 +217,60 @@ class SportsRepositoryTest {
         assertEquals(existing, repo.remind(e.id, streams(e.id), SPORTS_NOW).id)
         assertEquals(1, db.reminders().observeAll().first().size)
     }
+    @Test fun guideReconciliationPreservesVerifiedTimestampAndAcceptsNewerProviderUpdate() = runBlocking {
+        val verified = verifiedEvent().copy(updatedAtMillis = SPORTS_NOW - 60_000)
+        db.sports().upsertEvents(listOf(verified))
+        seed()
+        assertEquals(verified, db.sports().event(verified.id))
+        assertEquals(3, streams(verified.id).size)
+        val update = verified.copy(status = "LIVE", updatedAtMillis = SPORTS_NOW - 30_000)
+        repo.saveProviderEvents(listOf(update)) { _, _ -> }
+        assertEquals(update, db.sports().event(verified.id))
+    }
+    @Test fun soleVerifiedCandidateWinsOverOlderInferredEventWithoutReducingConfidence() = runBlocking {
+        seed()
+        val inferred = game()
+        val verified = verifiedEvent()
+        db.sports().upsertEvents(listOf(verified))
+        db.sports().clearFeedStates()
+        repo.reconcile(SPORTS_NOW)
+        assertTrue(streams(inferred.id).isEmpty())
+        val matched = streams(verified.id)
+        assertEquals(3, matched.size)
+        assertTrue(matched.all { it.confidence == MatchConfidence.CONFIRMED })
+    }
+    @Test fun multipleVerifiedCandidatesRemainPossibleInsteadOfChoosingOne() = runBlocking {
+        db.sports().upsertEvents(listOf(verifiedEvent(sourceId = "first"), verifiedEvent(sourceId = "second")))
+        seed()
+        val inferred = cards().filter { !it.event.verified }
+        val suggestions = inferred.flatMap { streams(it.event.id) }
+        assertEquals(3, suggestions.size)
+        assertTrue(suggestions.all { it.confidence == MatchConfidence.POSSIBLE })
+        assertTrue(streams(verifiedEvent(sourceId = "first").id).isEmpty())
+        assertTrue(streams(verifiedEvent(sourceId = "second").id).isEmpty())
+    }
+    @Test fun providerMetadataUpdatesPreserveFiredStateUntilTheStartMoves() = runBlocking {
+        val event = verifiedEvent()
+        db.sports().upsertEvents(listOf(event))
+        val id = db.reminders().insert(Reminder(channelId = 1, channelName = "Existing", title = event.title,
+            startUtcMillis = event.startUtcMillis, endUtcMillis = event.endUtcMillis, sportsEventId = event.id, fired = true))
+        val metadataUpdate = event.copy(title = "Updated title", endUtcMillis = event.endUtcMillis + 60_000)
+        repo.saveProviderEvents(listOf(metadataUpdate)) { reminder, cancel ->
+            assertTrue(reminder.fired); assertFalse(cancel)
+        }
+        assertTrue(db.reminders().byId(id)!!.fired)
+        val moved = metadataUpdate.copy(startUtcMillis = event.startUtcMillis + 60_000)
+        repo.saveProviderEvents(listOf(moved)) { reminder, cancel ->
+            assertFalse(reminder.fired); assertFalse(cancel)
+        }
+        assertFalse(db.reminders().byId(id)!!.fired)
+        for (status in listOf("CANCELED", "POSTPONED", "FINAL")) {
+            repo.saveProviderEvents(listOf(moved.copy(status = status))) { reminder, cancel ->
+                assertTrue(reminder.fired); assertTrue(cancel)
+            }
+            assertTrue(db.reminders().byId(id)!!.fired)
+        }
+    }
     @Test fun rescheduledVerifiedEventRearmsTheSameReminderAndCancellationCancelsIt() = runBlocking {
         seed()
         val event = verifiedEvent()

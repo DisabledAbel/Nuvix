@@ -336,8 +336,10 @@ use. Host times do not establish device frame rates.
 
 Manual verification remains required; record device/OS, provider connection limit and observations:
 
-- [ ] Android TV, Google TV and Fire TV: enter the existing Sports tab; reach all seven sections,
-  search keyboard, filter chips, favorite ordering, settings and paged streams with D-pad only.
+- [ ] Android TV, Google TV and Fire TV: enter the existing Sports tab; reach My Sports, Live Games,
+  Upcoming Games, Favorite Teams, Favorite Leagues, All Sports, Sports Channels, Unmatched sports programs
+  and the conditional Filtered Games shelf, plus the search keyboard, filter chips, favorite ordering,
+  settings and paged streams with D-pad only.
 - [ ] Select a game, return with Back, play a confirmed choice, Back to the same event, and explicitly
   switch providers. Focusing cards or suggestions must never tune or open a provider connection.
 - [ ] Verify favorite leagues/teams and order after restart; identical names in different competitions

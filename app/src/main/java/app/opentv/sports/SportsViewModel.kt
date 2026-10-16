@@ -133,14 +133,15 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
         }
     }
 
-    fun browse(league: String?, team: String?, sport: String?) { browse.value = Browse(league, team, sport) }
-    fun search(value: String) { saved["sports_query"] = value.take(120) }
+    fun browse(league: String?, team: String?, sport: String?) { consumeMessage(); browse.value = Browse(league, team, sport) }
+    fun search(value: String) { consumeMessage(); saved["sports_query"] = value.take(120) }
     fun select(id: String?) {
+        consumeMessage()
         if (id != selectedId.value) mutableState.update { it.copy(selectedEvent = null, streams = emptyList(), preferred = null) }
         streamPage.value = 0; saved["sports_event"] = id
     }
     fun streamsPage(delta: Int) { streamPage.value = (streamPage.value + delta.coerceIn(-1, 1)).coerceAtLeast(0) }
-    fun filter(value: SportsFilter) { saved["sports_filter"] = value }
+    fun filter(value: SportsFilter) { consumeMessage(); saved["sports_filter"] = value }
     fun more() { limit.value = (limit.value + 200).coerceAtMost(2000) }
     fun settings(value: SportsPreferences) = viewModelScope.launch(Dispatchers.IO) { action { store.set(value) } }
     fun refresh() = viewModelScope.launch(Dispatchers.IO) { action {
@@ -179,10 +180,11 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
         mutableState.update { it.copy(message = "Game reminder set") }
     } }
     fun cancelReminder(eventId: String) = viewModelScope.launch(Dispatchers.IO) { action {
-        graph.database.reminders().forSportsEvent(eventId)?.let {
+        sportsReminderForEvent(graph.database.reminders().observeAll().first(), eventId, state.value.streams)?.let {
             ReminderScheduler.cancel(getApplication(), it.id); graph.reminderRepository.delete(it.id)
         }
     } }
+    fun consumeMessage() { mutableState.update { it.copy(message = null) } }
     fun notify(message: String) { mutableState.update { it.copy(message = message) } }
     private suspend fun action(block: suspend () -> Unit) {
         try { block() } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel
