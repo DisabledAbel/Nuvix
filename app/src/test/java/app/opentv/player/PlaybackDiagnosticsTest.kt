@@ -31,6 +31,8 @@ internal class DiagnosticPlayer {
     var tracks = Tracks.EMPTY
     var video: Format? = null
     var audio: Format? = null
+    var error: PlaybackException? = null
+    var item: MediaItem? = null
     val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader, arrayOf(ExoPlayer::class.java)) { proxy, method, args ->
         when (method.name) {
             "addListener" -> listeners.add(args!![0] as Player.Listener).let { null }
@@ -46,6 +48,8 @@ internal class DiagnosticPlayer {
             "getPlaybackParameters" -> PlaybackParameters.DEFAULT
             "getVideoFormat" -> video
             "getAudioFormat" -> audio
+            "getPlayerError" -> error
+            "getCurrentMediaItem" -> item
             "equals" -> proxy === args!![0]
             "hashCode" -> System.identityHashCode(proxy)
             "toString" -> "DiagnosticPlayer"
@@ -231,6 +235,59 @@ class PlaybackDiagnosticsTest {
         observer.sample()
         assertThat(observer.snapshot.value.droppedFrames).isEqualTo(2)
         assertThat(observer.snapshot.value.throughputBps).isNull()
+        assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
+        observer.close()
+    }
+    @Test fun `empty timeline retains only the active item's current playback error`() {
+        val fake = DiagnosticPlayer()
+        val observer = PlaybackDiagnostics(fake.player)
+        val listener = fake.analytics.single()
+        val event = AnalyticsListener.EventTime(0, Timeline.EMPTY, 0, null, 0, Timeline.EMPTY, 0, null, 0, 0)
+        val oldError = PlaybackException("old secret", null, PlaybackException.ERROR_CODE_DECODING_FAILED)
+        val currentError = PlaybackException("current secret", null, PlaybackException.ERROR_CODE_DECODING_FAILED)
+        observer.beginSession("HLS", "new")
+        fake.item = MediaItem.Builder().setMediaId("old").build()
+        fake.error = oldError
+        listener.onPlayerError(event, oldError) // Same error, but still belongs to the old item.
+        fake.item = MediaItem.Builder().setMediaId("new").build()
+        fake.error = currentError
+        listener.onPlayerError(event, oldError) // Active item, but a delayed previous error.
+        fake.item = null
+        listener.onPlayerError(event, currentError) // No item to associate with the session.
+        observer.sample()
+        assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
+        assertThat(observer.snapshot.value.error).isNull()
+        fake.item = MediaItem.Builder().setMediaId("new").build()
+        listener.onPlayerError(event, currentError)
+        observer.sample()
+        assertThat(observer.snapshot.value.decoderErrors).isEqualTo(1)
+        assertThat(observer.snapshot.value.health).isEqualTo(PlaybackHealth.ERROR)
+        assertThat(observer.snapshot.value.error).isEqualTo(PlaybackErrors.describe(currentError))
+        assertThat(observer.snapshot.value.error).doesNotContain("secret")
+        observer.close()
+    }
+    @Test fun `empty timeline fallback does not relax filtering for other callbacks`() {
+        val fake = DiagnosticPlayer().apply {
+            item = MediaItem.Builder().setMediaId("new").build()
+            error = PlaybackException("secret", null, PlaybackException.ERROR_CODE_DECODING_FAILED)
+            video = Format.Builder().setSampleMimeType("video/avc").build()
+        }
+        val observer = PlaybackDiagnostics(fake.player)
+        observer.beginSession("HLS", "new")
+        val listener = fake.analytics.single()
+        val event = AnalyticsListener.EventTime(0, Timeline.EMPTY, 0, null, 0, Timeline.EMPTY, 0, null, 0, 0)
+        listener.onDroppedVideoFrames(event, 20, 1000)
+        listener.onBandwidthEstimate(event, 1000, 2000000, 1000000)
+        listener.onVideoEnabled(event, DecoderCounters().apply { renderedOutputBufferCount = 10 })
+        listener.onVideoDecoderInitialized(event, "old.decoder", 0, 1)
+        listener.onVideoCodecError(event, IllegalStateException("secret"))
+        listener.onAudioCodecError(event, IllegalStateException("secret"))
+        observer.sample()
+        assertThat(observer.snapshot.value.droppedFrames).isEqualTo(0)
+        assertThat(observer.snapshot.value.throughputBps).isNull()
+        assertThat(observer.snapshot.value.estimatedBandwidthBps).isNull()
+        assertThat(observer.snapshot.value.renderedFrames).isNull()
+        assertThat(observer.snapshot.value.decoder).isNull()
         assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
         observer.close()
     }

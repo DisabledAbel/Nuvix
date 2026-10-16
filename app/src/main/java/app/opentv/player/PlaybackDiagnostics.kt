@@ -192,7 +192,7 @@ class PlaybackDiagnostics internal constructor(
     }
     private val analytics = object : AnalyticsListener {
         override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
-            if (!accepts(eventTime)) return
+            if (!accepts(eventTime, error)) return
             timeline.failure(PlaybackErrors.describe(error), error.errorCode in 4000..5999)
         }
         override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { if (accepts(eventTime)) video = format }
@@ -225,9 +225,14 @@ class PlaybackDiagnostics internal constructor(
 
     // Renderer callbacks can arrive after a fast channel change. Match an opaque owner ID,
     // never a stream URL, so a late callback cannot contaminate the new session.
-    private fun accepts(event: AnalyticsListener.EventTime): Boolean {
+    private fun accepts(event: AnalyticsListener.EventTime, error: PlaybackException? = null): Boolean {
         if (closed) return false
         val expected = mediaId ?: return true
+        if (event.timeline.isEmpty && error != null) {
+            // Missing timeline context alone cannot identify a session. Accept only the
+            // player's current error for the active item, never a delayed previous error.
+            return player.playerError === error && player.currentMediaItem?.mediaId == expected
+        }
         return event.windowIndex in 0 until event.timeline.windowCount &&
             event.timeline.getWindow(event.windowIndex, eventWindow).mediaItem.mediaId == expected
     }
