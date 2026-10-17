@@ -1,6 +1,7 @@
 /* Nuvix modifications Copyright (C) 2026 Nuvix Contributors. GPL-3.0-or-later. */
 package app.opentv.connections
 
+import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.opentv.data.model.Source
@@ -14,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
+@Config(application = Application::class, sdk = [28])
 class AccountConnectionManagerTest {
     private lateinit var context: Context
     private fun source(id: Long = 1, username: String = "private-user") = Source(
