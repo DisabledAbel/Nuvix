@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="rec_options">Recording options</string>
+    <string name="rec_history">Recording history</string>
+    <string name="rec_history_empty">No history is available for this recording.</string>
+    <string name="rec_protected">Protected</string>
+    <string name="rec_padding_locked">Padding locked</string>
+    <string name="rec_protect_toggle">Protect Recording</string>
+    <string name="rec_protect_desc">Prefer this recording in conflicts and exclude it from automatic deletion.</string>
+    <string name="rec_lock_padding_toggle">Lock Padding</string>
+    <string name="rec_lock_padding_desc">Never trim this recording’s padding automatically. Capture still depends on available resources.</string>
+    <string name="rec_padding_edit_unavailable">Padding can be changed before capture begins when programme times are known.</string>
+    <string name="rec_padding_minutes">%1$d min</string>
+    <string name="rec_save_options">Save options</string>
+    <string name="rec_review_conflicts">Review recording conflicts</string>
+    <string name="rec_conflict_fallback_desc">Review optional padding before it is trimmed. At the deadline, unattended recording keeps programme airtime first, never trims locked padding, and prefers protected recordings, then manual bookings, then active captures. Start time and recording ID break ties. Padding can be adjusted only before capture begins.</string>
+    <string name="rec_conflict_none">No recording conflicts were found within configured account allowances.</string>
+    <string name="rec_conflict_unknown">Account allowance is unknown. An additional connection needs approval for that request; unattended capture is not guaranteed. Configure the allowance in provider settings.</string>
+    <string name="rec_conflict_rejected">This recording loses an unavoidable conflict under the current preferences. Change protection, padding, or the booking before its deadline.</string>
+    <string name="rec_conflict_trim">Proposed minimum optional padding trim: %1$d seconds.</string>
+    <string name="rec_apply_padding_trim">Apply padding adjustments</string>
+    <string name="rec_status_preparing">Preparing · %1$s</string>
+    <string name="rec_status_finalizing">Finalizing · %1$s</string>
+    <string name="rec_status_partial">Partial · %1$s · %2$s · %3$s</string>
+    <string name="rec_status_missed">Missed · %1$s · %2$s</string>
+    <string name="rec_status_canceled">Canceled · %1$s</string>
+    <string name="rec_readiness_title">Unattended recording readiness</string>
+    <string name="rec_battery_exempt_title">Battery optimization exemption is enabled</string>
+    <string name="rec_battery_exempt_desc">This reduces interruptions from device battery policy. Android may still stop or reject capture.</string>
+    <string name="rec_battery_missing">Battery optimization exemption is off</string>
+    <string name="rec_battery_desc">Allowing the exemption may reduce interruptions when leaving Nuvix or turning off the display. It does not guarantee unattended recording.</string>
+    <string name="rec_exact_ready">Exact alarm access is available.</string>
+    <string name="rec_exact_unavailable">Exact alarm access is unavailable.</string>
+    <string name="rec_notifications_ready">Recording notifications are enabled.</string>
+    <string name="rec_notifications_unavailable">Recording notifications are disabled.</string>
+    <string name="rec_manage_exact_alarms">Manage alarm access</string>
+    <string name="rec_manage_notifications">Manage notifications</string>
+</resources>

@@ -103,11 +103,11 @@ class GuideProgrammeActionsTest {
         assertFalse(actions(programme(now - 1000, now).copy(episode = 2)).canRecordSeries)
     }
 
-    @Test fun `existing recording protects its provider while another provider remains available`() {
+    @Test fun `recording eligibility leaves account capacity to recorder while catchup remains protected`() {
         val busy = setOf(source.id)
         val airing = GuideProgrammeActions.evaluate(programme().copy(episode = 1), channel, source, now, busy)
-        assertFalse(airing.canRecordNow)
-        assertFalse(airing.canRecordSeries)
+        assertTrue(airing.canRecordNow)
+        assertTrue(airing.canRecordSeries)
         val past = programme(now - 1000, now)
         assertFalse(GuideProgrammeActions.evaluate(past, channel, source, now, busy).canCatchup)
         assertTrue(GuideProgrammeActions.evaluate(past, channel, source, now, setOf(99)).canCatchup)

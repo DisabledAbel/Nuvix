@@ -325,7 +325,7 @@ class AppSettings private constructor(context: Context) {
     // ---- Recording behaviour -----------------------------------------------------------------
 
     /** Minutes to start a scheduled recording early, so a late start isn't clipped. */
-    private val _recordPadStartMinutes = MutableStateFlow(prefs.getInt(KEY_PAD_START, 1))
+    private val _recordPadStartMinutes = MutableStateFlow(prefs.getInt(KEY_PAD_START, 2))
     val recordPadStartMinutes: StateFlow<Int> = _recordPadStartMinutes.asStateFlow()
 
     /** Minutes to keep recording past the listed end, so an overrun (sport/news) isn't cut off. */
@@ -342,10 +342,10 @@ class AppSettings private constructor(context: Context) {
 
     /**
      * When a scheduled recording starts, switch the box to it (playing from the growing file, so no
-     * extra provider connection). Essential on a single-connection provider, where recording one
-     * channel while another plays gets one of them cut. Default on.
+     * extra provider connection). Optional: account admission now releases only conflicting
+     * viewing, so background recording leaves unrelated playback running by default.
      */
-    private val _recordAutoSwitch = MutableStateFlow(prefs.getBoolean(KEY_REC_AUTOSWITCH, true))
+    private val _recordAutoSwitch = MutableStateFlow(prefs.getBoolean(KEY_REC_AUTOSWITCH, false))
     val recordAutoSwitch: StateFlow<Boolean> = _recordAutoSwitch.asStateFlow()
 
     fun setRecordAutoSwitch(enabled: Boolean) {

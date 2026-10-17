@@ -51,9 +51,11 @@ data class GuideProgrammeActions(
                 status = status,
                 canWatchNow = available && airing,
                 canSetReminder = available && upcoming,
-                canRecordNow = recordable && airing && !sourceBusy,
+                // Capacity belongs to the shared account pool and is checked atomically by the
+                // recorder. A recording on this playlist alone does not prove the pool is full.
+                canRecordNow = recordable && airing,
                 canScheduleRecording = recordable && upcoming,
-                canRecordSeries = recordable && ((airing && !sourceBusy) || upcoming) && hasEpisode,
+                canRecordSeries = recordable && (airing || upcoming) && hasEpisode,
                 canCatchup = catchup,
                 canViewChannel = available,
             )

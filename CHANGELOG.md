@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Add one account-aware local connection allocator for retained live playback, optional Guide
+  preview and the existing recording service, with explicit shared-account links, local/provider
+  allowance controls and one-request consent for additional unknown-capacity connections.
+- Preserve exclusive live surfaces and use safe connection replacement; do not infer subscription
+  limits from generic errors or claim capacity on other devices is known. Multi-View panels,
+  layouts, audio switching and presets remain outstanding in this draft foundation.
+- Add independent Protect Recording/Lock Padding controls, scheduled padding overrides,
+  account-aware conflict review, deterministic deadline fallback and readable recording history.
+  Use two-minute early/five-minute late defaults without replacing existing stored preferences.
+- Add Preparing/Finalizing/Partial/Missed/Canceled lifecycle states and additive Room migration
+  14, preserving existing providers, schedules, series rules and capture locators. Automatic
+  deletion remains absent; active duration extension and alternate-provider selection remain future work.
+- Harden existing capture with durable duplicate-start claims, recoverable partial content,
+  collision-resistant destinations, local storage headroom checks, bounded empty reconnects
+  and terminal storage failures. Validate direct MPEG-TS and reject playlists/nonmedia responses.
+- Keep the selected recording provider authoritative and remove heuristic silent provider
+  substitution. Default recording auto-navigation to Off while preserving explicit saved On;
+  eligible background capture remains independent of visible playback.
+- Declare DVR capture as an Android 14+ specialUse foreground service with an explicit subtype,
+  add unattended-readiness checks and record denied/missed starts. Store approval and real-device
+  background execution still require verification. Use user-granted SCHEDULE_EXACT_ALARM access
+  and remove the restricted automatically granted USE_EXACT_ALARM declaration.
+
 - Replace the basic Sports presentation with My Sports, Live/Upcoming games, favorite teams/leagues,
   All Sports and the existing category-based channel fallback in the same destination.
 - Group enabled provider streams using exact league-scoped team evidence and time windows; distinguish

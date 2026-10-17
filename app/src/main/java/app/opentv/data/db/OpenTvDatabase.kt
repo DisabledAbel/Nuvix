@@ -28,6 +28,7 @@ import app.opentv.data.model.PlaybackPosition
 import app.opentv.data.model.Profile
 import app.opentv.data.model.Programme
 import app.opentv.data.model.Recording
+import app.opentv.data.model.RecordingEvent
 import app.opentv.data.model.RecordingStatus
 import app.opentv.data.model.Reminder
 import app.opentv.data.model.Series
@@ -72,13 +73,14 @@ class Converters {
         PlaybackPosition::class,
         Profile::class,
         Recording::class,
+        RecordingEvent::class,
         SeriesRule::class,
         Reminder::class,
         CustomChannelGroup::class,
         SportsEvent::class, SportsProgramme::class, SportsDecision::class, SportsFavorite::class,
         SportsPreferred::class, SportsFeedState::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
@@ -95,6 +97,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
     abstract fun positions(): PlaybackPositionDao
     abstract fun profiles(): ProfileDao
     abstract fun recordings(): RecordingDao
+    abstract fun recordingEvents(): RecordingEventDao
     abstract fun seriesRules(): SeriesRuleDao
     abstract fun reminders(): ReminderDao
     abstract fun sports(): SportsDao
@@ -321,6 +324,20 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive DVR policy metadata. Existing padded windows and all captured files survive. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE recordings ADD COLUMN programmeStartMillis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE recordings ADD COLUMN programmeEndMillis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE recordings ADD COLUMN padStartMinutes INTEGER NOT NULL DEFAULT 2")
+                db.execSQL("ALTER TABLE recordings ADD COLUMN padEndMinutes INTEGER NOT NULL DEFAULT 5")
+                db.execSQL("ALTER TABLE recordings ADD COLUMN protectedRecording INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE recordings ADD COLUMN lockPadding INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS recording_events (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, recordingId INTEGER NOT NULL, atMillis INTEGER NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recording_events_recordingId_atMillis ON recording_events (recordingId, atMillis)")
+            }
+        }
+
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
                 // Encrypt the complete cache: provider passwords and credential-bearing stream
@@ -332,6 +349,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                 .build()
     }

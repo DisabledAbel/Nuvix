@@ -41,13 +41,18 @@ class LivePlaybackSessionLifecycleTest {
         try {
             val session = ViewModelProvider(activity.get())[LivePlaybackSession::class.java]
             session.setPresentation(LivePresentation.BROWSING)
-            session.registerGuidePreview(preview)
+            var releases = 0
+            session.registerGuidePreview(preview) {
+                assertThat(preview.isReleased).isTrue()
+                releases++
+            }
             assertThat(preview.isReleased).isFalse()
             session.openChannel(123L) // Repository job stays queued; no live player or URL is needed.
             assertThat(preview.isReleased).isTrue()
             assertThat(session.controllerOrNull.value).isNull()
             assertThat(session.active.value).isTrue()
             session.unregisterGuidePreview(preview) // late Compose disposal remains harmless
+            assertThat(releases).isEqualTo(1)
         } finally {
             activity.pause().stop().destroy()
             preview.release()

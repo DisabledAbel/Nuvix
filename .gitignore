@@ -29,3 +29,6 @@ __pycache__/
 
 # Supabase CLI transient state
 /supabase/.temp/
+
+# Local validation SDKs, build logs and scratch files
+/work/

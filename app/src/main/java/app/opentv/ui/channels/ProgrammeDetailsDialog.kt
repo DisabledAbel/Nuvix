@@ -130,8 +130,6 @@ fun ProgrammeDetailsDialog(
                     val selected = chosenVariant
                     submit {
                         check(freshActions(selected).canRecordNow)
-                        onReleasePreview()
-                        liveSession.stop()
                         graph.recordingEngine.startChannel(selected, programme)
                         success(context.getString(R.string.guide_details_starting_recording, selected.shownName))
                         onRecordingScheduled()
@@ -197,7 +195,6 @@ fun ProgrammeDetailsDialog(
                 submit {
                     val current = freshActions(selected)
                     check(current.canRecordSeries)
-                    if (current.canRecordNow) { onReleasePreview(); liveSession.stop() }
                     graph.recordingEngine.recordSeries(selected, programme, targetRow.programmes)
                     success(context.getString(R.string.rec_series_recording_set, programme.title))
                     onRecordingScheduled()

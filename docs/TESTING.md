@@ -2,6 +2,34 @@
 
 # Testing OpenTV
 
+## Connection management and DVR foundation
+
+Run the full existing unit, lint, assembly, Python and database-security checks listed in
+[the feature architecture](smart-multiview-dvr.md#verification-and-remaining-acceptance).
+The existing Build workflow remains the source of CI validation; this draft does not
+introduce a second recorder or a parallel validation workflow.
+
+New deterministic tests cover account-local capacity, exact shared-account associations,
+request-specific unknown-capacity approval, concurrent reservations, idempotent release,
+stale generations, recording priority, locked padding and additive recording persistence.
+Capture tests use fake HTTP responses and destinations. No real IPTV credentials are
+required. These checks exercise policy and controlled failures; they do not establish
+Android foreground-start eligibility, exact-alarm delivery or decoder stability.
+
+| Test group | Scope |
+| --- | --- |
+| `ConnectionAllocatorTest`, `AccountConnectionManagerTest` | Independent/linked accounts, opaque identity and local persistence, unknown approval scope, concurrency, release and recording reclaim. |
+| `LivePlaybackCoordinatorTest`, existing live lifecycle/surface tests | Replacement denial, stale requests, safe old-engine release and presentation ownership. |
+| `GuidePreviewConnectionTest`, `GuideProgrammeActionsTest` | Optional preview admission and explicit account-aware recording/viewing actions. |
+| `DvrConflictPolicyTest`, `RecordingDefaultsTest` | Protected/manual/active ordering, known/unknown capacity, minimal unlocked trimming, locked/legacy/active windows and two/five-minute defaults. |
+| `RecordingPersistenceTest`, `RecordingRepositoryTest`, `RecordingMigrationTest` | Durable duplicate-start claims, finalization, partial reconciliation, activity history and additive schema preservation. |
+| `RecordingCaptureTest` | Controlled stream/storage failures, bounded reconnect and safe captured-byte accounting. |
+
+Use the [hardware checklist](smart-multiview-dvr.md#hardware-checklist) for upgrades,
+simultaneous viewing/capture, external drives, screen-off behavior, boot, process death and
+permission revocation. Multi-View layouts/audio/presets and their device acceptance remain
+outstanding; do not interpret allocator coverage as completed multi-channel playback.
+
 ## Advanced EPG
 
 Run the existing Gradle/Python tasks below and `bash scripts/test-supabase.sh` when validating

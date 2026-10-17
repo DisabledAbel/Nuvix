@@ -38,6 +38,16 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 ## Setup
 
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
+- **Connections:** Open a provider's **Connection Management** to set its local allowance,
+  keep it Unknown, use a provider-reported allowance, or explicitly link shared-account
+  playlists. Additional unknown-capacity connections require individual approval; usage on
+  other devices remains uncertain. See [connection management and DVR](docs/smart-multiview-dvr.md).
+- **Recordings:** Use **Recording options** for independent **Protect Recording** and
+  **Lock Padding** controls and scheduled padding overrides. **Review recording conflicts**
+  previews minimum unlocked-padding trims; **Recording history** explains decisions.
+  Background capture depends on Android permission, device policy, provider and storage.
+  Recording keeps your selected provider; automatic navigation to capture defaults Off,
+  while an existing explicitly saved On preference is preserved.
 - **Launcher:** Open **Settings → Home launcher** and enable the HOME entry. Use your device's default-home selector where supported. Restore the original default launcher before disabling the entry. See [device compatibility](docs/launcher-compatibility.md).
 - **Live playback:** Under **Settings → Display & playback → Playback**, choose **Persistent Live Playback**, **Live Preview**, and **Continue Audio While Browsing**. Select the preview to return to fullscreen. Disable persistence on devices that struggle to retain video while browsing.
 - **Guide:** Open **Guide settings** to choose the layout, default filter, sorting, timeline
@@ -53,6 +63,11 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 ## Project status
 
 Nuvix is in development. Real-device testing is still needed for launcher selection, remote navigation, playback, database migration, cloud sync, and APK updates.
+
+Smart Multi-View/background DVR work is being delivered as a working connection-management
+and recording foundation. The current scope and remaining acceptance criteria are tracked in
+[connection management and DVR](docs/smart-multiview-dvr.md). Two-, three- and four-panel
+Multi-View, saved layouts and Multi-View Guide/Sports controls are not available in this draft.
 
 See the [implementation report](docs/implementation-report.md), [roadmap](docs/ROADMAP.md), [architecture](docs/nuvix-architecture.md), and [contributing guide](CONTRIBUTING.md).
 

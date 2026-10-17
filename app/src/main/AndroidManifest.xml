@@ -12,13 +12,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Scheduled recordings: an exact alarm starts a booked capture at broadcast time, and the
          boot receiver re-arms future bookings after a power cycle. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Lets OpenTV ask the user to be exempted from battery optimisation ("Doze"). Without the
          exemption Android TV / Fire TV freeze the app during standby and kill an in-progress or
@@ -140,13 +140,17 @@
 
         <!--
           Keeps a recording running when the user leaves the player or the screen sleeps.
-          Typed mediaPlayback (not dataSync) so long captures aren't cut off by Android 14's
-          six-hour daily dataSync cap — recording live TV is a media task.
+          DVR ingest is distinct from playback. Android 14+ specialUse requires an explicit
+          subtype and review for store distribution; it does not bypass background start rules.
         -->
         <service
             android:name="app.opentv.recording.RecordingService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated or user-scheduled live TV recording to user-selected storage, including when the screen is off" />
+        </service>
 
         <!-- Starts a booked recording when its alarm fires; re-arms bookings after a reboot. -->
         <receiver
@@ -154,6 +158,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

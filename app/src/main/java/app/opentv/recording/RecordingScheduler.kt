@@ -10,6 +10,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.net.Uri
 
 /**
  * Books a recording to start at a wall-clock time. Uses an exact alarm so a programme that starts
@@ -68,6 +69,8 @@ object RecordingScheduler {
     private fun intentFor(context: Context, recordingId: Long, action: String): Intent =
         Intent(context, RecordingAlarmReceiver::class.java).apply {
             this.action = action
+            // Intent identity includes the full Long ID; requestCode alone truncates to 32 bits.
+            data = Uri.parse("nuvix://recording/$recordingId/$action")
             putExtra(EXTRA_ID, recordingId)
         }
 
