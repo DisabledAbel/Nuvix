@@ -8,6 +8,7 @@ package app.opentv.recording
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.documentfile.provider.DocumentFile
 import com.disabledabel.nuvix.R
 import app.opentv.core.AppSettings
@@ -15,6 +16,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.util.UUID
 
 /**
  * Where a recording's bytes go — and how to read the size back and delete it — hidden behind one
@@ -33,6 +35,9 @@ import java.io.OutputStream
  * back (via [Sink.resolvedLocator]) for the caller to persist onto the row.
  */
 object RecordingStorage {
+
+    /** A reserve for Android and concurrent captures; shortage never deletes another recording. */
+    const val MIN_FREE_BYTES = 256L * 1024 * 1024
 
     /** Marker locator for a USB recording that hasn't been created (and given a URI) yet. */
     private const val USB_PLACEHOLDER_PREFIX = "usb://"
@@ -62,7 +67,9 @@ object RecordingStorage {
 
     /** Internal recordings dir on the device's own (app-private) external storage — no permission needed. */
     fun internalDir(context: Context): File =
-        File(context.getExternalFilesDir(null), "recordings").apply { mkdirs() }
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "recordings").apply {
+            if (!isDirectory && !mkdirs()) throw IOException("Recording directory is unavailable")
+        }
 
     /**
      * The locator a new recording named [filename] would be stored at, given the current target.
@@ -94,23 +101,22 @@ object RecordingStorage {
      */
     fun openSink(context: Context, settings: AppSettings, locator: String): Sink = when {
         SmbClient.isSmb(locator) -> {
-            val handle = SmbClient.openForWrite(smbConfig(settings), locator)
+            val handle = SmbClient.openForWrite(smbConfig(settings), locator, overwrite = false)
             Sink(handle.output) { handle.close() }
         }
         isUsbPlaceholder(locator) ->
             openUsbSink(context, settings, locator.removePrefix(USB_PLACEHOLDER_PREFIX))
         isContent(locator) -> {
-            // A USB recording whose document already exists (e.g. re-opened): write into it.
-            val uri = Uri.parse(locator)
-            val out = context.contentResolver.openOutputStream(uri, "w")
-                ?: throw IOException(context.getString(R.string.rec_error_usb_unavailable))
-            Sink(out, resolvedLocator = locator) { runCatching { out.flush(); out.close() } }
+            // A retry receives a new planned locator; never truncate recoverable captured content.
+            throw IOException("Recording destination already exists; retry into a new file")
         }
         else -> {
             val file = File(locator)
-            file.parentFile?.mkdirs()
+            file.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) throw IOException("Recording destination is unavailable") }
+            checkHeadroom(locator)
+            if (!file.createNewFile()) throw IOException("Recording destination already exists")
             val out = FileOutputStream(file)
-            Sink(out) { runCatching { out.close() } }
+            Sink(out) { out.use { it.flush(); it.fd.sync() } }
         }
     }
 
@@ -129,9 +135,43 @@ object RecordingStorage {
         val doc = tree.createFile(mimeForFilename(filename), filename)
             ?: throw IOException(context.getString(R.string.rec_error_usb_unavailable))
         val out = context.contentResolver.openOutputStream(doc.uri)
-            ?: throw IOException(context.getString(R.string.rec_error_usb_unavailable))
+            ?: run {
+                doc.delete()
+                throw IOException(context.getString(R.string.rec_error_usb_unavailable))
+            }
         return Sink(out, resolvedLocator = doc.uri.toString()) {
-            runCatching { out.flush(); out.close() }
+            out.use { it.flush() }
+        }
+    }
+
+    /** Unknown free space on a document provider/NAS is disclosed, then write failures are fatal. */
+    fun checkHeadroom(locator: String, minimumFreeBytes: Long = MIN_FREE_BYTES) {
+        if (SmbClient.isSmb(locator) || isContent(locator) || isUsbPlaceholder(locator)) return
+        val parent = File(locator).parentFile ?: throw IOException("Recording destination is unavailable")
+        if (!parent.isDirectory || parent.usableSpace < minimumFreeBytes) {
+            throw IOException("Insufficient free recording space")
+        }
+    }
+
+    /** Check roughly once a second; simultaneous writers all observe the same remaining space. */
+    fun storageMonitor(locator: String): () -> Unit {
+        var lastChecked = Long.MIN_VALUE
+        return {
+            val now = SystemClock.elapsedRealtime()
+            if (lastChecked == Long.MIN_VALUE || now - lastChecked >= 1_000L) {
+                checkHeadroom(locator)
+                lastChecked = now
+            }
+        }
+    }
+
+    /** Retry metadata gets a new destination so an interrupted file remains recoverable. */
+    fun retryLocator(locator: String): String {
+        val suffix = "retry-${UUID.randomUUID()}.ts"
+        return when {
+            isContent(locator) || isUsbPlaceholder(locator) -> USB_PLACEHOLDER_PREFIX + suffix
+            SmbClient.isSmb(locator) -> locator.substringBeforeLast('/') + "/" + suffix
+            else -> File(File(locator).parentFile, suffix).absolutePath
         }
     }
 
@@ -162,6 +202,6 @@ object RecordingStorage {
         val stamp = android.text.format.DateFormat.format("yyyy-MM-dd HHmm", startMillis)
         val base = (if (title.isBlank() || title == channelName) channelName else "$channelName - $title")
         val safe = base.replace(Regex("[^A-Za-z0-9 _.-]"), "_").take(80).trim()
-        return "$safe - $stamp.ts"
+        return "$safe - $stamp - ${UUID.randomUUID()}.ts"
     }
 }

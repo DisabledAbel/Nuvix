@@ -75,6 +75,7 @@ import app.opentv.core.ServiceLocator
 import app.opentv.core.isIgnoringBatteryOptimizations
 import app.opentv.core.requestIgnoreBatteryOptimizations
 import app.opentv.recording.RecordingStorage
+import app.opentv.recording.RecordingReadiness
 import app.opentv.recording.SmbClient
 import app.opentv.recording.SmbConfig
 import kotlinx.coroutines.Dispatchers
@@ -161,6 +162,11 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         SectionCard(stringResource(R.string.recset_background_title)) {
             BackgroundStatus()
+        }
+
+        Spacer(Modifier.height(20.dp))
+        SectionCard(stringResource(R.string.rec_readiness_title)) {
+            DvrReadinessStatus()
         }
 
         Spacer(Modifier.height(20.dp))
@@ -439,7 +445,7 @@ private fun BackgroundStatus() {
                 val now = context.isIgnoringBatteryOptimizations()
                 // Just came back from granting it: say so out loud so it's unmistakable.
                 if (now && !allowed) {
-                    Toast.makeText(context, context.getString(R.string.recset_background_toast), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.rec_battery_exempt_title), Toast.LENGTH_LONG).show()
                 }
                 allowed = now
             }
@@ -468,14 +474,14 @@ private fun BackgroundStatus() {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    stringResource(R.string.recset_background_on_title),
+                    stringResource(R.string.rec_battery_exempt_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF4ADE80),
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    stringResource(R.string.recset_background_on_desc),
+                    stringResource(R.string.rec_battery_exempt_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -487,7 +493,7 @@ private fun BackgroundStatus() {
                 Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.width(14.dp))
                 Text(
-                    stringResource(R.string.recset_background_not_allowed),
+                    stringResource(R.string.rec_battery_missing),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f),
@@ -498,11 +504,42 @@ private fun BackgroundStatus() {
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                stringResource(R.string.recset_background_desc),
+                stringResource(R.string.rec_battery_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun DvrReadinessStatus() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var readiness by remember { mutableStateOf(RecordingReadiness.check(context)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) readiness = RecordingReadiness.check(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    Text(stringResource(if (readiness.exactAlarmsAllowed) R.string.rec_exact_ready else R.string.rec_exact_unavailable))
+    Text(stringResource(if (readiness.notificationsAllowed) R.string.rec_notifications_ready else R.string.rec_notifications_unavailable))
+    readiness.warnings.forEach { warning ->
+        Text(warning, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (!readiness.exactAlarmsAllowed && android.os.Build.VERSION.SDK_INT >= 31) {
+        OutlinedButton(onClick = {
+            runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.parse("package:${context.packageName}"))) }
+        }) { Text(stringResource(R.string.rec_manage_exact_alarms)) }
+    }
+    if (!readiness.notificationsAllowed) {
+        OutlinedButton(onClick = {
+            runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }
+        }) { Text(stringResource(R.string.rec_manage_notifications)) }
     }
 }
 

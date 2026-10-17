@@ -30,6 +30,7 @@ internal interface LivePlaybackEngine {
 
 /** A safe domain failure: never expose arbitrary provider exception messages. */
 internal class RecordingOwnsLiveSourceException : IllegalStateException()
+internal class LiveConnectionException(val safeMessage: String) : IllegalStateException()
 
 internal data class ResolvedLiveChannel(
     val channel: Channel,
@@ -48,6 +49,8 @@ internal class LivePlaybackCoordinator(
     private val engineFactory: () -> LivePlaybackEngine,
     private val onTune: (Channel) -> Unit = {},
     private val onRelease: () -> Unit = {},
+    private val preparePlayback: suspend (Channel, releaseCurrent: () -> Unit) -> Unit = { _, _ -> },
+    private val afterEngineRelease: () -> Unit = {},
 ) {
     private val _currentChannel = MutableStateFlow<Channel?>(null)
     val currentChannel = _currentChannel.asStateFlow()
@@ -128,6 +131,7 @@ internal class LivePlaybackCoordinator(
         requestJob?.cancel()
         requestJob = scope.launch {
             var selected: Channel? = null
+            var admitted = false
             try {
                 selected = channel() ?: run {
                     if (token == generation) {
@@ -146,6 +150,10 @@ internal class LivePlaybackCoordinator(
                 val resolved = resolve(selected)
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
+                preparePlayback(resolved.channel, ::releaseEngine)
+                admitted = true
+                coroutineContext.ensureActive()
+                if (token != generation) return@launch
                 val playback = ensureEngine()
                 if (rememberPrevious) playingChannelId?.takeIf { it != id }?.let { _previousChannelId.value = it }
                 _currentChannel.value = resolved.channel
@@ -161,15 +169,18 @@ internal class LivePlaybackCoordinator(
                 applyPolicy()
                 onTune(resolved.channel)
             } catch (cancelled: CancellationException) {
+                if (admitted && token == generation) releaseEngine()
                 throw cancelled
             } catch (failure: Exception) {
                 // Provider exceptions often contain credential-bearing URLs. Keep them out of UI/logs.
                 if (token == generation) {
+                    if (admitted) releaseEngine()
                     failedChannel = selected
                     resolutionFailed = true
                     val message = if (failure is RecordingOwnsLiveSourceException) {
                         "A recording is using this provider. Play the recording or stop it before watching live TV."
-                    } else "Unable to open this channel. Please retry."
+                    } else if (failure is LiveConnectionException) failure.safeMessage
+                    else "Unable to open this channel. Please retry."
                     _state.value = PlayerController.State.Error(selected?.shownName.orEmpty(), message, true)
                 }
             } finally {
@@ -242,6 +253,17 @@ internal class LivePlaybackCoordinator(
         failedChannel = null
         resolving = false
         resolutionFailed = false
+        releaseEngine()
+        _previousChannelId.value = null
+        _active.value = false
+        _currentChannel.value = null
+        _variants.value = emptyList()
+        _paused.value = false
+        _state.value = PlayerController.State.Idle
+    }
+
+    /** Closing the decoder/HTTP owner precedes releasing its account reservation. */
+    private fun releaseEngine() {
         engineStateJob?.cancel()
         engineStateJob = null
         enginePausedJob?.cancel()
@@ -250,12 +272,7 @@ internal class LivePlaybackCoordinator(
         engine?.release()
         engine = null
         _engineReady.value = false
-        _previousChannelId.value = null
-        _active.value = false
-        _currentChannel.value = null
-        _variants.value = emptyList()
-        _paused.value = false
-        _state.value = PlayerController.State.Idle
+        afterEngineRelease()
     }
 
     fun destroy() { if (!destroyed) { stop(); destroyed = true } }

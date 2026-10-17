@@ -77,6 +77,10 @@ import app.opentv.core.AppSettings
 import app.opentv.core.ServiceLocator
 import app.opentv.core.findActivity
 import app.opentv.core.requestIgnoreBatteryOptimizations
+import app.opentv.connections.AccountConnectionManager
+import app.opentv.connections.ConnectionPurpose
+import app.opentv.connections.ConnectionRequest
+import app.opentv.connections.ReservationResult
 import app.opentv.data.model.Channel
 import app.opentv.data.model.Programme
 import app.opentv.data.model.Reminder
@@ -100,6 +104,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 
 /**
  * Live TV: a category rail on the left, the channel list on the right.
@@ -234,44 +240,45 @@ fun HomeScreen(
     }
 
     // No standalone preview player exists while the shared live session owns playback.
-    // Disabled preview and active recording paths do not allocate a decoder either.
-    val recordingActive = activeRecordingSnapshot == null || activeRecordings.isNotEmpty()
+    // Wait for Room's initial recording snapshot; subsequent account capacity is checked by the
+    // same allocator as live playback and capture, including pending connection attempts.
+    val recordingSnapshotReady = activeRecordingSnapshot != null
+    val accountConnections = remember { AccountConnectionManager.get(context) }
     val previewScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
-    val previewController = remember(previewEnabled, livePreviewEnabled, screenResumed, recordingActive, persistentActive, optionalPreviewSuppressed) {
-        if (previewEnabled && livePreviewEnabled && screenResumed && !recordingActive && !persistentActive && !optionalPreviewSuppressed) {
+    val previewController = remember(previewEnabled, livePreviewEnabled, screenResumed, recordingSnapshotReady, persistentActive, optionalPreviewSuppressed) {
+        if (previewEnabled && livePreviewEnabled && screenResumed && recordingSnapshotReady && !persistentActive && !optionalPreviewSuppressed) {
             PlayerController(context.applicationContext, previewScope, graph.streamingHttpClient, subtitlesEnabled = false, preview = true)
                 .also { it.player.volume = 0f }
         } else null
     }
-    DisposableEffect(previewController) {
-        previewController?.let(liveSession::registerGuidePreview)
+    val previewConnection = remember(previewController) {
+        previewController?.let { GuidePreviewConnection(accountConnections, it::stop) }
+    }
+    DisposableEffect(previewController, previewConnection) {
+        if (previewController != null && previewConnection != null) {
+            liveSession.registerGuidePreview(previewController, previewConnection::onPlaybackReleased)
+        }
         onDispose { previewController?.let(liveSession::unregisterGuidePreview) }
     }
     DisposableEffect(Unit) { onDispose { previewScope.cancel() } }
 
-    // Watching a live channel while a recording runs opens a second stream on the same line — which
-    // cuts the recording and can get a single-connection account banned. So every jump to full-screen
-    // live is funnelled through [requestLive]: with a recording active it asks first.
-    var pendingLiveChannel by remember { mutableStateOf<Channel?>(null) }
-    fun startLive(channel: Channel) {
+    // Explicit Watch uses the shared live owner's account admission and per-request approval UI.
+    fun requestLive(channel: Channel) {
         PlaybackQueue.items = rows.map {
             PlaybackQueue.Item(it.primary.id, it.primary.shownName, it.primary.logoUrl, it.primary.number)
         }
-        previewController?.release()
+        previewController?.let(liveSession::unregisterGuidePreview)
         onPlayChannel(channel)
-    }
-    fun requestLive(channel: Channel) {
-        if (activeRecordings.isNotEmpty()) pendingLiveChannel = channel else startLive(channel)
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, previewConnection) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> screenResumed = true
                 Lifecycle.Event.ON_PAUSE -> {
                     screenResumed = false
-                    previewController?.stop()
+                    previewConnection?.stop()
                 }
                 else -> Unit
             }
@@ -285,26 +292,60 @@ fun HomeScreen(
         previewController?.player?.volume = if (previewSound) 1f else 0f
     }
 
-    // An explicit channel selection may start a standalone preview when no retained session owns playback.
-    LaunchedEffect(selectedRow?.key, previewController) {
+    // An optional preview never asks to open another connection on an unknown account. Watch
+    // remains available and routes through the live owner's explicit approval surface.
+    LaunchedEffect(selectedRow?.key, previewController, previewConnection) {
         val controller = previewController ?: return@LaunchedEffect
+        val connection = previewConnection ?: return@LaunchedEffect
+        val attempt = connection.beginTune()
         val channel = selectedRow?.primary ?: return@LaunchedEffect
         try {
             val source = graph.sourceRepository.byId(channel.sourceId)
+                ?.takeIf { it.enabled } ?: return@LaunchedEffect
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (!connection.isCurrent(attempt) || controller.isReleased) return@LaunchedEffect
+            accountConnections.registerSource(source)
+            val result = accountConnections.reserve(ConnectionRequest(
+                connection.sessionId, attempt, channel.sourceId, ConnectionPurpose.PREVIEW,
+            ))
+            if (result is ReservationResult.ApprovalRequired) {
+                accountConnections.discardChallenge(result.challenge)
+                return@LaunchedEffect
+            }
+            val token = (result as? ReservationResult.Reserved)?.token ?: return@LaunchedEffect
+            if (!connection.attach(token, attempt)) return@LaunchedEffect
+            accountConnections.registerOwner(token) {
+                withContext(Dispatchers.Main.immediate) {
+                    if (connection.owns(token)) liveSession.unregisterGuidePreview(controller)
+                }
+            }
             val url = graph.catalogRepository.resolvePlaybackUrl(channel, source)
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (!connection.isCurrent(attempt) || !connection.owns(token) || controller.isReleased) return@LaunchedEffect
             controller.play(
                 PlayerController.Request(
                     url = url, title = channel.shownName,
-                    userAgent = source?.userAgent ?: "Nuvix/0.1 (Android)", isLive = true,
+                    userAgent = source.userAgent, isLive = true,
                 ),
                 debounce = true,
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            connection.stop(attempt)
             throw cancelled
         } catch (_: Exception) {
             // Provider exceptions may contain private URLs. Keep the guide's logo fallback.
-            controller.stop()
+            connection.stop(attempt)
+        }
+    }
+    LaunchedEffect(previewController, previewConnection) {
+        val controller = previewController ?: return@LaunchedEffect
+        val connection = previewConnection ?: return@LaunchedEffect
+        controller.state.collect { state ->
+            when (state) {
+                is PlayerController.State.Playing -> connection.markActive()
+                is PlayerController.State.Error -> if (!state.canRetry) connection.stop()
+                else -> Unit
+            }
         }
     }
 
@@ -438,7 +479,6 @@ fun HomeScreen(
                         graph.recordingEngine.stop(active.id)
                         Toast.makeText(context, context.getString(R.string.rec_recording_stopped), Toast.LENGTH_SHORT).show()
                     } else {
-                        previewController?.release()
                         liveSession.recordChannel(row.primary, row.now)
                         Toast.makeText(context, context.getString(R.string.rec_recording_started_see_tab, row.primary.shownName), Toast.LENGTH_LONG).show()
                         promptBackgroundIfNeeded()
@@ -556,45 +596,12 @@ fun HomeScreen(
     recordTarget?.let { (targetRow, programme) ->
         ProgrammeDetailsDialog(
             targetRow, programme, nowMillis, sources, activeRecordings, liveSession, recordScope,
-            onReleasePreview = { previewController?.release() },
+            onReleasePreview = { previewController?.let(liveSession::unregisterGuidePreview) },
             onWatch = ::requestLive,
             onPlayCatchup = onPlayCatchup,
             onRecordingScheduled = ::promptBackgroundIfNeeded,
             onDismiss = { recordTarget = null },
         )
-    }
-
-    // Single-connection guard: confirm before opening a live stream that would fight a recording.
-    pendingLiveChannel?.let { liveChannel ->
-        val recTitle = activeRecordings.firstOrNull()?.title.orEmpty()
-        Dialog(onDismissRequest = { pendingLiveChannel = null }) {
-            Column(
-                Modifier
-                    .width(480.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(20.dp),
-            ) {
-                Text(
-                    stringResource(R.string.rec_live_warn_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    stringResource(R.string.rec_live_warn_body, recTitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(16.dp))
-                RecordActionRow(stringResource(R.string.rec_live_warn_watch)) {
-                    pendingLiveChannel = null
-                    activeRecordings.forEach { graph.recordingEngine.stop(it.id) }
-                    startLive(liveChannel)
-                }
-                RecordActionRow(stringResource(R.string.rec_live_warn_keep)) { pendingLiveChannel = null }
-            }
-        }
     }
 
     // The channel menu — opened by pressing OK on a channel. Watch, record what's on now, schedule
@@ -668,7 +675,6 @@ fun HomeScreen(
                         }
                     } else if (GuideProgrammeActions.canRecordChannel(channel, sources.firstOrNull { it.id == channel.sourceId })) {
                         RecordActionRow(stringResource(R.string.guide_record_now_playing), primary = true) {
-                            previewController?.release()
                             liveSession.recordChannel(channel, nowProg)
                             Toast.makeText(context, context.getString(R.string.rec_recording_started_see_tab, channel.shownName), Toast.LENGTH_LONG).show()
                             promptBackgroundIfNeeded()
@@ -677,8 +683,6 @@ fun HomeScreen(
                     }
                     if (nowProg != null && GuideProgrammeActions.canRecordChannel(channel, sources.firstOrNull { it.id == channel.sourceId })) {
                         RecordActionRow(stringResource(R.string.rec_record_series_named, nowProg.title)) {
-                            previewController?.release()
-                            liveSession.stop()
                             recordScope.launch {
                                 graph.recordingEngine.recordSeries(channel, nowProg, menuRow.programmes)
                             }

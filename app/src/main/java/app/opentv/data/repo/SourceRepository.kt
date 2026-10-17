@@ -23,6 +23,7 @@ class SourceRepository(
     private val dao: SourceDao,
     private val api: XtreamApi,
     private val stalkerApi: StalkerApi,
+    private val onAccountVerified: (Source, XtreamApi.AccountInfo) -> Unit = { _, _ -> },
 ) {
     fun observeAll(): Flow<List<Source>> = dao.observeAll()
 
@@ -46,6 +47,7 @@ class SourceRepository(
             val message = when (validated.kind) {
                 SourceKind.XTREAM -> {
                     val info = api.authenticate(validated)
+                    if (validated.id > 0) onAccountVerified(validated, info)
                     buildString {
                         append("Connected")
                         info.maxConnections?.let { append(" · $it connection(s)") }

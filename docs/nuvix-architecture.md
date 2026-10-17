@@ -2,6 +2,11 @@
 
 Nuvix keeps OpenTV's native Kotlin/Compose/Media3/Room structure. The upstream commit and original-file digests are recorded in `upstream-source.json`. `MainActivity` owns navigation, the sidebar/home screens present local provider catalogs, `ServiceLocator` retains the dependency graph, and existing catalog, EPG, player, recording, reminder, LAN pairing, and NAS components remain in place. The Kotlin source namespace `app.opentv` preserves upstream structure; generated Android resources and installed identity use `com.disabledabel.nuvix`.
 
+The Smart Multi-View/background DVR foundation extends those owners rather than replacing
+them. Its [architecture assessment](smart-multiview-dvr.md) records the baseline, account/
+reservation/player/panel boundaries, Android execution limits and outstanding full-feature
+acceptance. Multi-View presentation remains future work in this draft.
+
 New code has explicit boundaries: `launcher/` wraps PackageManager, optional HOME alias activation, app favorites, and startup preferences; `cloud/` implements optional email OTP, an encrypted allowlisted outbox, REST/RPC sync and WorkManager retry; `update/` validates fixed-origin release metadata, hashes, Android package/version/signers and uses interactive PackageInstaller sessions. `player/BufferSettings` and `ConfigurableLoadControl` expose bounded, live-applied buffering. `core/RecentChannels` persists local channel identifiers only.
 
 The guide downloads and validates an XML feed off the main thread before replacing a feed inside a Room transaction. Parsing or database failure rolls back previous programs/aliases. Catalog and VOD loading continue through the original repositories. Home channel/sports shelves use bounded database queries instead of loading full playlists.

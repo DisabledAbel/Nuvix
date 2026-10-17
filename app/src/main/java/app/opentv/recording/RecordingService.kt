@@ -12,21 +12,33 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import app.opentv.connections.AccountConnectionManager
+import app.opentv.connections.ConnectionPurpose
+import app.opentv.connections.ConnectionRequest
+import app.opentv.connections.ReservationResult
+import app.opentv.connections.ReservationToken
+import app.opentv.data.model.RecordingStatus
 import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.Call
-import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A foreground service that captures live streams to storage. Recording has to keep going when the
@@ -41,22 +53,32 @@ class RecordingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val captures = ConcurrentHashMap<Long, Capture>()
     private var wakeLock: PowerManager.WakeLock? = null
+    private var lastStartId = 0
 
-    private class Capture(@Volatile var call: Call?, val job: Job)
+    private class Capture {
+        @Volatile var call: Call? = null
+        @Volatile var userStopped = false
+        @Volatile var stopReason: String? = null
+        lateinit var job: Job
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(0))
+        runningService = this
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(0),
+            if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
     }
 
+    @Synchronized
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         when (intent?.action) {
             ACTION_START -> {
                 val id = intent.getLongExtra(EXTRA_ID, -1L)
-                if (id > 0 && !captures.containsKey(id)) startCapture(id)
+                if (id > 0) startCapture(id)
             }
             ACTION_STOP -> {
                 val id = intent.getLongExtra(EXTRA_ID, -1L)
@@ -68,148 +90,143 @@ class RecordingService : Service() {
         return START_NOT_STICKY
     }
 
+    @Synchronized
     private fun startCapture(id: Long) {
+        if (captures.containsKey(id)) return
         acquireWakeLock()
-        val job = scope.launch { runCapture(id) }
-        captures[id] = Capture(null, job)
+        val capture = Capture()
+        capture.job = scope.launch(start = CoroutineStart.LAZY) { runCapture(id, capture) }
+        captures[id] = capture
+        // Registration precedes launch, and completion retires even a job cancelled before dispatch.
+        capture.job.invokeOnCompletion { finish(id, capture) }
         updateNotification()
+        capture.job.start()
     }
 
-    private suspend fun runCapture(id: Long) {
+    private suspend fun runCapture(id: Long, capture: Capture) {
         val graph = ServiceLocator.get(applicationContext)
         val repo = graph.recordingRepository
-        val recording = repo.byId(id)
-        if (recording == null) {
-            finish(id)
-            return
-        }
-
+        var claimed = false
         var total = 0L
         var error: String? = null
         var sink: RecordingStorage.Sink? = null
+        var token: ReservationToken? = null
+        var late = false
+        var programmeEnd = 0L
+        val connections = AccountConnectionManager.get(applicationContext)
         try {
-            repo.markStarted(id, System.currentTimeMillis())
-            // Announce the live capture so the player can watch this file while it grows.
-            RecordingLiveState.markActive(id, recording.filePath)
+            repo.failInterrupted()
+            if (!graph.recordingEngine.prepareDue(id)) return
+            claimed = repo.claimScheduled(id, System.currentTimeMillis())
+            if (!claimed) return // Duplicate alarm, canceled booking, or already finished capture.
+            val recording = repo.byId(id) ?: return
+            val now = System.currentTimeMillis()
+            if (recording.scheduledEndMillis > 0 && now >= recording.scheduledEndMillis) {
+                repo.setStatus(id, RecordingStatus.MISSED, "Recording window ended before capture could start")
+                repo.event(id, "MISSED", "Recording window ended before capture could start")
+                claimed = false
+                return
+            }
+            val programmeStart = recording.programmeStartMillis.takeIf { it > 0 }
+                ?: recording.scheduledStartMillis.takeIf { recording.scheduledEndMillis > 0 } ?: 0L
+            programmeEnd = recording.programmeEndMillis.takeIf { it > 0 } ?: recording.scheduledEndMillis
+            late = programmeStart > 0 && now > programmeStart
+            graph.sourceRepository.byId(recording.sourceId)?.let { connections.registerSource(it) }
+            val request = ConnectionRequest("recording:$id", generations.incrementAndGet(), recording.sourceId, ConnectionPurpose.RECORDING)
+            when (val reservation = connections.reserveForRecording(request, allowInterruptLive = true)) {
+                is ReservationResult.Reserved -> token = reservation.token
+                is ReservationResult.ApprovalRequired -> {
+                    connections.discardChallenge(reservation.challenge)
+                    error = "Account allowance is unknown; an additional recording connection needs confirmation"
+                    return
+                }
+                is ReservationResult.Denied -> { error = reservation.reason; return }
+            }
+            repo.event(id, "PROVIDER_SELECTED", "Authorized provider selected; account connection reserved")
+            RecordingStorage.checkHeadroom(recording.filePath,
+                RecordingStorage.MIN_FREE_BYTES * captures.size.coerceAtLeast(1))
             sink = RecordingStorage.openSink(applicationContext, graph.settings, recording.filePath)
-            // A USB (SAF) sink only learns its real content:// URI when the document is created —
-            // persist it onto the row so the finished recording plays back and deletes correctly.
+            var actualPath = recording.filePath
             sink.resolvedLocator?.let { actual ->
-                if (actual != recording.filePath) {
-                    repo.setFilePath(id, actual)
-                    RecordingLiveState.updatePath(id, actual)
-                }
+                actualPath = actual
+                if (actual != recording.filePath) repo.setFilePath(id, actual)
             }
-
-            val buffer = ByteArray(BUFFER_BYTES)
-            var lastReport = 0L
-            var deadReconnects = 0
-
-            // Reconnect loop. Real IPTV `.ts` live endpoints commonly serve a rolling ~30s window and
-            // then close the socket, expecting the client to re-request (ExoPlayer does this on its own
-            // during playback). A single read-to-EOF therefore captures only ~30s — the exact bug. So
-            // when the connection drops we reopen it and keep appending to the same file, until the
-            // scheduled end, a user stop, or the stream is genuinely gone (several empty reconnects).
-            val scheduledEnd = recording.scheduledEndMillis
-            while (kotlin.coroutines.coroutineContext[Job]?.isActive == true) {
-                if (scheduledEnd > 0 && System.currentTimeMillis() >= scheduledEnd) break
-
-                val request = Request.Builder()
-                    .url(recording.streamUrl)
-                    .header("User-Agent", recording.userAgent)
-                    .build()
-                val call = graph.streamingHttpClient.newCall(request)
-                captures[id]?.call = call
-
-                val bytesThisLeg = try {
-                    call.execute().use { response ->
-                        if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
-                        val input = response.body?.byteStream() ?: throw java.io.IOException("Empty response")
-                        var leg = 0L
-                        while (kotlin.coroutines.coroutineContext[Job]?.isActive == true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            sink.output.write(buffer, 0, read)
-                            total += read
-                            leg += read
-                            if (scheduledEnd > 0 && System.currentTimeMillis() >= scheduledEnd) break
-                            if (total - lastReport >= SIZE_REPORT_BYTES) {
-                                lastReport = total
-                                repo.setSize(id, total)
-                            }
-                        }
-                        leg
-                    }
-                } catch (t: kotlinx.coroutines.CancellationException) {
-                    throw t
-                } catch (t: java.io.IOException) {
-                    // A dropped connection isn't a failure — reconnect and carry on.
-                    Log.i(TAG, "Recording $id connection dropped; reconnecting")
-                    0L
-                }
-
-                // Nothing arrived this leg: count it, and give up only after several in a row so a
-                // truly dead stream can't spin forever. A leg that delivered bytes resets the counter.
-                if (bytesThisLeg <= 0L) {
-                    if (++deadReconnects >= MAX_DEAD_RECONNECTS) {
-                        if (total == 0L) error = getString(R.string.rec_error_nothing)
-                        break
-                    }
-                    kotlinx.coroutines.delay(RECONNECT_BACKOFF_MILLIS)
-                } else {
-                    deadReconnects = 0
-                }
-            }
-        } catch (t: Throwable) {
-            // A cancelled stop is a clean finish, not an error.
-            if (t is kotlinx.coroutines.CancellationException) {
-                Log.i(TAG, "Recording $id stopped by user")
-            } else {
-                error = t.message ?: t.javaClass.simpleName
-                Log.w(TAG, "Recording $id failed")
-            }
+            RecordingLiveState.markActive(id, actualPath)
+            val result = RecordingCapture(graph.streamingHttpClient).copy(
+                recording.streamUrl, recording.userAgent, sink.output, recording.scheduledEndMillis,
+                onCall = { call -> capture.call = call; if (!capture.job.isActive) call?.cancel() },
+                onProgress = { bytes ->
+                    total = bytes
+                    withContext(NonCancellable) { repo.setSize(id, bytes) }
+                },
+                checkStorage = RecordingStorage.storageMonitor(actualPath),
+                onStarted = {
+                    val firstByteAt = System.currentTimeMillis()
+                    late = programmeStart > 0 && firstByteAt > programmeStart
+                    repo.markStarted(id, firstByteAt)
+                    repo.event(id, "STARTED", if (late) "Capture started late; remaining content will be Partial" else "Capture started")
+                    connections.markActive(requireNotNull(token))
+                    // A disabled notification or an unavailable Activity must not stop capture.
+                    runCatching { RecordingAlarmReceiver.notifyCaptureStarted(applicationContext, recording) }
+                },
+            )
+            total = result.bytes
+            error = result.error
+        } catch (_: CancellationException) {
+            error = capture.stopReason ?: if (capture.userStopped && programmeEnd > System.currentTimeMillis())
+                "Recording stopped before the programme finished"
+            else if (!capture.userStopped) "Recording service interrupted" else null
+        } catch (_: Exception) {
+            // Never persist exception text: network/SAF/SMB exceptions may include secrets.
+            error = "Recording could not continue; check provider access and recording storage"
+            Log.w(TAG, "Recording $id could not continue")
         } finally {
-            // The file is now at its final size — anyone watching it should see the true end.
-            RecordingLiveState.markInactive(id)
-            runCatching { sink?.close() }
-            val ok = total > 0 && error == null
-            runCatching {
-                repo.markFinished(
-                    id = id,
-                    ok = ok,
-                    atMillis = System.currentTimeMillis(),
-                    bytes = total,
-                    error = if (ok) null else (error ?: getString(R.string.rec_error_nothing)),
-                )
+            withContext(NonCancellable) {
+                if (claimed) runCatching { repo.beginFinalizing(id) }
+                capture.call?.cancel()
+                capture.call = null
+                try { sink?.close() }
+                catch (_: Exception) { error = "Recording destination could not finalize captured content" }
+                // Keep tail-following active until all output has actually been closed.
+                RecordingLiveState.markInactive(id)
+                token?.let { connections.release(it) }
+                if (claimed) {
+                    val reason = error ?: if (late) "Recording started after the programme began" else null
+                    val ok = total > 0 && reason == null
+                    runCatching {
+                        repo.markFinished(id, ok, System.currentTimeMillis(), total, reason ?: if (total == 0L) "No content captured" else null)
+                        if (capture.userStopped && total == 0L) repo.setStatus(id, RecordingStatus.CANCELED, "Stopped before content arrived")
+                        repo.event(id, if (ok) "COMPLETED" else if (total > 0) "PARTIAL" else "FAILED",
+                            reason ?: if (ok) "Capture completed" else "No content captured")
+                    }.onFailure { Log.w(TAG, "Recording $id final status could not be persisted; recovery will reconcile it") }
+                }
             }
-            finish(id)
         }
     }
 
     private fun stopCapture(id: Long) {
         val capture = captures[id] ?: return
-        runCatching { capture.call?.cancel() }
+        capture.userStopped = true
+        capture.call?.cancel()
         capture.job.cancel()
     }
 
-    /** Called from the capture coroutine's finally to retire it and, if it was the last, stop. */
-    private fun finish(id: Long) {
-        captures.remove(id)
-        if (captures.isEmpty()) {
-            stopSelfSafely()
-        } else {
-            updateNotification()
-        }
+    /** Completion also runs for a lazy coroutine canceled before its body was dispatched. */
+    @Synchronized
+    private fun finish(id: Long, capture: Capture) {
+        captures.remove(id, capture)
+        if (captures.isEmpty()) stopSelfSafely() else updateNotification()
     }
 
+    @Synchronized
     private fun stopSelfSafely() {
+        if (captures.isNotEmpty() || !stopSelfResult(lastStartId)) return
         releaseWakeLock()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION") stopForeground(true)
         }
-        stopSelf()
     }
 
     /**
@@ -230,6 +247,8 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
+        runningService = null
+        captures.values.forEach { it.call?.cancel() }
         scope.coroutineContext[Job]?.cancel()
         releaseWakeLock()
         super.onDestroy()
@@ -242,7 +261,9 @@ class RecordingService : Service() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OpenTV:recording").apply {
             setReferenceCounted(false)
-            acquire(MAX_WAKE_MILLIS)
+            // Lifetime is bounded by capture ownership and onDestroy, with explicit release.
+            @Suppress("WakelockTimeout")
+            acquire()
         }
     }
 
@@ -291,13 +312,8 @@ class RecordingService : Service() {
         private const val TAG = "Nuvix"
         private const val CHANNEL_ID = "recordings"
         private const val NOTIFICATION_ID = 4210
-        private const val BUFFER_BYTES = 64 * 1024
-        private const val SIZE_REPORT_BYTES = 4L * 1024 * 1024
-        private const val MAX_WAKE_MILLIS = 6L * 60 * 60 * 1000 // 6h safety cap
-        // Providers close a live .ts socket every ~30s; reconnect and keep appending. Give up only
-        // after this many consecutive reconnects deliver nothing (the stream is genuinely gone).
-        private const val MAX_DEAD_RECONNECTS = 5
-        private const val RECONNECT_BACKOFF_MILLIS = 1500L
+        @Volatile private var runningService: RecordingService? = null
+        private val generations = AtomicLong()
 
         private const val ACTION_START = "app.opentv.recording.START"
         private const val ACTION_STOP = "app.opentv.recording.STOP"
@@ -317,11 +333,20 @@ class RecordingService : Service() {
         }
 
         fun stop(context: Context, recordingId: Long) {
-            val intent = Intent(context, RecordingService::class.java).apply {
-                action = ACTION_STOP
-                putExtra(EXTRA_ID, recordingId)
-            }
-            context.startService(intent)
+            // A stop must never create an idle service from the background.
+            runningService?.stopCapture(recordingId)
+        }
+
+        suspend fun stopForConflict(recordingId: Long) {
+            val capture = runningService?.captures?.get(recordingId) ?: return
+            capture.stopReason = "Higher-priority recording required this account's capacity"
+            capture.call?.cancel()
+            capture.job.cancel()
+            capture.job.join() // Capacity is reusable only after actual I/O and sink closure.
+        }
+
+        suspend fun awaitCaptureStopped(recordingId: Long) {
+            runningService?.captures?.get(recordingId)?.job?.join()
         }
     }
 }

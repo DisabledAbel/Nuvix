@@ -25,6 +25,7 @@ import com.disabledabel.nuvix.R
 import app.opentv.core.RecordingSignals
 import app.opentv.core.ServiceLocator
 import app.opentv.data.model.Recording
+import app.opentv.data.model.RecordingStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,7 +41,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED -> rescheduleAll(context)
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> rescheduleAll(context)
             RecordingScheduler.ACTION_START -> {
                 val id = RecordingScheduler.recordingIdFrom(intent)
                 if (id > 0) onDue(context, id)
@@ -54,20 +55,32 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
 
     /** The booking is due: start capturing, then switch the live view to it if auto-switch is on. */
     private fun onDue(context: Context, id: Long) {
-        RecordingService.start(context, id)
         val pending = goAsync()
         val app = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val graph = ServiceLocator.get(app)
-                if (!graph.settings.recordAutoSwitch.value) return@launch
                 val rec = graph.recordingRepository.byId(id) ?: return@launch
-                // Only internal recordings can be tail-watched; a NAS/USB one just records.
-                if (!isTailWatchable(rec)) return@launch
-                // In-app (foreground) switch: the nav graph is watching this.
-                RecordingSignals.requestWatch(id, System.currentTimeMillis())
-                // Screen-off / another-app switch: a full-screen intent brings OpenTV forward.
-                notifySwitch(app, rec)
+                if (rec.status != RecordingStatus.SCHEDULED) return@launch
+                val now = System.currentTimeMillis()
+                if (rec.scheduledEndMillis > 0 && now >= rec.scheduledEndMillis) {
+                    graph.recordingRepository.setScheduledStatus(id, RecordingStatus.MISSED, "Recording window expired before alarm delivery")
+                    graph.recordingRepository.event(id, "MISSED", "Recording window expired before alarm delivery")
+                    return@launch
+                }
+                if (rec.scheduledStartMillis > now + 1_000L) {
+                    RecordingScheduler.set(app, id, rec.scheduledStartMillis)
+                    return@launch
+                }
+                try { RecordingService.start(app, id) }
+                catch (_: IllegalStateException) {
+                    graph.recordingRepository.setScheduledStatus(id, RecordingStatus.FAILED, "Android rejected a background recording start; review DVR readiness")
+                    graph.recordingRepository.event(id, "FAILED", "Android rejected the background service start")
+                    return@launch
+                } catch (_: SecurityException) {
+                    graph.recordingRepository.setScheduledStatus(id, RecordingStatus.FAILED, "Recording service permission is unavailable")
+                    return@launch
+                }
             } finally {
                 pending.finish()
             }
@@ -83,6 +96,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
                 val graph = ServiceLocator.get(app)
                 if (!graph.settings.recordAutoSwitch.value) return@launch
                 val rec = graph.recordingRepository.byId(id) ?: return@launch
+                if (rec.status != RecordingStatus.SCHEDULED) return@launch
                 if (!isTailWatchable(rec)) return@launch
                 RecordingSignals.warn(
                     RecordingSignals.Imminent(
@@ -104,14 +118,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val graph = ServiceLocator.get(context)
-                val autoSwitch = graph.settings.recordAutoSwitch.value
-                val now = System.currentTimeMillis()
-                graph.recordingRepository.scheduled().forEach { rec ->
-                    if (rec.scheduledStartMillis > now) {
-                        RecordingScheduler.set(context, rec.id, rec.scheduledStartMillis)
-                        if (autoSwitch) RecordingScheduler.setWarning(context, rec.id, rec.scheduledStartMillis)
-                    }
-                }
+                graph.recordingEngine.rearmScheduled()
             } finally {
                 pending.finish()
             }
@@ -144,7 +151,6 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pi)
-            .setFullScreenIntent(pi, true)
         safeNotify(context, NOTIFICATION_BASE + rec.id.toInt(), builder.build())
     }
 
@@ -184,10 +190,19 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private companion object {
-        const val CHANNEL_ID = "recording_switch"
-        const val NOTIFICATION_BASE = 6000
-        const val WARN_NOTIFICATION_BASE = 6500
-        const val SWITCH_REQUEST_BASE = 7000
+    companion object {
+        /** Called once, only after valid media bytes actually reach the capture destination. */
+        internal fun notifyCaptureStarted(context: Context, recording: Recording) {
+            val graph = ServiceLocator.get(context)
+            val receiver = RecordingAlarmReceiver()
+            if (!graph.settings.recordAutoSwitch.value || !receiver.isTailWatchable(recording)) return
+            RecordingSignals.requestWatch(recording.id, System.currentTimeMillis())
+            receiver.notifySwitch(context, recording)
+        }
+
+        private const val CHANNEL_ID = "recording_switch"
+        private const val NOTIFICATION_BASE = 6000
+        private const val WARN_NOTIFICATION_BASE = 6500
+        private const val SWITCH_REQUEST_BASE = 7000
     }
 }

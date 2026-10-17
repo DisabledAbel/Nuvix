@@ -24,6 +24,10 @@ program information. With an active live session, guide highlighting cannot
 start a competing preview player or change the channel being watched. The optional guide
 controller registers with the Activity session so notifications and startup tunes can
 release it synchronously before opening live playback.
+The standalone preview also reserves from the provider account's shared connection pool.
+When local capacity is unavailable, or another connection to an Unknown allowance would
+need consent, the optional preview stays off. Explicit Watch actions use normal live
+admission and show any request-specific approval instead of silently opening a stream.
 
 The preview shows the current channel, available logo and programme, live status, and
 fullscreen/retry/stop actions. It is focusable with a visible D-pad focus indicator and does
@@ -45,6 +49,13 @@ channel is a no-op; channel changes and explicit retry resolve a fresh playback 
 Cancellation and generation checks prevent an obsolete lookup from tuning after a newer
 selection. Existing buffering configuration, audio/subtitle selections, Media3 errors,
 and bounded retry behavior stay with `PlayerController`.
+
+Actual channel changes now use the shared account allocator. A replacement resolves while
+the old stream is still owned, then safe switching closes the old decoder before opening
+the new one. Known unavailable capacity can be rejected before relinquishing playback.
+The foundation does not implement seamless overlapping streams; presentation-only surface
+transfers retain the existing player. See [connection rules](smart-multiview-dvr.md#draft-foundation)
+for unknown allowances, manual account associations and local limits.
 
 `PlayerSurfaceOwner` grants one surface attachment at a time. A replacement `PlayerView`
 first detaches its predecessor. An outgoing Compose `AndroidView` can only detach its own
@@ -86,12 +97,19 @@ Starting VOD, catch-up, or recording playback releases the retained live session
 the other player is allocated. Returning from that content does not silently reopen live
 TV. Dedicated VOD/recording screens register their playback controller so an explicit
 live tune also releases their viewing connection synchronously. This protects single-connection providers from an extra retained viewing stream;
-immediate recording actions also relinquish live playback before capture starts. New scheduled
-captures release same-provider live viewing without stopping the recorder. A live request
-against a provider already recording shows a recovery message instead of opening a competing
-stream; watch the growing recording or stop capture first. Future
-recording scheduling, watch-while-recording, and NAS/USB playback retain their
-existing implementations and provider limitations.
+live and DVR capture now reserve from the same account pool. Recording actions do not
+unconditionally close unrelated live playback or stop other recordings. Independent
+accounts remain independent, while explicitly associated playlists share their configured
+allowance. Recording admission may reclaim optional same-account viewing according to
+the recording fallback; it never reclaims another capture through that viewer mechanism.
+A denied live request gives a recovery message instead of opening an extra stream.
+An additional unknown-capacity request needs its own approval. Growing internal-recording
+playback reads the captured file and does not itself open another provider stream.
+Viewing and capture otherwise use independent reservations; shared stream ingest is not
+implemented. See [DVR architecture and limits](smart-multiview-dvr.md).
+Scheduled capture does not navigate away from viewing by default: recording auto-switch
+defaults Off, with any explicitly saved On preference retained. Capture keeps the selected
+recording source and never silently substitutes a similarly named provider channel.
 
 The existing fullscreen channel-list overlay uses the shared live channel-change method.
 Opening/dismissing it keeps the player, buffer, and track selections. This feature has no

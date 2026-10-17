@@ -43,6 +43,9 @@ object ServiceLocator {
         private val appContext = context.applicationContext
 
         val settings: AppSettings by lazy { AppSettings.get(appContext) }
+        val connections: app.opentv.connections.AccountConnectionManager by lazy {
+            app.opentv.connections.AccountConnectionManager.get(appContext)
+        }
 
         val database: OpenTvDatabase by lazy { OpenTvDatabase.build(context) }
 
@@ -85,7 +88,9 @@ object ServiceLocator {
         val stremioClient: StremioClient by lazy { StremioClient(httpClient) }
 
         val sourceRepository: SourceRepository by lazy {
-            SourceRepository(database.sources(), xtreamApi, stalkerApi)
+            SourceRepository(database.sources(), xtreamApi, stalkerApi) { source, info ->
+                connections.updateProviderAccount(source, info.maxConnections, info.activeConnections)
+            }
         }
 
         val tvMetadata: app.opentv.data.repo.TvMetadataRepository by lazy {
@@ -113,6 +118,9 @@ object ServiceLocator {
                 stalkerApi = stalkerApi,
                 http = httpClient,
                 settings = settings,
+                onAccountVerified = { source, info ->
+                    connections.updateProviderAccount(source, info.maxConnections, info.activeConnections)
+                },
             )
         }
 
@@ -141,7 +149,7 @@ object ServiceLocator {
         val profiles get() = database.profiles()
 
         val recordingRepository: RecordingRepository by lazy {
-            RecordingRepository(database.recordings(), database.seriesRules())
+            RecordingRepository(database.recordings(), database.seriesRules(), database.recordingEvents())
         }
 
         val reminderRepository: ReminderRepository by lazy {

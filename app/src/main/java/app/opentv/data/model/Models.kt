@@ -389,11 +389,26 @@ enum class RecordingStatus {
     /** Booked from the guide, waiting for its start time. */
     SCHEDULED,
 
+    /** Atomically claimed by the service while resources and storage are prepared. */
+    PREPARING,
+
     /** Capturing right now. */
     RECORDING,
 
+    /** Capture has stopped and its destination is being flushed. */
+    FINALIZING,
+
     /** Finished and playable. */
     COMPLETED,
+
+    /** Recoverable bytes exist, but some of the programme was not captured. */
+    PARTIAL,
+
+    /** The broadcast ended before capture could begin. */
+    MISSED,
+
+    /** Explicitly canceled before capture began. */
+    CANCELED,
 
     /** Stopped early or hit an error; the file may be partial or missing. */
     FAILED,
@@ -444,6 +459,15 @@ data class Recording(
     val profileId: Long? = null,
     /** Human-readable reason when [status] is FAILED. */
     val error: String? = null,
+    /** Programme airtime, separate from the persisted padded capture window. Zero for legacy rows. */
+    @ColumnInfo(defaultValue = "0") val programmeStartMillis: Long = 0,
+    @ColumnInfo(defaultValue = "0") val programmeEndMillis: Long = 0,
+    @ColumnInfo(defaultValue = "2") val padStartMinutes: Int = 2,
+    @ColumnInfo(defaultValue = "5") val padEndMinutes: Int = 5,
+    /** Preference in unavoidable conflicts and exclusion from any future automatic retention. */
+    @ColumnInfo(defaultValue = "0") val protectedRecording: Boolean = false,
+    /** Independent of protection: automatic conflict resolution may not trim this padding. */
+    @ColumnInfo(defaultValue = "0") val lockPadding: Boolean = false,
 ) {
     /** Best available length: actual if finished, else the planned window. */
     val durationMillis: Long
@@ -453,6 +477,16 @@ data class Recording(
             else -> 0
         }
 }
+
+/** Durable, human-readable decisions; messages must not contain provider URLs or credentials. */
+@Entity(tableName = "recording_events", indices = [Index(value = ["recordingId", "atMillis"])])
+data class RecordingEvent(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val recordingId: Long,
+    val atMillis: Long,
+    val kind: String,
+    val message: String,
+)
 
 /**
  * A series-link rule: record every future airing of a programme on a channel.

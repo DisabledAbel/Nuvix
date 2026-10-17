@@ -44,13 +44,16 @@ class SmbWriteHandle(
     val locator: String,
 ) : Closeable {
     override fun close() {
-        runCatching { output.flush() }
-        runCatching { output.close() }
-        runCatching { file.close() }
-        runCatching { share.close() }
-        runCatching { session.close() }
-        runCatching { connection.close() }
-        runCatching { client.close() }
+        // A failed flush must reach capture finalization instead of reporting false success.
+        try {
+            output.use { it.flush() }
+        } finally {
+            runCatching { file.close() }
+            runCatching { share.close() }
+            runCatching { session.close() }
+            runCatching { connection.close() }
+            runCatching { client.close() }
+        }
     }
 }
 
@@ -100,11 +103,20 @@ object SmbClient {
 
     private fun connect(config: SmbConfig): Quad {
         val client = SMBClient(smbjConfig)
-        val connection = client.connect(config.host)
-        val auth = AuthenticationContext(config.username, config.password.toCharArray(), null)
-        val session = connection.authenticate(auth)
-        val share = session.connectShare(config.share) as DiskShare
-        return Quad(client, connection, session, share)
+        var connection: Connection? = null
+        var session: Session? = null
+        try {
+            connection = client.connect(config.host)
+            val auth = AuthenticationContext(config.username, config.password.toCharArray(), null)
+            session = connection.authenticate(auth)
+            val share = session.connectShare(config.share) as DiskShare
+            return Quad(client, connection, session, share)
+        } catch (failure: Throwable) {
+            runCatching { session?.close() }
+            runCatching { connection?.close() }
+            runCatching { client.close() }
+            throw failure
+        }
     }
 
     private class Quad(
@@ -133,7 +145,7 @@ object SmbClient {
     }
 
     /** Open the file named by [locator] for writing. Caller writes to [SmbWriteHandle.output]. */
-    fun openForWrite(config: SmbConfig, locator: String): SmbWriteHandle {
+    fun openForWrite(config: SmbConfig, locator: String, overwrite: Boolean = true): SmbWriteHandle {
         val parsed = parse(locator)
         val cfg = config.copy(host = parsed.host, share = parsed.share)
         val q = connect(cfg)
@@ -145,7 +157,7 @@ object SmbClient {
                 EnumSet.of(AccessMask.GENERIC_WRITE),
                 null,
                 SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OVERWRITE_IF,
+                if (overwrite) SMB2CreateDisposition.FILE_OVERWRITE_IF else SMB2CreateDisposition.FILE_CREATE,
                 null,
             )
             return SmbWriteHandle(

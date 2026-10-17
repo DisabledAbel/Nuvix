@@ -83,6 +83,63 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.variants.value.single().id).isEqualTo(2)
     }
 
+    @Test fun `account safe switching closes the old engine before its reservation is freed`() = runTest {
+        val engines = mutableListOf<FakeEngine>()
+        val releases = mutableListOf<Int>()
+        val session = LivePlaybackCoordinator(
+            backgroundScope, { channel(it) }, { resolved(it) },
+            { FakeEngine().also(engines::add) },
+            preparePlayback = { _, releaseCurrent -> releaseCurrent() },
+            afterEngineRelease = { releases += engines.sumOf { it.releases } },
+        )
+        session.openChannel(1); runCurrent()
+        session.openChannel(2); runCurrent()
+        assertThat(engines).hasSize(2)
+        assertThat(engines.first().releases).isEqualTo(1)
+        assertThat(releases.last()).isEqualTo(1)
+        assertThat(engines.last().requests.single().title).isEqualTo("Channel 2")
+        session.destroy()
+        assertThat(releases.last()).isEqualTo(2)
+    }
+
+    @Test fun `denied replacement admission preserves the current player`() = runTest {
+        val engines = mutableListOf<FakeEngine>()
+        val session = LivePlaybackCoordinator(
+            backgroundScope, { channel(it) }, { resolved(it) },
+            { FakeEngine().also(engines::add) },
+            preparePlayback = { selected, _ ->
+                if (selected.id == 2L) throw app.opentv.player.LiveConnectionException("This account is in use.")
+            },
+        )
+        session.openChannel(1); runCurrent()
+        session.openChannel(2); runCurrent()
+        assertThat(engines).hasSize(1)
+        assertThat(engines.single().releases).isEqualTo(0)
+        assertThat(engines.single().requests).hasSize(1)
+        assertThat(session.currentChannel.value?.id).isEqualTo(1)
+        assertThat((session.state.value as PlayerController.State.Error).message).contains("account is in use")
+    }
+
+    @Test fun `synchronous play failure closes admitted resources and permits a fresh retry`() = runTest {
+        var releasedReservations = 0
+        val engines = mutableListOf<FakeEngine>()
+        var failAllocation = true
+        val session = LivePlaybackCoordinator(
+            backgroundScope, { channel(it) }, { resolved(it) },
+            {
+                if (failAllocation) error("Decoder unavailable")
+                FakeEngine().also(engines::add)
+            },
+            afterEngineRelease = { releasedReservations++ },
+        )
+        session.openChannel(1); runCurrent()
+        assertThat(releasedReservations).isEqualTo(1)
+        assertThat(session.engineReady.value).isFalse()
+        failAllocation = false
+        session.retry(); runCurrent()
+        assertThat(engines.single().requests).hasSize(1)
+    }
+
     @Test fun `quality and Mini Guide channel list tune reuse the same engine`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()

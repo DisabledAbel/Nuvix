@@ -56,6 +56,10 @@ fun ProvidersScreen(
 ) {
     val ui by viewModel.ui.collectAsState()
     var pendingRemove by remember { mutableStateOf<Source?>(null) }
+    var connectionSettings by remember { mutableStateOf<Source?>(null) }
+    connectionSettings?.let { source ->
+        ConnectionManagementDialog(source, ui.sources, onDismiss = { connectionSettings = null })
+    }
 
     Column(
         Modifier
@@ -90,6 +94,7 @@ fun ProvidersScreen(
                     source = source,
                     confirming = pendingRemove?.id == source.id,
                     onEdit = { onEditSource(source) },
+                    onConnections = { connectionSettings = source },
                     onAskRemove = { pendingRemove = source },
                     onCancelRemove = { pendingRemove = null },
                     onConfirmRemove = {
@@ -108,6 +113,7 @@ private fun ProviderRow(
     source: Source,
     confirming: Boolean,
     onEdit: () -> Unit,
+    onConnections: () -> Unit,
     onAskRemove: () -> Unit,
     onCancelRemove: () -> Unit,
     onConfirmRemove: () -> Unit,
@@ -139,6 +145,7 @@ private fun ProviderRow(
                     TextButton(onClick = onConfirmRemove) { Text(stringResource(R.string.providers_yes_remove)) }
                     TextButton(onClick = onCancelRemove) { Text(stringResource(R.string.common_cancel)) }
                 } else {
+                    TextButton(onClick = onConnections) { Text("Connection Management") }
                     TextButton(onClick = onEdit) { Text(stringResource(R.string.common_edit)) }
                     TextButton(onClick = onAskRemove) { Text(stringResource(R.string.common_remove)) }
                 }

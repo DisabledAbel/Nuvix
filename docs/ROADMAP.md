@@ -1,5 +1,13 @@
 # Nuvix development roadmap
 
+Smart Multi-View and advanced background DVR are staged work. The current draft establishes
+shared account allocation and extends the existing DVR service; it does not ship Multi-View
+panels or claim complete acceptance. See the [architecture audit, remaining criteria and
+hardware checklist](smart-multiview-dvr.md). Subsequent stages must deliver real two-channel
+playback before expanding to three/four views, 150 ms audio selection, fullscreen handoff,
+Guide/Sports integration, safe presets/recovery and recording conflict review. Preserve the
+existing CI suite and distinguish fake-provider policy tests from physical-TV verification.
+
 The initial source import preserves OpenTV's functional native systems. The Nuvix foundation adds branding/navigation, home/provider shelves, installed apps and optional launcher, opt-in cloud synchronization, configurable buffering, cache protection, and verified release/update infrastructure. See implementation-report.md for earlier foundation checks and [cloud sync](cloud-sync.md) for current scope.
 
 The next phase is device acceptance testing: Android TV, Google TV and Fire TV D-pad/Back/long-press flows, cold starts, launchers that reject home replacement, authorized stream playback, EPG refresh failure, PiP, recording lifecycle, encrypted persistence and upgrades. Test installation cancellation and failed signatures on hardware without publishing invalid APKs.
