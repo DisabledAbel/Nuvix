@@ -135,6 +135,7 @@ class CatalogRepository(
     private val stalkerApi: StalkerApi,
     private val http: OkHttpClient,
     private val settings: AppSettings,
+    private val onAccountVerified: (Source, XtreamApi.AccountInfo) -> Unit = { _, _ -> },
 ) {
 
     /** TMDB back-fill for VOD detail pages, gated on a user-supplied key. See [TmdbClient]. */
@@ -657,7 +658,8 @@ class CatalogRepository(
     private suspend fun syncXtreamLive(source: Source, nowUtcMillis: Long): SyncResult {
         // Authenticate first so a wrong password produces a clear message rather than
         // four separate confusing failures further down.
-        api.authenticate(source)
+        val account = api.authenticate(source)
+        onAccountVerified(source, account)
 
         val liveCategories = api.liveCategories(source)
         val channels = api.liveStreams(source)

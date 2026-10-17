@@ -48,7 +48,8 @@ class SportsMigrationTest {
             VALUES ($id,$id,'Existing channel',NULL,'Existing reminder',100000,200000,1,100,0)""")
         helper.close()
         val upgraded = Room.databaseBuilder(context, OpenTvDatabase::class.java, name)
-            .addMigrations(OpenTvDatabase.MIGRATION_12_13).allowMainThreadQueries().build()
+            .addMigrations(OpenTvDatabase.MIGRATION_12_13, OpenTvDatabase.MIGRATION_13_14)
+            .allowMainThreadQueries().build()
         try {
             val retained = upgraded.reminders().observeAll().first()
             assertEquals(2, retained.size)

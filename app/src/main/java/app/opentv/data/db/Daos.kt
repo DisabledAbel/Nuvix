@@ -25,6 +25,7 @@ import app.opentv.data.model.PlaybackPosition
 import app.opentv.data.model.Profile
 import app.opentv.data.model.Programme
 import app.opentv.data.model.Recording
+import app.opentv.data.model.RecordingEvent
 import app.opentv.data.model.RecordingStatus
 import app.opentv.data.model.Reminder
 import app.opentv.data.model.Series
@@ -794,10 +795,10 @@ interface RecordingDao {
     fun observeAll(): Flow<List<Recording>>
 
     /** Just the ones capturing right now — the player watches this to light its Record button. */
-    @Query("SELECT * FROM recordings WHERE status = 'RECORDING'")
+    @Query("SELECT * FROM recordings WHERE status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
     fun observeActive(): Flow<List<Recording>>
 
-    @Query("SELECT * FROM recordings WHERE status = 'RECORDING'")
+    @Query("SELECT * FROM recordings WHERE status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
     suspend fun active(): List<Recording>
 
     @Query("SELECT * FROM recordings WHERE status = 'SCHEDULED' ORDER BY scheduledStartMillis")
@@ -818,7 +819,8 @@ interface RecordingDao {
     @Query(
         """
         SELECT COUNT(*) FROM recordings
-        WHERE seriesRuleId = :ruleId AND channelId = :channelId AND scheduledStartMillis = :startMillis
+        WHERE seriesRuleId = :ruleId AND channelId = :channelId
+          AND (scheduledStartMillis = :startMillis OR (programmeStartMillis > 0 AND programmeStartMillis = :startMillis))
         """
     )
     suspend fun countForRuleAt(ruleId: Long, channelId: Long, startMillis: Long): Int
@@ -827,8 +829,9 @@ interface RecordingDao {
     @Query(
         """
         SELECT * FROM recordings
-        WHERE channelId = :channelId AND scheduledStartMillis = :startMillis
-          AND status IN ('SCHEDULED', 'RECORDING') LIMIT 1
+        WHERE channelId = :channelId
+          AND (scheduledStartMillis = :startMillis OR (programmeStartMillis > 0 AND programmeStartMillis = :startMillis))
+          AND status IN ('SCHEDULED', 'PREPARING', 'RECORDING', 'FINALIZING') LIMIT 1
         """
     )
     suspend fun bookingAt(channelId: Long, startMillis: Long): Recording?
@@ -839,8 +842,42 @@ interface RecordingDao {
     @Update
     suspend fun update(recording: Recording)
 
+    /** Duplicate alarms and simultaneous starts can claim the same booking only once. */
+    @Query("UPDATE recordings SET status = 'PREPARING', startedAtMillis = :startedAt, error = NULL WHERE id = :id AND status = 'SCHEDULED'")
+    suspend fun claimScheduled(id: Long, startedAt: Long): Int
+
+    @Query("UPDATE recordings SET status = 'FINALIZING' WHERE id = :id AND status IN ('PREPARING', 'RECORDING')")
+    suspend fun beginFinalizing(id: Long): Int
+
+    @Query("UPDATE recordings SET protectedRecording = :protectedRecording, lockPadding = :lockPadding WHERE id = :id")
+    suspend fun setProtection(id: Long, protectedRecording: Boolean, lockPadding: Boolean)
+
+    @Query("UPDATE recordings SET scheduledStartMillis = :startMillis, scheduledEndMillis = :endMillis WHERE id = :id AND status = 'SCHEDULED' AND lockPadding = 0")
+    suspend fun setScheduledWindow(id: Long, startMillis: Long, endMillis: Long): Int
+
+    @Query("UPDATE recordings SET padStartMinutes = :startMinutes, padEndMinutes = :endMinutes, scheduledStartMillis = :startMillis, scheduledEndMillis = :endMillis WHERE id = :id AND status = 'SCHEDULED'")
+    suspend fun setPadding(id: Long, startMinutes: Int, endMinutes: Int, startMillis: Long, endMillis: Long): Int
+
+    @Query("UPDATE recordings SET status = 'CANCELED', error = 'Canceled by user' WHERE id = :id AND status = 'SCHEDULED'")
+    suspend fun cancelScheduled(id: Long): Int
+
+    @Query("UPDATE recordings SET status = 'SCHEDULED', filePath = :filePath, sizeBytes = 0, startedAtMillis = 0, endedAtMillis = 0, error = NULL WHERE id = :id AND status IN ('FAILED', 'PARTIAL', 'MISSED', 'CANCELED')")
+    suspend fun prepareRetry(id: Long, filePath: String): Int
+
+    /** Archive partial bytes and change retry ownership as one durable operation. */
+    @Transaction
+    suspend fun retryPreserving(id: Long, filePath: String, archive: Recording?): Boolean {
+        val current = byId(id) ?: return false
+        if (current.status !in setOf(RecordingStatus.FAILED, RecordingStatus.PARTIAL, RecordingStatus.MISSED, RecordingStatus.CANCELED)) return false
+        archive?.let { insert(it.copy(id = 0, status = RecordingStatus.PARTIAL)) }
+        return prepareRetry(id, filePath) == 1
+    }
+
     @Query("UPDATE recordings SET status = :status, error = :error WHERE id = :id")
     suspend fun setStatus(id: Long, status: RecordingStatus, error: String? = null)
+
+    @Query("UPDATE recordings SET status = :status, error = :error WHERE id = :id AND status = 'SCHEDULED'")
+    suspend fun setScheduledStatus(id: Long, status: RecordingStatus, error: String? = null): Int
 
     @Query("UPDATE recordings SET sizeBytes = :bytes WHERE id = :id")
     suspend fun setSize(id: Long, bytes: Long)
@@ -850,7 +887,7 @@ interface RecordingDao {
     suspend fun setFilePath(id: Long, filePath: String)
 
     @Query(
-        "UPDATE recordings SET status = :status, startedAtMillis = :startedAt WHERE id = :id"
+        "UPDATE recordings SET status = :status, startedAtMillis = :startedAt WHERE id = :id AND status = 'PREPARING'"
     )
     suspend fun markStarted(id: Long, status: RecordingStatus, startedAt: Long)
 
@@ -863,11 +900,26 @@ interface RecordingDao {
     suspend fun delete(id: Long)
 
     /**
-     * On a cold start, any row still marked RECORDING is a leftover from a process that was
-     * killed mid-capture — reconcile it to FAILED so the UI never shows a phantom "recording".
+     * Cold-start fallback preserves the stored locator and bytes. Repository recovery also checks
+     * actual file size before finalizing an interrupted row.
      */
-    @Query("UPDATE recordings SET status = 'FAILED', error = 'Interrupted' WHERE status = 'RECORDING'")
+    @Query("UPDATE recordings SET status = CASE WHEN sizeBytes > 0 THEN 'PARTIAL' ELSE 'FAILED' END, error = 'Interrupted' WHERE status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
     suspend fun failInterrupted()
+}
+
+@Dao
+interface RecordingEventDao {
+    @Query("SELECT * FROM recording_events WHERE recordingId = :recordingId ORDER BY atMillis, id")
+    fun observeForRecording(recordingId: Long): Flow<List<RecordingEvent>>
+
+    @Query("SELECT * FROM recording_events WHERE recordingId = :recordingId ORDER BY atMillis, id")
+    suspend fun forRecording(recordingId: Long): List<RecordingEvent>
+
+    @Insert
+    suspend fun insert(event: RecordingEvent): Long
+
+    @Query("DELETE FROM recording_events WHERE recordingId = :recordingId")
+    suspend fun deleteForRecording(recordingId: Long)
 }
 
 @Dao

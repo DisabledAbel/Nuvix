@@ -36,10 +36,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
@@ -337,6 +339,16 @@ private fun NuvixNavigation(
     // Created outside NavHost: the Activity owns this ViewModel, not a player back-stack entry.
     val liveSession: LivePlaybackSession = viewModel()
     SideEffect { onLiveSession(liveSession) }
+    val connectionPrompt by liveSession.connectionPrompt.collectAsState()
+    connectionPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { liveSession.answerConnectionPrompt(false) },
+            title = { Text("Open an additional connection?") },
+            text = { Text("The simultaneous connection allowance for this account is unknown. Open ${prompt.channelName} for this request? Other devices may also be using this account. Extra capacity is not guaranteed.") },
+            confirmButton = { TextButton(onClick = { liveSession.answerConnectionPrompt(true) }) { Text("Open once") } },
+            dismissButton = { TextButton(onClick = { liveSession.answerConnectionPrompt(false) }) { Text("Cancel") } },
+        )
+    }
     val navController = rememberNavController()
     var mainLivePresentation by rememberSaveable { mutableStateOf(LivePresentation.BROWSING) }
     var guideVisible by rememberSaveable { mutableStateOf(false) }
@@ -410,10 +422,8 @@ private fun NuvixNavigation(
         val startupChannel = if (resumeLast && bootSettings.lastChannelId != 0L) {
             ServiceLocator.get(bootContext).catalogRepository.channel(bootSettings.lastChannelId)
         } else null
-        val recordingOwnsSource = startupChannel != null && ServiceLocator.get(bootContext)
-            .recordingRepository.active().any { it.sourceId == startupChannel.sourceId }
         if (homeGeneration == initialHomeGeneration && resumeLast && sourcesUi.sources.isNotEmpty() &&
-            startupChannel != null && !recordingOwnsSource && !liveSession.active.value) {
+            startupChannel != null && !liveSession.active.value) {
             openLive(startupChannel.id)
         } else if (restoringAfterProcessDeath && !liveSession.active.value &&
             navController.currentDestination?.route == Routes.PLAYER) {

@@ -11,10 +11,18 @@ import androidx.media3.common.util.UnstableApi
 import app.opentv.core.RecentChannels
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
+import app.opentv.connections.AccountConnectionManager
+import app.opentv.connections.ConnectionPurpose
+import app.opentv.connections.ConnectionRequest
+import app.opentv.connections.ReservationResult
+import app.opentv.connections.ReservationToken
+import app.opentv.connections.UnknownConnectionChallenge
+import app.opentv.connections.UnknownConnectionApproval
 import app.opentv.data.model.Channel
 import app.opentv.data.model.Programme
 import app.opentv.data.model.shownName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +34,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.UUID
+
+data class LiveConnectionPrompt(val channelName: String, val challenge: UnknownConnectionChallenge)
 
 /**
  * The Activity's ViewModel owns live playback; screens only borrow a video surface.
@@ -35,8 +47,16 @@ import kotlinx.coroutines.launch
 @OptIn(UnstableApi::class)
 class LivePlaybackSession(application: Application) : AndroidViewModel(application) {
     private val graph = ServiceLocator.get(application)
+    private val connections = AccountConnectionManager.get(application)
+    private val connectionSessionId = "live:${UUID.randomUUID()}"
+    private var connectionGeneration = 0L
+    private var connectionToken: ReservationToken? = null
+    private val _connectionPrompt = MutableStateFlow<LiveConnectionPrompt?>(null)
+    val connectionPrompt = _connectionPrompt.asStateFlow()
+    private var approvalResponse: CompletableDeferred<UnknownConnectionApproval?>? = null
     private var implementation: ControllerEngine? = null
     private var guidePreview: PlayerController? = null
+    private var guidePreviewReleased: (() -> Unit)? = null
     private var nonLivePlayback: PlayerController? = null
     private val _controllerOrNull = MutableStateFlow<PlayerController?>(null)
     val controllerOrNull = _controllerOrNull.asStateFlow()
@@ -48,10 +68,6 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         scope = viewModelScope,
         findChannel = { graph.catalogRepository.channel(it) },
         resolve = { channel ->
-            // Also guard requests arriving after the initial recording observer snapshot.
-            if (graph.recordingRepository.active().any { it.sourceId == channel.sourceId }) {
-                throw RecordingOwnsLiveSourceException()
-            }
             val source = graph.sourceRepository.byId(channel.sourceId)
             val url = graph.catalogRepository.resolvePlaybackUrl(channel, source)
             ResolvedLiveChannel(
@@ -67,7 +83,15 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             graph.settings.lastChannelId = channel.id
             RecentChannels.get(application).record(channel.id)
         },
-        onRelease = { surfaceOwner.clear(); implementation = null; _controllerOrNull.value = null },
+        onRelease = {
+            connectionToken?.let(connections::beginRelease)
+            surfaceOwner.clear(); implementation = null; _controllerOrNull.value = null
+        },
+        preparePlayback = ::reserveLiveConnection,
+        afterEngineRelease = {
+            connectionToken?.let(connections::release)
+            connectionToken = null
+        },
     )
 
     val currentChannel = coordinator.currentChannel
@@ -89,14 +113,6 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
                 .collect { (persistent, audio) -> coordinator.updatePreferences(persistent, audio) }
         }
         viewModelScope.launch {
-            var knownRecordingIds = emptySet<Long>()
-            graph.recordingRepository.observeActive().collect { recordings ->
-                val newlyStarted = recordings.filter { it.id !in knownRecordingIds }
-                knownRecordingIds = recordings.mapTo(mutableSetOf()) { it.id }
-                newlyStarted.forEach { coordinator.onRecordingStarted(it.sourceId) }
-            }
-        }
-        viewModelScope.launch {
             SleepTimer.deadline.collectLatest { deadline ->
                 if (deadline != null) {
                     delay((deadline - System.currentTimeMillis()).coerceAtLeast(0))
@@ -110,14 +126,75 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private suspend fun reserveLiveConnection(channel: Channel, releaseCurrent: () -> Unit) {
+        val source = graph.sourceRepository.byId(channel.sourceId)?.takeIf { it.enabled }
+            ?: throw LiveConnectionException("This provider is no longer available.")
+        val accountKey = connections.registerSource(source)
+        val snapshot = connections.snapshotForSource(source.id)
+        val old = connectionToken
+        val maximum = snapshot?.effectiveMaximum
+        val usedWithoutOld = (snapshot?.locallyReserved ?: 0) - if (old?.accountKey == accountKey) 1 else 0
+        if (maximum != null && usedWithoutOld >= maximum) {
+            throw LiveConnectionException("This account's configured connection limit is in use. Recordings keep their reserved connections.")
+        }
+        // This foundation deliberately uses safe switching. Resolve first, then close the real
+        // old player before freeing its slot; a pending reservation never opens a stream.
+        if (old?.accountKey == accountKey && (maximum == null || (snapshot?.locallyReserved ?: 0) >= maximum)) {
+            releaseCurrent()
+        }
+        val request = ConnectionRequest(connectionSessionId, ++connectionGeneration, source.id, ConnectionPurpose.LIVE)
+        var result = connections.reserve(request)
+        if (result is ReservationResult.ApprovalRequired) {
+            val response = CompletableDeferred<UnknownConnectionApproval?>()
+            approvalResponse = response
+            val prompt = LiveConnectionPrompt(channel.shownName, result.challenge)
+            _connectionPrompt.value = prompt
+            val approval = try { response.await() } finally {
+                connections.discardChallenge(prompt.challenge)
+                if (approvalResponse === response) {
+                    approvalResponse = null
+                    _connectionPrompt.value = null
+                }
+            }
+            if (approval == null) throw LiveConnectionException("The additional connection was canceled. Your provider's allowance is unknown.")
+            result = connections.reserve(request, approval)
+        }
+        val token = (result as? ReservationResult.Reserved)?.token ?: throw LiveConnectionException(
+            (result as? ReservationResult.Denied)?.reason ?: "Connection settings changed. Please retry.",
+        )
+        try {
+            releaseCurrent()
+            connectionToken = token
+            connections.registerOwner(token) {
+                withContext(Dispatchers.Main.immediate) {
+                    if (connectionToken == token) {
+                        stop()
+                        app.opentv.core.StatusBus.set("Live TV paused to give a recording account capacity. Resume it when you are ready.")
+                    }
+                }
+            }
+        } catch (failure: Exception) {
+            connections.release(token)
+            if (connectionToken == token) connectionToken = null
+            throw failure
+        }
+    }
+
+    fun answerConnectionPrompt(allow: Boolean) {
+        val prompt = _connectionPrompt.value ?: return
+        approvalResponse?.complete(if (allow) connections.approve(prompt.challenge) else null)
+    }
+
     // The optional highlighted-channel preview registers only its application-context controller.
     // This closes it synchronously for notification/startup tunes, before Compose can dispose it.
-    fun registerGuidePreview(controller: PlayerController) {
+    fun registerGuidePreview(controller: PlayerController, onReleased: () -> Unit = {}) {
         if (active.value || guidePreviewSuppressed.value) {
             controller.release()
+            onReleased()
         } else {
             if (guidePreview !== controller) releaseGuidePreview()
             guidePreview = controller
+            guidePreviewReleased = onReleased
         }
     }
     fun unregisterGuidePreview(controller: PlayerController) {
@@ -127,6 +204,8 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     private fun releaseGuidePreview() {
         guidePreview?.release()
         guidePreview = null
+        guidePreviewReleased?.invoke()
+        guidePreviewReleased = null
     }
 
     /** Dedicated VOD/recording screens retain their implementation but relinquish synchronously. */
@@ -153,9 +232,8 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
     fun retry() = coordinator.retry()
     fun stop() { releaseGuidePreview(); coordinator.stopForOtherPlayback() }
-    /** Close live's provider connection before capture; this job belongs to the Activity owner. */
+    /** Capture admission closes only viewing sessions whose account capacity is needed. */
     fun recordChannel(channel: Channel, programme: Programme? = null) {
-        stop()
         viewModelScope.launch { graph.recordingEngine.startChannel(channel, programme) }
     }
     fun setPaused(paused: Boolean) = coordinator.setPaused(paused)
@@ -204,7 +282,16 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
                 if (browsingMuted) applyVolume(0f)
             }
         }
-        init { controller.player.addListener(volumeListener) }
+        init {
+            controller.player.addListener(volumeListener)
+            scope.launch {
+                controller.state.collect { state ->
+                    if (state is PlayerController.State.Playing && implementation === this@ControllerEngine) {
+                        connectionToken?.let(connections::markActive)
+                    }
+                }
+            }
+        }
         override fun play(request: PlayerController.Request) = controller.play(request, debounce = false)
         override fun setPaused(paused: Boolean) = controller.setUserPaused(paused)
         override fun setSuspended(suspended: Boolean) = controller.setSuspended(suspended)
