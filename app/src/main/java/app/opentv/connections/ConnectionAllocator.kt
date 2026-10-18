@@ -228,7 +228,17 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         sources[sourceId]?.let { accounts[it]?.limitErrors = 0 }; publish()
     }
 
-    @Synchronized internal fun beginRecordingReclaim(sourceId: Long): String? = sources[sourceId]?.takeIf { reclaiming.add(it) }
+    @Synchronized internal fun beginRecordingReclaim(sourceId: Long): String? {
+        val key = sources[sourceId] ?: return null
+        val recordingCount = reservations.values.count {
+            it.token.accountKey == key && it.token.purpose == ConnectionPurpose.RECORDING
+        }
+        val maximum = accounts.getValue(key).policy.effectiveMaximum
+        // Closing viewers cannot free a known recording-only limit or authorize an additional
+        // unknown-allowance recording. Pending and releasing recorders still own their slots.
+        if (maximum?.let { recordingCount >= it } ?: (recordingCount > 0)) return null
+        return key.takeIf { reclaiming.add(it) }
+    }
     @Synchronized internal fun endRecordingReclaim(accountKey: String) { reclaiming.remove(accountKey) }
     @Synchronized internal fun optionalReservations(accountKey: String): List<ReservationToken> = reservations.values
         .map { it.token }.filter { it.accountKey == accountKey && it.purpose != ConnectionPurpose.RECORDING }

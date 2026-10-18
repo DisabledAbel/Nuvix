@@ -166,6 +166,74 @@ class AccountConnectionManagerTest {
         assertEquals(ReservationState.PENDING, manager.reservationState(live))
     }
 
+    @Test fun exhaustedRecordingLimitPreservesOptionalViewersOnLinkedPlaylists() = runTest {
+        assertRecordingOnlyCapacityPreservesViewers(1)
+    }
+
+    @Test fun unknownAdditionalRecordingPreservesOptionalViewersWithoutApproval() = runTest {
+        assertRecordingOnlyCapacityPreservesViewers(null)
+    }
+
+    private suspend fun assertRecordingOnlyCapacityPreservesViewers(maximum: Int?) {
+        for (state in listOf(ReservationState.PENDING, ReservationState.ACTIVE, ReservationState.RELEASING)) {
+            val manager = AccountConnectionManager.createForTest(context)
+            manager.registerSource(source())
+            manager.registerSource(source(2, username = "linked-playlist"))
+            assertTrue(manager.associateSources(2, 1))
+            manager.setMaximumConnections(1, 3)
+            val recording = reserve(manager, request("existing-$state", purpose = ConnectionPurpose.RECORDING))
+            if (state == ReservationState.ACTIVE) manager.markActive(recording)
+            if (state == ReservationState.RELEASING) manager.beginRelease(recording)
+            val viewers = listOf(ConnectionPurpose.PREVIEW, ConnectionPurpose.LIVE).map { purpose ->
+                reserve(manager, request("$purpose-$state", sourceId = 2, purpose = purpose))
+            }
+            var closed = 0
+            viewers.forEach { token -> manager.registerOwner(token) { closed++; manager.release(token) } }
+            manager.setMaximumConnections(1, maximum)
+
+            val result = manager.reserveForRecording(
+                request("next-$state", sourceId = 2, purpose = ConnectionPurpose.RECORDING), allowInterruptLive = true)
+
+            if (maximum == null) assertTrue(result is ReservationResult.ApprovalRequired)
+            else assertTrue(result is ReservationResult.Denied)
+            assertEquals(0, closed)
+            assertEquals(3, manager.snapshotForSource(2)!!.locallyReserved)
+            assertEquals(state, manager.reservationState(recording))
+            viewers.forEach { assertEquals(ReservationState.PENDING, manager.reservationState(it)) }
+        }
+    }
+
+    @Test fun spareRecordingCapacityStillReclaimsAViewerAndKeepsTheExistingRecording() = runTest {
+        val manager = AccountConnectionManager.createForTest(context)
+        manager.registerSource(source())
+        manager.setMaximumConnections(1, 2)
+        val recording = reserve(manager, request("existing", purpose = ConnectionPurpose.RECORDING))
+        val live = reserve(manager, request("live"))
+        manager.registerOwner(live) { manager.release(live) }
+
+        val result = manager.reserveForRecording(request("next", purpose = ConnectionPurpose.RECORDING),
+            allowInterruptLive = true)
+
+        assertTrue(result is ReservationResult.Reserved)
+        assertEquals(ReservationState.RELEASED, manager.reservationState(live))
+        assertEquals(ReservationState.PENDING, manager.reservationState(recording))
+        assertEquals(2, manager.snapshotForSource(1)!!.locallyReserved)
+    }
+
+    @Test fun unknownFirstRecordingStillReclaimsAViewerWithoutReusingConsent() = runTest {
+        val manager = AccountConnectionManager.createForTest(context)
+        manager.registerSource(source())
+        val live = reserve(manager, request("live"))
+        manager.registerOwner(live) { manager.release(live) }
+
+        val result = manager.reserveForRecording(request("first", purpose = ConnectionPurpose.RECORDING),
+            allowInterruptLive = true)
+
+        assertTrue(result is ReservationResult.Reserved)
+        assertEquals(ReservationState.RELEASED, manager.reservationState(live))
+        assertEquals(1, manager.snapshotForSource(1)!!.locallyReserved)
+    }
+
     @Test fun unknownScheduledRecordingCannotReusePriorOneShotConsent() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())

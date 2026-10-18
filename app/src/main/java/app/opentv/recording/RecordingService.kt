@@ -24,6 +24,7 @@ import app.opentv.connections.ConnectionPurpose
 import app.opentv.connections.ConnectionRequest
 import app.opentv.connections.ReservationResult
 import app.opentv.connections.ReservationToken
+import app.opentv.data.model.Recording
 import app.opentv.data.model.RecordingStatus
 import com.disabledabel.nuvix.R
 import app.opentv.core.ServiceLocator
@@ -127,10 +128,8 @@ class RecordingService : Service() {
                 claimed = false
                 return
             }
-            val programmeStart = recording.programmeStartMillis.takeIf { it > 0 }
-                ?: recording.scheduledStartMillis.takeIf { recording.scheduledEndMillis > 0 } ?: 0L
             programmeEnd = recording.programmeEndMillis.takeIf { it > 0 } ?: recording.scheduledEndMillis
-            late = programmeStart > 0 && now > programmeStart
+            late = isLateStart(recording, now)
             graph.sourceRepository.byId(recording.sourceId)?.let { connections.registerSource(it) }
             val request = ConnectionRequest("recording:$id", generations.incrementAndGet(), recording.sourceId, ConnectionPurpose.RECORDING)
             when (val reservation = connections.reserveForRecording(request, allowInterruptLive = true)) {
@@ -162,7 +161,7 @@ class RecordingService : Service() {
                 checkStorage = RecordingStorage.storageMonitor(actualPath),
                 onStarted = {
                     val firstByteAt = System.currentTimeMillis()
-                    late = programmeStart > 0 && firstByteAt > programmeStart
+                    late = isLateStart(recording, firstByteAt)
                     repo.markStarted(id, firstByteAt)
                     repo.event(id, "STARTED", if (late) "Capture started late; remaining content will be Partial" else "Capture started")
                     connections.markActive(requireNotNull(token))
@@ -309,6 +308,14 @@ class RecordingService : Service() {
     }
 
     companion object {
+        private const val LATE_START_GRACE_MILLIS = 5_000L
+
+        internal fun isLateStart(recording: Recording, atMillis: Long): Boolean {
+            // Legacy padded windows do not establish the programme's actual start time.
+            val programmeStart = recording.programmeStartMillis.takeIf { it > 0 } ?: return false
+            return atMillis > programmeStart && atMillis - programmeStart > LATE_START_GRACE_MILLIS
+        }
+
         private const val TAG = "Nuvix"
         private const val CHANNEL_ID = "recordings"
         private const val NOTIFICATION_ID = 4210
