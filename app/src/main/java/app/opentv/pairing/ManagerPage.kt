@@ -20,6 +20,7 @@ package app.opentv.pairing
  */
 object ManagerPage {
 
+    /** Wraps the local web manager content in its complete HTML page. */
     fun page(token: String): String = """
         <!DOCTYPE html>
         <html lang="en">

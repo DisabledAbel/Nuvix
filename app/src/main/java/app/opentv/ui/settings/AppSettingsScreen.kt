@@ -360,6 +360,7 @@ private fun changeLanguage(context: Context, settings: AppSettings, tag: String)
     context.findActivity()?.recreate()
 }
 
+/** Displays the active sleep timer and its preset duration choices. */
 @Composable
 private fun SleepTimerSection() {
     val deadline by SleepTimer.deadline.collectAsState()
@@ -396,6 +397,7 @@ private fun SleepTimerSection() {
     }
 }
 
+/** Displays a focusable sleep timer duration choice. */
 @Composable
 private fun SleepOption(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
@@ -411,6 +413,7 @@ private fun SleepOption(label: String, selected: Boolean, onSelect: () -> Unit) 
     }
 }
 
+/** Displays a titled group of application settings. */
 @Composable
 private fun SettingsSection(title: String, content: @Composable () -> Unit) {
     Text(
@@ -429,6 +432,7 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
     }
 }
 
+/** Displays a selectable application theme choice. */
 @Composable
 private fun ThemeOption(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
@@ -444,6 +448,7 @@ private fun ThemeOption(label: String, selected: Boolean, onSelect: () -> Unit) 
     }
 }
 
+/** Displays a labeled settings switch with a remote-friendly activation target. */
 @Composable
 private fun ToggleRow(
     title: String,

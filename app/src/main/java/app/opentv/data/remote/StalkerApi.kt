@@ -48,8 +48,10 @@ class StalkerApi(
     private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true },
 ) {
 
+    /** Portal failure expressed as an application-facing provider error. */
     class StalkerException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+    /** Authorized portal token and device identity used by subsequent Stalker requests. */
     private data class Session(val token: String, val endpoint: HttpUrl, val expiresAt: Long)
 
     /** One live token per source, so zapping doesn't re-handshake on every channel. */
@@ -122,6 +124,7 @@ class StalkerApi(
 
     // ---- Session / handshake -----------------------------------------------------------------
 
+    /** Returns a cached authenticated portal session or performs a fresh handshake. */
     private fun session(source: Source, force: Boolean = false): Session {
         val now = System.currentTimeMillis()
         if (!force) sessions[source.id]?.let { if (it.expiresAt > now) return it }
@@ -146,8 +149,10 @@ class StalkerApi(
         )
     }
 
+    /** Portal authentication result used to construct a session. */
     private data class Handshake(val token: String, val random: String)
 
+    /** Obtains the portal authorization token for the configured device identity. */
     private fun handshake(source: Source, endpoint: HttpUrl): Handshake? {
         val url = endpoint.newBuilder()
             .addQueryParameter("type", "stb")
@@ -202,6 +207,7 @@ class StalkerApi(
         execute(source, url, token)
     }
 
+    /** Device identifiers sent by the authorized Stalker client during portal negotiation. */
     private data class StbIdentity(val sn: String, val deviceId: String, val deviceId2: String)
 
     /** The MAG identity a portal expects, derived deterministically from the MAC. */
@@ -210,15 +216,20 @@ class StalkerApi(
         return StbIdentity(sn = md5Upper(mac).take(13), deviceId = deviceId, deviceId2 = deviceId)
     }
 
+    /** Returns the uppercase SHA-256 digest used in portal device identity fields. */
     private fun sha256Upper(s: String): String = hashUpper("SHA-256", s)
+    /** Returns the uppercase SHA-1 digest used in portal device identity fields. */
     private fun sha1Upper(s: String): String = hashUpper("SHA-1", s)
+    /** Returns the uppercase MD5 digest used in portal device identity fields. */
     private fun md5Upper(s: String): String = hashUpper("MD5", s)
+    /** Hashes portal identity text and encodes its digest as uppercase hexadecimal. */
     private fun hashUpper(algo: String, s: String): String =
         java.security.MessageDigest.getInstance(algo).digest(s.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }.uppercase()
 
     // ---- HTTP --------------------------------------------------------------------------------
 
+    /** Calls a portal action using the authenticated session and query parameters. */
     private fun call(
         session: Session,
         source: Source,
@@ -252,6 +263,7 @@ class StalkerApi(
         return call(session(source, force = true), source, type, action, extra)
     }
 
+    /** Executes a portal request and decodes its JSON response or raises a provider error. */
     private fun execute(source: Source, url: HttpUrl, token: String?): JsonElement? {
         val mac = source.macAddress?.trim().orEmpty()
         // adid (the lower-case device id) rides in the cookie the way a real box sends it; some
@@ -331,7 +343,9 @@ class StalkerApi(
 
 // ---- Minimal JSON helpers (self-contained; the Xtream accessors are private to that file) --------
 
+/** Reads a JSON field as text when its value is available. */
 private fun JsonObject.str(key: String): String? =
     (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() && it != "null" }
 
+/** Reads a JSON field as an object when its shape matches. */
 private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject

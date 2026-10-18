@@ -34,15 +34,27 @@ class AccountConnectionManager private constructor(context: Context) {
         return allocator.accountKeyForSource(source.id) ?: key
     }
 
+    /** Returns the opaque account key associated with a source, or null if unregistered. */
     fun accountKeyForSource(sourceId: Long): String? = allocator.accountKeyForSource(sourceId)
+    /** Returns the current account snapshot for a source, or null if unregistered. */
     fun snapshotForSource(sourceId: Long): AccountConnectionSnapshot? = allocator.snapshotForSource(sourceId)
+    /**
+     * Attempts generation-scoped admission, consuming any matching approval and returning the
+     * reservation outcome.
+     */
     fun reserve(request: ConnectionRequest, approval: UnknownConnectionApproval? = null): ReservationResult = allocator.reserve(request, approval)
+    /** Converts a current request-specific challenge into a single-use approval, or null if stale. */
     fun approve(challenge: UnknownConnectionChallenge): UnknownConnectionApproval? = allocator.approve(challenge)
+    /** Discards a pending unknown-capacity challenge without admitting its request. */
     fun discardChallenge(challenge: UnknownConnectionChallenge) = allocator.discardChallenge(challenge)
+    /** Returns the tracked state only when the complete reservation token matches. */
     fun reservationState(token: ReservationToken): ReservationState? = allocator.reservationState(token)
+    /** Marks a matching pending reservation active after its connection opens. */
     fun markActive(token: ReservationToken): Boolean = allocator.markActive(token)
+    /** Marks a matching connection as releasing while retaining its capacity until close completes. */
     fun beginRelease(token: ReservationToken): Boolean = allocator.beginRelease(token)
 
+    /** Releases a matching reservation once; stale or repeated releases return false. */
     fun release(token: ReservationToken): Boolean {
         unregisterOwner(token)
         return allocator.release(token)
@@ -54,6 +66,7 @@ class AccountConnectionManager private constructor(context: Context) {
         return allocator.fail(token, knownConnectionLimit)
     }
 
+    /** Associates a reservation with the suspending callback that closes its connection. */
     @Synchronized fun registerOwner(
         token: ReservationToken,
         reclamationPriority: () -> Int = { 1 },
@@ -64,10 +77,12 @@ class AccountConnectionManager private constructor(context: Context) {
             reclamationPriorities[token.reservationId] = reclamationPriority
         }
     }
+    /** Removes the close callback associated with a reservation. */
     @Synchronized fun unregisterOwner(token: ReservationToken) {
         owners.remove(token.reservationId)
         reclamationPriorities.remove(token.reservationId)
     }
+    /** Finds the registered close callback for a reservation token. */
     @Synchronized private fun owner(token: ReservationToken): (suspend () -> Unit)? = owners[token.reservationId]
     @Synchronized private fun reclamationPriority(token: ReservationToken): Int =
         if (token.purpose == ConnectionPurpose.PREVIEW) Int.MIN_VALUE
@@ -101,6 +116,7 @@ class AccountConnectionManager private constructor(context: Context) {
         }
     }
 
+    /** Saves a positive manual account limit or null for unknown capacity. */
     @Synchronized
     fun setMaximumConnections(sourceId: Long, maximum: Int?): Boolean {
         require(maximum == null || maximum > 0)
@@ -108,12 +124,14 @@ class AccountConnectionManager private constructor(context: Context) {
         return updatePolicy(sourceId, snapshot.policy.copy(maximumConnections = maximum, useProviderMetadata = false))
     }
 
+    /** Selects whether the provider-reported allowance controls local admission. */
     @Synchronized
     fun setUseProviderMetadata(sourceId: Long, enabled: Boolean): Boolean {
         val snapshot = snapshotForSource(sourceId) ?: return false
         return updatePolicy(sourceId, snapshot.policy.copy(useProviderMetadata = enabled))
     }
 
+    /** Updates the account's observed allowance and usage from provider metadata. */
     @Synchronized
     fun updateProviderAccount(source: Source, maxConnections: Int?, activeConnections: Int?, observedAtMillis: Long = System.currentTimeMillis()) {
         val expectedAccount = canonicalAccount(accountIdentity(source))
@@ -133,6 +151,7 @@ class AccountConnectionManager private constructor(context: Context) {
         return applyAliases(updated)
     }
 
+    /** Removes a manual shared-account association when affected pools are idle. */
     @Synchronized
     fun clearAssociation(sourceId: Long): Boolean {
         val base = baseAccounts[sourceId] ?: return false
@@ -140,9 +159,12 @@ class AccountConnectionManager private constructor(context: Context) {
         return applyAliases(updated)
     }
 
+    /** Checks whether this source has an explicit shared-account association. */
     @Synchronized fun isManuallyAssociated(sourceId: Long): Boolean = baseAccounts[sourceId]?.let { canonicalAccount(it) != it } ?: false
+    /** Clears locally observed connection-limit errors for the source account. */
     fun clearKnownConnectionLimitErrors(sourceId: Long) = allocator.clearKnownConnectionLimitErrors(sourceId)
 
+    /** Applies and persists an account policy if its source is registered. */
     private fun updatePolicy(sourceId: Long, policy: AccountConnectionPolicy): Boolean {
         val key = accountKeyForSource(sourceId) ?: return false
         if (!allocator.configure(sourceId, policy)) return false
@@ -151,6 +173,7 @@ class AccountConnectionManager private constructor(context: Context) {
         return true
     }
 
+    /** Resolves a base account identity through the configured alias mapping. */
     private fun canonicalAccount(base: String, aliases: Map<String, String> = accountAliases): String {
         var current = base
         val visited = mutableSetOf<String>()
@@ -158,6 +181,7 @@ class AccountConnectionManager private constructor(context: Context) {
         return base // Corrupt/cyclic saved data never grants a new account identity.
     }
 
+    /** Applies an account association mapping atomically before persisting it. */
     private fun applyAliases(updated: Map<String, String>): Boolean {
         val remapped = baseAccounts.mapValues { (_, base) -> canonicalAccount(base, updated) }
         if (!allocator.reassociateSources(remapped, policies)) return false
@@ -167,6 +191,7 @@ class AccountConnectionManager private constructor(context: Context) {
         return true
     }
 
+    /** Loads valid saved account associations, ignoring malformed entries. */
     private fun readAliases(): MutableMap<String, String> = runCatching {
         val saved = JSONObject(prefs.getString("account_aliases_v1", "{}") ?: "{}")
         saved.keys().asSequence().mapNotNull { raw ->
@@ -176,6 +201,7 @@ class AccountConnectionManager private constructor(context: Context) {
         }.toMap().toMutableMap()
     }.getOrDefault(mutableMapOf())
 
+    /** Loads saved account limits and provider-metadata choices. */
     private fun readPolicies(): MutableMap<String, AccountConnectionPolicy> = runCatching {
         val saved = JSONObject(prefs.getString("policies_v1", "{}") ?: "{}")
         saved.keys().asSequence().mapNotNull { key ->
@@ -186,11 +212,13 @@ class AccountConnectionManager private constructor(context: Context) {
         }.toMap().toMutableMap()
     }.getOrDefault(mutableMapOf())
 
+    /** Saves the current explicit account associations. */
     private fun persistAliases() {
         val saved = JSONObject()
         accountAliases.forEach { (base, key) -> saved.put(base, key) }
         prefs.edit().putString("account_aliases_v1", saved.toString()).apply()
     }
+    /** Saves manual account limits and provider-metadata choices. */
     private fun persistPolicies() {
         val saved = JSONObject()
         policies.forEach { (key, policy) -> saved.put(key, JSONObject().apply {
@@ -203,10 +231,13 @@ class AccountConnectionManager private constructor(context: Context) {
 
     companion object {
         @Volatile private var instance: AccountConnectionManager? = null
+        /** Returns the process-wide account connection manager. */
         fun get(context: Context): AccountConnectionManager = instance ?: synchronized(this) {
             instance ?: AccountConnectionManager(context.applicationContext).also { instance = it }
         }
+        /** Creates an isolated account connection manager for deterministic tests. */
         internal fun createForTest(context: Context): AccountConnectionManager = AccountConnectionManager(context)
+        /** Validates the opaque account-key representation accepted by persistence. */
         private fun isAccountKey(value: String): Boolean = value.matches(Regex("acct_[0-9a-f]{64}"))
 
         /** Digest avoids persisting credential-bearing endpoint/username/MAC/playlist strings. */

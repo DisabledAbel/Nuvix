@@ -20,9 +20,11 @@ class EpgMatcherTest {
     private fun index(vararg aliases: Pair<String, String>) =
         EpgMatcher.buildIndex(aliases.toList())
 
+    /** Returns the normalized matching key for a synthetic provider channel name. */
     private fun keyOf(providerName: String) =
         ChannelNameNormalizer.normalize(providerName).groupKey
 
+    /** Checks: provider channel matches guide channel by normalised name. */
     @Test
     fun `provider channel matches guide channel by normalised name`() {
         val idx = index("bbc1.uk" to "BBC One", "itv1.uk" to "ITV1")
@@ -31,6 +33,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK - ITV 1 HD"))).isEqualTo("itv1.uk")
     }
 
+    /** Checks: the raw guide id is matchable too. */
     @Test
     fun `the raw guide id is matchable too`() {
         // Providers that do fill in epg_channel_id often use the id form directly.
@@ -39,6 +42,7 @@ class EpgMatcherTest {
         assertThat(idx.match(ChannelNameNormalizer.groupKeyOf("bbc1.uk"))).isEqualTo("bbc1.uk")
     }
 
+    /** Checks: unique prefix matches are accepted. */
     @Test
     fun `unique prefix matches are accepted`() {
         val idx = index("bbc1london.uk" to "BBC One London")
@@ -47,6 +51,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK| BBC ONE"))).isEqualTo("bbc1london.uk")
     }
 
+    /** Checks: ambiguous prefix matches are refused. */
     @Test
     fun `ambiguous prefix matches are refused`() {
         val idx = index(
@@ -59,6 +64,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK| BBC ONE"))).isNull()
     }
 
+    /** Checks: colliding display names disable exact matching for that key. */
     @Test
     fun `colliding display names disable exact matching for that key`() {
         val idx = index(
@@ -69,6 +75,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("CNN"))).isNull()
     }
 
+    /** Checks: unknown channels match nothing. */
     @Test
     fun `unknown channels match nothing`() {
         val idx = index("bbc1.uk" to "BBC One")
@@ -76,6 +83,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK| SOME SHOP CHANNEL"))).isNull()
     }
 
+    /** Checks: keys too short to mean anything never match. */
     @Test
     fun `keys too short to mean anything never match`() {
         val idx = index("e.uk" to "E")
@@ -86,6 +94,7 @@ class EpgMatcherTest {
         assertThat(e4.match(keyOf("UK| E4 HD"))).isEqualTo("e4.uk")
     }
 
+    /** Checks: end to end - the exact names from the reporting provider. */
     @Test
     fun `end to end - the exact names from the reporting provider`() {
         // The names that started all this, verbatim from the screen.
@@ -102,6 +111,7 @@ class EpgMatcherTest {
         assertThat(idx.match(keyOf("UK| SKY ATLANTIC ᴴᴰ"))).isEqualTo("skyatlantic.uk")
     }
 
+    /** Checks: prefix lookup considers aliases on both sides without accepting conflicting ids. */
     @Test
     fun `prefix lookup considers aliases on both sides without accepting conflicting ids`() {
         val unique = index("sports.uk" to "Sky Sports")

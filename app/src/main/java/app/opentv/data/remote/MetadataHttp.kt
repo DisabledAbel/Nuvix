@@ -31,6 +31,7 @@ class MetadataHttp(
     private var blockedUntil = 0L
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Fetches metadata JSON with local caching, bounded retries and cancellation support. */
     suspend fun get(url: HttpUrl): JsonElement? = withContext(Dispatchers.IO) {
         lock.withLock {
             currentCoroutineContext().ensureActive()
@@ -91,6 +92,7 @@ class MetadataHttp(
         }
     }
 
+    /** Stores a successful metadata response in the local cache. */
     private fun save(file: File, value: JsonElement) {
         // Cache failure must never prevent viewing provider data (disk full, eviction, etc.).
         runCatching {
@@ -114,6 +116,7 @@ class MetadataHttp(
         private const val STALE = 7 * 24 * FRESH
         private const val MAX_RESPONSE = 8 * 1024 * 1024L
 
+        /** Calculates the delay before retrying a transient metadata request failure. */
         internal fun retryDelay(header: String?, now: Long, attempt: Int): Long {
             val seconds = header?.toLongOrNull()?.takeIf { it >= 0 }
                 ?.coerceAtMost(7 * 24 * 3600)?.times(1000)

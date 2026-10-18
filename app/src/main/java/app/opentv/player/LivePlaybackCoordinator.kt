@@ -21,17 +21,24 @@ enum class LivePresentation { FULLSCREEN, BROWSING, HIDDEN, PIP }
 internal interface LivePlaybackEngine {
     val state: StateFlow<PlayerController.State>
     val paused: StateFlow<Boolean>
+    /** Starts an explicitly requested channel on this playback engine. */
     fun play(request: PlayerController.Request)
+    /** Applies the user's pause choice to the retained engine. */
     fun setPaused(paused: Boolean)
+    /** Controls browsing-policy muting independently of the user's volume choice. */
     fun setBrowsingMuted(muted: Boolean)
+    /** Suspends or resumes the engine according to presentation policy. */
     fun setSuspended(suspended: Boolean)
+    /** Closes the playback engine and releases its resources. */
     fun release()
 }
 
 /** A safe domain failure: never expose arbitrary provider exception messages. */
 internal class RecordingOwnsLiveSourceException : IllegalStateException()
+/** Live admission failure carrying a message safe to show without provider details. */
 internal class LiveConnectionException(val safeMessage: String) : IllegalStateException()
 
+/** Resolved channel and variants supplied to an explicit tune request. */
 internal data class ResolvedLiveChannel(
     val channel: Channel,
     val variants: List<Channel>,
@@ -88,6 +95,7 @@ internal class LivePlaybackCoordinator(
     private var inPip = false
     private var destroyed = false
 
+    /** Creates the shared live engine lazily and reuses it for subsequent presentation changes. */
     fun ensureEngine(): LivePlaybackEngine {
         check(!destroyed) { "Live session is already destroyed" }
         return engine ?: engineFactory().also { created ->
@@ -102,6 +110,7 @@ internal class LivePlaybackCoordinator(
         }
     }
 
+    /** Resolves and admits an explicit channel request while guarding against stale generations. */
     fun openChannel(id: Long) {
         request(id, rememberPrevious = true) { findChannel(id) }
     }
@@ -111,6 +120,7 @@ internal class LivePlaybackCoordinator(
         request(channel.id, rememberPrevious = false) { channel }
     }
 
+    /** Starts a resolved request only if it still belongs to the current tune generation. */
     private fun request(id: Long, rememberPrevious: Boolean, channel: suspend () -> Channel?) {
         if (destroyed || requestedId == id) return
         setPolicyPreviewSuppressed(false)
@@ -200,11 +210,13 @@ internal class LivePlaybackCoordinator(
         tune(channel)
     }
 
+    /** Updates the explicit pause choice and reapplies retained playback policy. */
     fun setPaused(paused: Boolean) {
         _paused.value = paused
         engine?.setPaused(paused)
     }
 
+    /** Applies changed persistence, preview and browsing-audio preferences. */
     fun updatePreferences(persistent: Boolean, continueAudio: Boolean) {
         this.persistent = persistent
         this.continueAudio = continueAudio
@@ -212,15 +224,19 @@ internal class LivePlaybackCoordinator(
         else applyPolicy()
     }
 
+    /** Changes the live presentation target and reapplies playback policy without retuning. */
     fun setPresentation(value: LivePresentation) {
         presentation = value
         if (!persistent && value != LivePresentation.FULLSCREEN && value != LivePresentation.PIP && !inPip) stop()
         else applyPolicy()
     }
 
+    /** Updates foreground state used by live playback policy. */
     fun setForeground(value: Boolean) { foreground = value; applyPolicy() }
+    /** Updates picture-in-picture state used by live playback policy. */
     fun setInPip(value: Boolean) { inPip = value; applyPolicy() }
 
+    /** Reconciles engine suspension and browsing audio with the current presentation and settings. */
     private fun applyPolicy() {
         val pip = inPip || presentation == LivePresentation.PIP
         engine?.setBrowsingMuted(!continueAudio && presentation == LivePresentation.BROWSING && !pip)
@@ -251,12 +267,14 @@ internal class LivePlaybackCoordinator(
         _guidePreviewSuppressed.value = policyPreviewSuppressed || optionalPreviewSuppressed
     }
 
+    /** Releases live playback before another media session takes ownership. */
     fun stopForOtherPlayback() {
         // An outgoing guide must not replace the relinquished stream with its optional preview.
         setPolicyPreviewSuppressed(true)
         stop()
     }
 
+    /** Invalidates pending tune requests and closes the retained live engine. */
     fun stop() {
         generation++
         requestJob?.cancel()
@@ -288,5 +306,6 @@ internal class LivePlaybackCoordinator(
         afterEngineRelease()
     }
 
+    /** Closes the coordinator and releases retained playback ownership. */
     fun destroy() { if (!destroyed) { stop(); destroyed = true } }
 }

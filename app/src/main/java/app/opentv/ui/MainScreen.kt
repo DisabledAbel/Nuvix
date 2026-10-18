@@ -113,6 +113,7 @@ enum class Tab(val labelRes: Int, val icon: ImageVector) {
 private val RAIL_COLLAPSED = 76.dp
 private val RAIL_EXPANDED = 236.dp
 
+/** Displays the application navigation shell and selected content destination. */
 @Composable
 fun MainScreen(
     isTelevision: Boolean,
@@ -360,6 +361,7 @@ private fun StatusBar() {
     }
 }
 
+/** Displays the remote-focusable navigation destinations and current selection. */
 @Composable
 private fun NavRail(
     tabs: List<Tab>,
@@ -428,6 +430,7 @@ private fun NavRail(
     }
 }
 
+/** Displays one focusable navigation item with its selected state and activation callback. */
 @Composable
 private fun RailItem(
     icon: ImageVector,

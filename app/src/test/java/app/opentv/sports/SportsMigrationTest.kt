@@ -18,9 +18,11 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
 
+/** Regression tests for sports migration. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class SportsMigrationTest {
+    /** Checks: existing V12 Reminders Survive With Nullable Game Keys And Unique New Game Reminders. */
     @Test fun existingV12RemindersSurviveWithNullableGameKeysAndUniqueNewGameReminders(): Unit = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         val name = "sports-migration.db"

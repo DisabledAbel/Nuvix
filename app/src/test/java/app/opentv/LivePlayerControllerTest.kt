@@ -18,22 +18,26 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for live player controller. */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
 class LivePlayerControllerTest {
+    /** Runs an assertion block with a player controller and releases it afterward. */
     private fun withController(test: (PlayerController) -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val controller = PlayerController(RuntimeEnvironment.getApplication(), scope, OkHttpClient())
         try { test(controller) } finally { controller.release(); scope.cancel() }
     }
 
+    /** Checks: explicit captions off survives applying defaults after fullscreen reentry. */
     @Test fun `explicit captions off survives applying defaults after fullscreen reentry`() = withController { controller ->
         controller.disableText()
         controller.applySubtitleDefault(true)
         assertThat(controller.player.trackSelectionParameters.disabledTrackTypes).contains(C.TRACK_TYPE_TEXT)
     }
 
+    /** Checks: user pause survives lifecycle suppression without any media requests. */
     @Test fun `user pause survives lifecycle suppression without any media requests`() = withController { controller ->
         controller.setUserPaused(true)
         controller.setSuspended(true)
@@ -43,6 +47,7 @@ class LivePlayerControllerTest {
         assertThat(controller.player.mediaItemCount).isEqualTo(0)
     }
 
+    /** Checks: request made while suspended does not prepare media or open stream. */
     @Test fun `request made while suspended does not prepare media or open stream`() = withController { controller ->
         controller.setSuspended(true)
         controller.play(PlayerController.Request("https://example.invalid/never-request", "Test", "Nuvix test"), debounce = false)

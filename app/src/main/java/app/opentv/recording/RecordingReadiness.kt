@@ -21,6 +21,7 @@ data class RecordingReadiness(
     }
 
     companion object {
+        /** Reports device permissions, background eligibility and storage readiness for recording. */
         fun check(context: Context): RecordingReadiness {
             val alarms = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager

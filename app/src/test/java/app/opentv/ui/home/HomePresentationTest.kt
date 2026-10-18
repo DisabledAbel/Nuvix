@@ -4,7 +4,9 @@ package app.opentv.ui.home
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
+/** Regression tests for home presentation. */
 class HomePresentationTest {
+    /** Checks: every layout and card combination is bounded with increasing sizes. */
     @Test fun `every layout and card combination is bounded with increasing sizes`() {
         HomeLayout.entries.forEach { layout ->
             val widths = HomeCardSize.entries.map { homeCardWidth(layout, it) }
@@ -16,6 +18,7 @@ class HomePresentationTest {
             }
         }
     }
+    /** Checks: malformed version unknown values and oversized payloads are rejected. */
     @Test fun `malformed version unknown values and oversized payloads are rejected`() {
         val defaults = HomePresentation().portable()
         listOf(emptyList(), defaults + "provider_url=secret", defaults.toMutableList().apply { this[0] = "v2" },
@@ -24,12 +27,14 @@ class HomePresentationTest {
             assertThat(HomePresentation.parse(it)).isNull()
         }
     }
+    /** Checks: dynamic backgrounds fall back when artwork is unavailable. */
     @Test fun `dynamic backgrounds fall back when artwork is unavailable`() {
         assertThat(backgroundArtwork(HomeBackground.DYNAMIC_ARTWORK, null)).isNull()
         assertThat(backgroundArtwork(HomeBackground.DYNAMIC_ARTWORK, " ")).isNull()
         assertThat(backgroundArtwork(HomeBackground.DEFAULT, "art")).isNull()
         assertThat(backgroundArtwork(HomeBackground.DYNAMIC_ARTWORK, "art")).isEqualTo("art")
     }
+    /** Checks: featured choices handle empty content and preserve classic automatic selection. */
     @Test fun `featured choices handle empty content and preserve classic automatic selection`() {
         HomeFeatured.entries.forEach { assertThat(selectHomeFeature(it, false, false, false, false)).isEqualTo(HomeFeatureSource.NONE) }
         assertThat(selectHomeFeature(HomeFeatured.AUTOMATIC, true, true, true, true)).isEqualTo(HomeFeatureSource.RECENT)

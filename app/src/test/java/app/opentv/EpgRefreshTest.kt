@@ -24,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for epg refresh. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class EpgRefreshTest {
@@ -34,6 +35,7 @@ class EpgRefreshTest {
     private var feedId = 0L
     private val now = XmltvParser.parseXmltvTime("20300101000000 +0000")!!
 
+    /** Creates isolated fixtures before each test. */
     @Before fun prepare() = runBlocking {
         database = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).build()
         server = MockWebServer().also { it.start() }
@@ -51,12 +53,14 @@ class EpgRefreshTest {
         database.epgAliases().upsertAll(listOf(EpgChannelAlias(feedId, "old", "Old channel", "oldchannel")))
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun cleanUp() {
         database.close()
         server.shutdown()
         directory.deleteRecursively()
     }
 
+    /** Checks: HTTP failure keeps programmes aliases and refresh stamp. */
     @Test fun `HTTP failure keeps programmes aliases and refresh stamp`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(503))
         val result = repository.syncAll(now, force = true)
@@ -65,6 +69,7 @@ class EpgRefreshTest {
         assertOldGuidePreserved()
     }
 
+    /** Checks: malformed XML after a flushed batch rolls back the entire replacement. */
     @Test fun `malformed XML after a flushed batch rolls back the entire replacement`() = runBlocking {
         val entries = (0..550).joinToString("") {
             "<programme channel=\"new-$it\" start=\"20300101000000 +0000\" stop=\"20300101010000 +0000\"><title>New $it</title></programme>"
@@ -75,12 +80,14 @@ class EpgRefreshTest {
         assertOldGuidePreserved()
     }
 
+    /** Checks: empty guide cannot erase the last valid cache. */
     @Test fun `empty guide cannot erase the last valid cache`() = runBlocking {
         server.enqueue(MockResponse().setBody("<tv><channel id=\"new\"><display-name>New</display-name></channel></tv>"))
         assertThat(repository.syncAll(now, force = true).feedsFailed).isEqualTo(1)
         assertOldGuidePreserved()
     }
 
+    /** Checks: complete guide commits programmes aliases and refresh stamp together. */
     @Test fun `complete guide commits programmes aliases and refresh stamp together`() = runBlocking {
         server.enqueue(MockResponse().setBody("""
             <tv>
@@ -99,6 +106,7 @@ class EpgRefreshTest {
         assertThat(directory.listFiles().orEmpty().toList()).isEmpty()
     }
 
+    /** Asserts that the previously stored guide remains intact after a failed refresh. */
     private suspend fun assertOldGuidePreserved() {
         assertThat(database.programmes().countForFeed(feedId)).isEqualTo(1)
         assertThat(database.programmes().upcoming("old", now, 10).single().title).isEqualTo("Last valid programme")

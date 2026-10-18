@@ -70,6 +70,7 @@ class ManagerServer(
     private val sourceRepository: SourceRepository,
 ) {
 
+    /** Address and authorization details for the active local web management session. */
     data class Session(
         /** What the QR code encodes, e.g. `http://192.168.0.14:41234/?t=…` */
         val url: String,
@@ -80,9 +81,13 @@ class ManagerServer(
         val shortUrl: String get() = "$host:$port"
     }
 
+    /** Observable lifecycle of the local web management server. */
     sealed interface State {
+        /** Server state with no active management listener. */
         data object Idle : State
+        /** Server state exposing an active local management session. */
         data class Listening(val session: Session) : State
+        /** Server startup or serving failure with a display-safe message. */
         data class Failed(val reason: String) : State
     }
 
@@ -96,6 +101,7 @@ class ManagerServer(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /** Starts the local web manager and publishes its session address. */
     fun start() {
         if (running) return
         val host = lanAddress()
@@ -168,6 +174,7 @@ class ManagerServer(
         }
     }
 
+    /** Closes the active listener and clears its management session. */
     fun stop() {
         running = false
         runCatching { serverSocket?.close() }
@@ -178,6 +185,7 @@ class ManagerServer(
 
     // ---- Request handling ----------------------------------------------------------------------
 
+    /** Routes an authenticated local management request to its catalog or recording operation. */
     private fun handle(client: Socket) {
         client.soTimeout = SOCKET_TIMEOUT_MILLIS
 
@@ -242,6 +250,7 @@ class ManagerServer(
         }
     }
 
+    /** Reads request text up to the bounded Content-Length accepted by the local manager. */
     private fun readBody(reader: BufferedReader, headers: Map<String, String>): String {
         val contentLength = (headers["content-length"]?.toIntOrNull() ?: 0)
             .coerceAtMost(MAX_BODY_BYTES)
@@ -315,6 +324,7 @@ class ManagerServer(
         writeOk(output)
     }
 
+    /** Writes a successful local management response. */
     private fun writeOk(output: OutputStream) {
         output.write(
             PairingHttp.httpResponse("200 OK", "application/json", json.encodeToString(OkDto.serializer(), OkDto())),
@@ -441,10 +451,12 @@ class ManagerServer(
         )
     }
 
+    /** Serializes a management response as JSON with the supplied HTTP status. */
     private fun <T> writeJson(output: OutputStream, serializer: kotlinx.serialization.KSerializer<T>, value: T) {
         output.write(PairingHttp.httpResponse("200 OK", "application/json", json.encodeToString(serializer, value)))
     }
 
+    /** Maps a local channel to the web manager's response representation. */
     private fun Channel.toDto() = ChannelDto(
         id = id,
         name = shownName,
@@ -502,12 +514,16 @@ class ManagerServer(
 // kotlinx.serialization handles the escaping that matters here: channel names carry quotes, `|`
 // and unicode, and hand-rolled string concatenation is exactly where that goes wrong.
 
+/** Provider and category summaries used by the local web manager's filters. */
 @Serializable private data class MetaDto(val sources: List<SourceDto>, val categories: List<CategoryDto>)
 
+/** Provider summary exposed to the authenticated local web manager. */
 @Serializable private data class SourceDto(val id: Long, val name: String)
 
+/** Catalog category summary used by web management filters. */
 @Serializable private data class CategoryDto(val id: String, val label: String, val sourceId: Long, val count: Int)
 
+/** Channel presentation and management fields returned to the local web manager. */
 @Serializable private data class ChannelDto(
     val id: Long,
     val name: String,
@@ -519,8 +535,10 @@ class ManagerServer(
     val number: Int?,
 )
 
+/** Success acknowledgment returned by local management operations. */
 @Serializable private data class OkDto(val ok: Boolean = true)
 
+/** Requested edits to a channel's local management fields. */
 @Serializable private data class ChannelPatch(
     val id: Long,
     val hidden: Boolean? = null,
@@ -528,8 +546,10 @@ class ManagerServer(
     val name: String? = null,
 )
 
+/** Requested channel ordering from the local web manager. */
 @Serializable private data class ReorderReq(val ids: List<Long>)
 
+/** Recording destination settings exposed to the local web manager without the stored NAS password. */
 @Serializable private data class RecordingDto(
     val target: String,
     val host: String,
@@ -539,6 +559,7 @@ class ManagerServer(
     val hasPassword: Boolean,
 )
 
+/** NAS recording destination fields submitted by the local web manager. */
 @Serializable private data class RecordingReq(
     val host: String = "",
     val share: String = "",
@@ -547,8 +568,10 @@ class ManagerServer(
     val password: String? = null,
 )
 
+/** NAS connection-test result with success status and an optional error message. */
 @Serializable private data class TestDto(val ok: Boolean, val error: String?)
 
+/** Provider configuration request received from the local web manager. */
 @Serializable private data class SourceReq(
     val kind: String = "xtream",
     val name: String = "",
@@ -558,6 +581,8 @@ class ManagerServer(
     val mac: String? = null,
 )
 
+/** Provider-addition result returned to the local web manager. */
 @Serializable private data class AddResultDto(val ok: Boolean, val channels: Int = 0, val error: String? = null)
 
+/** Provider connection-test result returned to the local web manager. */
 @Serializable private data class TestResultDto(val ok: Boolean, val message: String? = null, val error: String? = null)

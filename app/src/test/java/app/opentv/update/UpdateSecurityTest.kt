@@ -6,6 +6,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+/** Regression tests for update security. */
 class UpdateSecurityTest {
     @get:Rule val temporary = TemporaryFolder()
     private val trustedSigner = "a".repeat(64)
@@ -16,10 +17,12 @@ class UpdateSecurityTest {
         "https://github.com/DisabledAbel/Nuvix/releases/download/v0.1.0/nuvix.apk", 12,
         "https://github.com/DisabledAbel/Nuvix/releases/tag/v0.1.0", "c".repeat(64), trustedSigner, "com.disabledabel.nuvix")
 
+    /** Checks: valid release metadata is accepted. */
     @Test fun `valid release metadata is accepted`() {
         UpdateSecurity.validateMetadata(metadata, "com.disabledabel.nuvix", 12)
     }
 
+    /** Checks: rejects malformed hashes schema package and asset length. */
     @Test fun `rejects malformed hashes schema package and asset length`() {
         for (invalid in listOf(
             metadata.copy(schemaVersion = 2), metadata.copy(applicationId = "app.opentv"),
@@ -31,6 +34,7 @@ class UpdateSecurityTest {
         }
     }
 
+    /** Checks: asset UR Ls must belong to exact release repository and tag. */
     @Test fun `asset URLs must belong to exact release repository and tag`() {
         UpdateSecurity.requireAssetUrl(update.apkUrl, "v0.1.0", "nuvix.apk")
         for (bad in listOf(
@@ -45,6 +49,7 @@ class UpdateSecurityTest {
         }
     }
 
+    /** Checks: corrupt and truncated downloads are rejected. */
     @Test fun `corrupt and truncated downloads are rejected`() {
         val file = temporary.newFile("update.apk").apply { writeText("verified bytes") }
         val sha = UpdateSecurity.sha256(file.readBytes())
@@ -54,16 +59,19 @@ class UpdateSecurityTest {
         assertThrows(UpdateValidationException::class.java) { UpdateSecurity.verifyFile(file, file.length(), sha) }
     }
 
+    /** Checks: signer metadata cannot replace the installed trust anchor. */
     @Test fun `signer metadata cannot replace the installed trust anchor`() {
         assertThrows(UpdateValidationException::class.java) {
             verifyIdentity(update.copy(signingCertificateSha256 = attackerSigner), signers = setOf(attackerSigner))
         }
     }
 
+    /** Checks: correct installed signer and strictly greater numeric build are accepted. */
     @Test fun `correct installed signer and strictly greater numeric build are accepted`() {
         verifyIdentity(update)
     }
 
+    /** Checks: same version downgrade wrong package and forged version metadata are rejected. */
     @Test fun `same version downgrade wrong package and forged version metadata are rejected`() {
         assertThrows(UpdateValidationException::class.java) { verifyIdentity(update, installedVersion = 21) }
         assertThrows(UpdateValidationException::class.java) { verifyIdentity(update, installedVersion = 22) }
@@ -73,10 +81,12 @@ class UpdateSecurityTest {
         assertThrows(UpdateValidationException::class.java) { verifyIdentity(update, signers = emptySet()) }
     }
 
+    /** Checks: digest bytes are formatted as full SHA256. */
     @Test fun `digest bytes are formatted as full SHA256`() {
         assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", UpdateSecurity.sha256(byteArrayOf()))
     }
 
+    /** Runs APK identity validation against configurable installed and candidate package details. */
     private fun verifyIdentity(
         candidate: UpdateChecker.Update,
         installedVersion: Long = 20,

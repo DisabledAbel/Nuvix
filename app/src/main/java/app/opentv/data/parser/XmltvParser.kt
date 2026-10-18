@@ -97,6 +97,7 @@ object XmltvParser {
         return Stats(channelCount, programmeCount, skipped)
     }
 
+    /** Consumes a channel element and returns its first nonblank display name. */
     private fun readChannelDisplayName(parser: XmlPullParser): String? {
         var displayName: String? = null
         var depth = 1
@@ -116,6 +117,7 @@ object XmltvParser {
         return displayName
     }
 
+    /** Consumes a program element and returns validated timing and metadata, or null if invalid. */
     private fun readProgramme(parser: XmlPullParser, feedId: Long): Programme? {
         val channelId = parser.getAttributeValue(null, "channel")
         val start = parseXmltvTime(parser.getAttributeValue(null, "start"))
@@ -221,6 +223,7 @@ object XmltvParser {
         }
     }
 
+    /** Reads an XMLTV episode-number segment, using zero for missing or invalid values. */
     private fun String.segmentOrZero(from: Int): Int =
         if (length >= from + 2) substring(from, from + 2).toIntOrNull() ?: 0 else 0
 

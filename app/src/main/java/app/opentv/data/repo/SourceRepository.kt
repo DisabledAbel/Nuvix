@@ -19,18 +19,23 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
+/** Persists provider configurations and validates source-specific connection details. */
 class SourceRepository(
     private val dao: SourceDao,
     private val api: XtreamApi,
     private val stalkerApi: StalkerApi,
     private val onAccountVerified: (Source, XtreamApi.AccountInfo) -> Unit = { _, _ -> },
 ) {
+    /** Observes saved provider configurations in local ID order. */
     fun observeAll(): Flow<List<Source>> = dao.observeAll()
 
+    /** Returns enabled provider configurations. */
     suspend fun enabled(): List<Source> = dao.enabled()
 
+    /** Returns the saved provider by local ID, or null if absent. */
     suspend fun byId(id: Long): Source? = dao.byId(id)
 
+    /** Validates and inserts or updates a provider configuration, returning its local ID. */
     suspend fun save(source: Source): Long = withContext(Dispatchers.IO) {
         val normalised = validatedSource(source)
         if (source.id == 0L) dao.insert(normalised)
@@ -94,6 +99,7 @@ class SourceRepository(
             )
         }
 
+        /** Requires an absolute HTTP or HTTPS URL suitable for the provider request. */
         fun validateHttpUrl(value: String) {
             require(value.none { it == '\r' || it == '\n' || it == '\u0000' }) { "Source addresses must be a single line." }
             val parsed = value.toHttpUrlOrNull()

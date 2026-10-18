@@ -7,7 +7,9 @@ import app.opentv.data.model.Channel
 import app.opentv.data.model.Programme
 import java.security.MessageDigest
 
+/** Schedule status used to present a cached sports event. */
 enum class SportsStatus { SCHEDULED, LIVE, INTERMISSION, FINAL, POSTPONED, CANCELED }
+/** Confidence category for a guide-program association with a sports event. */
 enum class MatchConfidence(val label: String) {
     CONFIRMED("Confirmed Match"), LIKELY("Likely Match"), POSSIBLE("Possible Match")
 }
@@ -39,7 +41,9 @@ data class SportsEvent(
     val awayScore: Int? = null,
     val period: String? = null,
 ) {
+    /** Checks whether cached event evidence remains within its freshness interval. */
     fun isFresh(now: Long) = now >= updatedAtMillis && now - updatedAtMillis <= CACHE_FRESH_MILLIS
+    /** Derives a display status from the event schedule, cached status and current time. */
     fun displayStatus(now: Long): String = when {
         status == SportsStatus.CANCELED.name -> "Canceled"
         status == SportsStatus.POSTPONED.name -> "Postponed"
@@ -70,23 +74,29 @@ data class SportsDecision(
     val eventId: String, val accepted: Boolean,
 )
 
+/** Persisted favorite league or team with a stable identity and user ordering. */
 @Entity(tableName = "sports_favorites", primaryKeys = ["kind", "id"], indices = [Index(value = ["kind", "rank"])])
 data class SportsFavorite(val kind: String, val id: String, val leagueId: String, val name: String, val rank: Int)
 
+/** Persisted preferred provider-channel choice for a sports event. */
 @Entity(tableName = "sports_preferred", primaryKeys = ["eventId"])
 data class SportsPreferred(val eventId: String, val sourceId: Long, val streamId: String)
 
+/** Last processed guide-feed revision used to refresh inferred sports data. */
 @Entity(tableName = "sports_feed_state", primaryKeys = ["feedId"])
 data class SportsFeedState(val feedId: Long, val revision: String, val indexedUntil: Long, val partial: Boolean = false)
 
+/** Sports program evidence paired with a playable provider channel and match confidence. */
 data class SportsStream(
     val channel: Channel, val programme: SportsProgramme, val providerName: String,
     val confidence: MatchConfidence, val userConfirmed: Boolean = false, val rejected: Boolean = false,
     val currentProgramme: String? = null,
 ) { val available: Boolean get() = confidence == MatchConfidence.CONFIRMED && !rejected }
 
+/** Builds a deterministic digest for a portable sports identity. */
 internal fun sportsHash(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+/** Builds a stable identity for guide program evidence. */
 internal fun programmeKey(p: Programme): String = sportsHash(
     "${p.feedId}\u0000${p.epgChannelId}\u0000${p.startUtcMillis}\u0000${p.endUtcMillis}\u0000${p.title}",
 )
@@ -94,9 +104,11 @@ internal fun programmeKey(p: Programme): String = sportsHash(
 /** Replaceable schedule interface. No network provider is enabled or contacted by default. */
 interface SportsDataProvider {
     val sourceId: String
+    /** Loads scheduled sports events within the requested time interval. */
     suspend fun schedule(fromUtcMillis: Long, untilUtcMillis: Long): List<SportsEvent>
 }
 
+/** Provider schedule events with the identities of sources that failed to refresh. */
 data class SportsProviderResult(val events: List<SportsEvent>, val failedSources: Set<String>)
 
 /** One provider failure must not discard the other providers or the local EPG cache. */
@@ -114,6 +126,7 @@ internal suspend fun loadSportsProviders(providers: List<SportsDataProvider>, fr
     return SportsProviderResult(result, failed)
 }
 
+/** Validates event identity, schedule bounds and supported metadata before caching. */
 internal fun validSportsEvent(e: SportsEvent): Boolean =
     e.source != "epg" && e.source.matches(Regex("[a-z][a-z0-9_-]{0,47}")) && e.sourceEventId.length in 1..180 &&
         e.id == "${e.source}:${sportsHash(e.sourceEventId)}" && e.title.length in 1..300 &&

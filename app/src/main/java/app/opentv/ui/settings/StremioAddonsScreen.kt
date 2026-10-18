@@ -52,15 +52,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Loads add-on manifests and manages the saved local add-on list. */
 class StremioAddonsViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
 
     val addons: StateFlow<List<StremioAddon>> = graph.settings.stremioAddons
 
+    /** Progress or result of validating and adding an add-on manifest. */
     sealed interface Status {
+        /** Add-on state before validation begins. */
         data object Idle : Status
+        /** Add-on state while a manifest is being checked. */
         data object Checking : Status
+        /** Successful add-on validation with the added display name. */
         data class Added(val name: String) : Status
+        /** Add-on validation failure without exposing the private manifest URL. */
         data object Invalid : Status
     }
 
@@ -83,8 +89,10 @@ class StremioAddonsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Removes the selected add-on from local settings. */
     fun remove(addon: StremioAddon) = graph.settings.removeStremioAddon(addon.manifestUrl)
 
+    /** Clears the previous add-on validation result. */
     fun clearStatus() { _status.value = Status.Idle }
 }
 
@@ -191,6 +199,7 @@ fun StremioAddonsScreen(onBack: () -> Unit) {
     }
 }
 
+/** Displays a saved add-on and its removal action. */
 @Composable
 private fun AddonRow(addon: StremioAddon, onRemove: () -> Unit) {
     Card {

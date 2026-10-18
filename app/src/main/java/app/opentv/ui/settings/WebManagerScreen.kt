@@ -96,6 +96,7 @@ fun WebManagerScreen(
     }
 }
 
+/** Displays the active web manager address, QR code and stop action. */
 @Composable
 private fun Listening(session: ManagerServer.Session, onBack: () -> Unit) {
     // Generated once per session — encoding is not free and the content does not change.

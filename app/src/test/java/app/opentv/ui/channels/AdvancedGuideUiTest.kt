@@ -31,12 +31,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for advanced guide ui. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], qualifiers = "w1280dp-h720dp-land")
 @OptIn(ExperimentalTestApi::class)
 class AdvancedGuideUiTest {
     @get:Rule val compose = createComposeRule()
     private val start = 1_800_000_000_000L
+    /** Builds a synthetic guide channel row with optional program cells. */
     private fun row(id: Long, withProgrammes: Boolean = true): ChannelsViewModel.Row {
         val channel = Channel(id = id, sourceId = 1, streamId = "$id", name = "Channel $id", categoryId = null,
             logoUrl = null, epgChannelId = "channel$id", number = id.toInt(), streamUrl = "https://example.invalid/$id")
@@ -46,8 +48,10 @@ class AdvancedGuideUiTest {
         } else emptyList()
         return ChannelsViewModel.Row(channel, listOf(channel), programmes.firstOrNull(), programmes.getOrNull(1), programmes)
     }
+    /** Builds the Compose test tag identifying a channel's program slot. */
     private fun programmeTag(channel: Long, slot: Int = 0) = "guide-programme-1-channel$channel-${start + slot * 30 * 60_000L}"
 
+    /** Checks: remote Moves Across Timeline And Channels And Select Opens Details Without Tuning. */
     @Test fun remoteMovesAcrossTimelineAndChannelsAndSelectOpensDetailsWithoutTuning() {
         var selections = 0
         var details: Pair<Long, String>? = null
@@ -72,6 +76,7 @@ class AdvancedGuideUiTest {
         }
     }
 
+    /** Checks: switching Layouts Preserves Programme Focus And Details Target. */
     @Test fun switchingLayoutsPreservesProgrammeFocusAndDetailsTarget() {
         var layout by mutableStateOf(GuideLayout.STANDARD)
         var selectedProgramme: String? = null
@@ -88,6 +93,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(selectedProgramme).isEqualTo("Programme 1-0") }
     }
 
+    /** Checks: hour And Now Controls Move Shared Timeline And Persist Position Without Tuning. */
     @Test fun hourAndNowControlsMoveSharedTimelineAndPersistPositionWithoutTuning() {
         var selections = 0
         var savedTime = start
@@ -102,6 +108,7 @@ class AdvancedGuideUiTest {
         compose.onNodeWithTag(programmeTag(1)).assertIsDisplayed()
     }
 
+    /** Checks: current Channel Restores Focus Across Lazy Rows Including Missing Guide Data. */
     @Test fun currentChannelRestoresFocusAcrossLazyRowsIncludingMissingGuideData() {
         var selections = 0
         val rows = (1L..100L).map { row(it, withProgrammes = false) }
@@ -114,6 +121,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(selections).isEqualTo(0) }
     }
 
+    /** Checks: current Channel Clears An Excluding Filter Before Restoring Focus Without Tuning. */
     @Test fun currentChannelClearsAnExcludingFilterBeforeRestoringFocusWithoutTuning() {
         var rows by mutableStateOf(listOf(row(1, withProgrammes = false)))
         var selections = 0
@@ -130,6 +138,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(clearFilterCalls).isEqualTo(1); assertThat(selections).isEqualTo(0) }
     }
 
+    /** Checks: rapid Remote Input Across Offscreen Rows Keeps The Latest Focus Target. */
     @Test fun rapidRemoteInputAcrossOffscreenRowsKeepsTheLatestFocusTarget() {
         val rows = (1L..100L).map { row(it, withProgrammes = false) }
         var selections = 0
@@ -144,6 +153,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(selections).isEqualTo(0) }
     }
 
+    /** Checks: saved Position Restores Channel And Virtualized Timeline And Reports Bounded Slice. */
     @Test fun savedPositionRestoresChannelAndVirtualizedTimelineAndReportsBoundedSlice() {
         var visibleIds = emptyList<Long>()
         val rows = (1L..1000L).map { row(it, withProgrammes = false) }
@@ -156,6 +166,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(visibleIds).contains(600L); assertThat(visibleIds.size).isAtMost(60) }
     }
 
+    /** Checks: legacy List Reports New Guide Rows After Scrolling Beyond Initial Window. */
     @Test fun legacyListReportsNewGuideRowsAfterScrollingBeyondInitialWindow() {
         var visibleIds = emptyList<Long>()
         val rows = (1L..500L).map { row(it, withProgrammes = false) }
@@ -167,6 +178,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(visibleIds).contains(151L); assertThat(visibleIds.size).isAtMost(60) }
     }
 
+    /** Checks: changed Automatic Match Reloads Visible Epg Without Scrolling. */
     @Test fun changedAutomaticMatchReloadsVisibleEpgWithoutScrolling() {
         var channel by mutableStateOf(row(1, withProgrammes = false))
         var reportedCandidate: String? = null
@@ -181,6 +193,7 @@ class AdvancedGuideUiTest {
         compose.runOnIdle { assertThat(reportedCandidate).isEqualTo("new-match") }
     }
 
+    /** Checks: empty Guide Provides Clear Filter Feedback. */
     @Test fun emptyGuideProvidesClearFilterFeedback() {
         compose.setContent { MaterialTheme { GuideGrid(emptyList(), start, null, {}, {}, nowMillis = start) } }
         compose.onNodeWithText("No channels match this guide filter.").assertIsDisplayed()

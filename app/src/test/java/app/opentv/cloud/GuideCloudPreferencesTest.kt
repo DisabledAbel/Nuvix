@@ -17,15 +17,18 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for guide cloud preferences. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class GuideCloudPreferencesTest {
     private val settingsInstance = AppSettings::class.java.getDeclaredField("instance").apply { isAccessible = true }
     private val device = "00000000-0000-0000-0000-000000000001"
     private val owner = "11111111-1111-1111-1111-111111111111"
+    /** Builds a synthetic cloud record for validation and merge assertions. */
     private fun record(key: String, text: String? = null, flag: Boolean? = null) =
         AdvancedCloudRecord(key, "guide_setting", 1000, device, textValue = text, boolValue = flag)
 
+    /** Creates isolated fixtures before each test. */
     @Before fun resetSettingsForCurrentApplication() {
         // Robolectric can reuse app classes across Application instances. A previous singleton
         // otherwise writes to its old Context's preferences while this test reads the new one.
@@ -34,11 +37,13 @@ class GuideCloudPreferencesTest {
         check(context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE).edit().clear().commit())
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun releaseSettingsApplication() {
         // Do not retain this test's Application or restore a stale singleton for the next test.
         settingsInstance.set(null, null)
     }
 
+    /** Checks: portable enums and flags have exact typed shapes under existing optional category. */
     @Test fun `portable enums and flags have exact typed shapes under existing optional category`() {
         val enums = mapOf(
             "guide_layout" to GuideLayout.entries.map { it.name },
@@ -74,6 +79,7 @@ class GuideCloudPreferencesTest {
         assertThat(AdvancedSyncCategory.DEFAULTS).doesNotContain(AdvancedSyncCategory.COMPATIBLE_SETTINGS)
     }
 
+    /** Checks: snapshot exports display choices while retaining local selection position and secrets. */
     @Test fun `snapshot exports display choices while retaining local selection position and secrets`() {
         val context = RuntimeEnvironment.getApplication()
         val storage = context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE)
@@ -121,6 +127,7 @@ class GuideCloudPreferencesTest {
         } finally { data.close() }
     }
 
+    /** Checks: malformed local values use safe defaults and concurrent local choices win. */
     @Test fun `malformed local values use safe defaults and concurrent local choices win`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE).edit().clear()
@@ -138,6 +145,7 @@ class GuideCloudPreferencesTest {
         } finally { data.close() }
     }
 
+    /** Checks: disabled category excludes guide preferences and offline replay remains owner bound. */
     @Test fun `disabled category excludes guide preferences and offline replay remains owner bound`() {
         var disk: String? = null
         var journal = AdvancedCloudJournal({ disk }, { disk = it })

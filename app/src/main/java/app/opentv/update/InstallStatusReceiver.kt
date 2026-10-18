@@ -7,6 +7,7 @@ import android.content.pm.PackageInstaller
 
 /** Explicit, non-exported target for the PackageInstaller session's PendingIntent callback. */
 class InstallStatusReceiver : BroadcastReceiver() {
+    /** Handles PackageInstaller callbacks and forwards any required platform confirmation action. */
     @Suppress("DEPRECATION")
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = UpdatePreferences(context)
@@ -39,6 +40,7 @@ class InstallStatusReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Publishes an installation failure and clears pending installation session state. */
     private fun fail(context: Context, update: UpdateChecker.Update?, message: String) {
         val prefs = UpdatePreferences(context)
         val id = prefs.pendingSessionId()

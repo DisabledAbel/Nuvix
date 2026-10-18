@@ -20,6 +20,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class SqlCipherRetentionBindingTest {
+    /** Checks: native corruption handler retains database and surfaces original failure. */
     @Test
     fun `native corruption handler retains database and surfaces original failure`() {
         val context = RuntimeEnvironment.getApplication()

@@ -36,6 +36,7 @@ import app.opentv.ui.VodViewModel
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
+/** Displays customizable television home shelves, featured content and application shortcuts. */
 @Composable
 fun TelevisionHomeScreen(
     hasSources: Boolean,
@@ -184,6 +185,7 @@ fun TelevisionHomeScreen(
     }
 }
 
+/** Displays an ordered horizontal shelf of available channels. */
 @Composable
 internal fun ChannelShelf(title: String, channels: List<Channel>, programmes: List<Programme>, onPlay: (Channel) -> Unit) {
     HomeShelf(title, channels, { it.id.toString() }) { channel ->
@@ -192,6 +194,7 @@ internal fun ChannelShelf(title: String, channels: List<Channel>, programmes: Li
     }
 }
 
+/** Displays a titled home content shelf using the selected layout preferences. */
 @Composable
 internal fun <T> HomeShelf(title: String, items: List<T>, key: (T) -> String, tile: @Composable (T) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -202,6 +205,7 @@ internal fun <T> HomeShelf(title: String, items: List<T>, key: (T) -> String, ti
     }
 }
 
+/** Displays a focusable home content tile with artwork, metadata and an activation callback. */
 @Composable
 internal fun ContentTile(title: String, art: String?, subtitle: String, progress: Float? = null, logo: Boolean = false, size: HomeCardSize = HomeCardSize.MEDIUM, artworkBackground: Boolean = false, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

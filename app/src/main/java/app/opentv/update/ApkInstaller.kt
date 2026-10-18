@@ -34,13 +34,21 @@ import java.io.IOException
 
 /** Validates against the installed signer, then asks the platform for an interactive update. */
 class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
-    fun interface Progress { fun onProgress(fraction: Float) }
+    /** Receives APK download progress without owning download or installation state. */
+    fun interface Progress {
+        /** Reports the current APK download fraction to the caller. */
+        fun onProgress(fraction: Float)
+    }
 
+    /** Outcome of attempting to submit a verified APK to Android's package installer. */
     sealed interface InstallResult {
+        /** Installation state requiring the user to grant install-source permission. */
         data object PermissionRequired : InstallResult
+        /** Installation state with the PackageInstaller session ID submitted to Android. */
         data class Submitted(val sessionId: Int) : InstallResult
     }
 
+    /** Downloads an eligible release APK and verifies its metadata and integrity. */
     suspend fun download(
         context: Context,
         update: UpdateChecker.Update,
@@ -91,6 +99,7 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         }
     }
 
+    /** Performs one APK transfer with progress, cancellation and bounded output handling. */
     private suspend fun downloadOnce(update: UpdateChecker.Update, partial: File, progress: Progress) {
         http.awaitResponse(Request.Builder().url(update.apkUrl).header("User-Agent", "Nuvix").build()).use { response ->
             if (!response.isSuccessful) throw IOException("Download failed: HTTP ${response.code}")
@@ -126,6 +135,7 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         }
     }
 
+    /** Validates the APK and submits an interactive Android installation session when permission allows. */
     suspend fun install(context: Context, apk: File, update: UpdateChecker.Update): InstallResult = withContext(Dispatchers.IO) {
         validateUpdate(context, update)
         validateApk(context, apk, update) // Repeat every security check at the installation boundary.
@@ -170,6 +180,7 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         }
     }
 
+    /** Opens Android's install-source permission settings for this application. */
     fun openInstallPermission(context: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
             context.startActivity(
@@ -179,6 +190,7 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         }
     }
 
+    /** Validates release metadata before an APK download or installation attempt. */
     private fun validateUpdate(context: Context, update: UpdateChecker.Update) {
         val url = update.apkUrl.toHttpUrlOrNull() ?: throw UpdateValidationException("Invalid APK URL")
         val tag = url.pathSegments.getOrNull(4) ?: throw UpdateValidationException("Invalid APK URL")
@@ -191,6 +203,7 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         )
     }
 
+    /** Checks the downloaded APK's package, version and signer against the allowed update identity. */
     @Suppress("DEPRECATION")
     private fun validateApk(context: Context, apk: File, update: UpdateChecker.Update) {
         UpdateSecurity.verifyFile(apk, update.apkSizeBytes, update.sha256)
@@ -204,9 +217,11 @@ class ApkInstaller(private val http: OkHttpClient = UpdateNetwork.client) {
         )
     }
 
+    /** Reads an APK's numeric version using the supported Android package-info API. */
     @Suppress("DEPRECATION")
     private fun versionCode(info: PackageInfo): Long = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
 
+    /** Computes signing-certificate digests from Android package information. */
     @Suppress("DEPRECATION")
     private fun signerDigests(info: PackageInfo): Set<String> {
         val signatures = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures

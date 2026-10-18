@@ -31,6 +31,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 
+/** Configuration, account, category selections and progress presented by the cloud settings UI. */
 data class CloudUiState(
     val enabled: Boolean = false, val configured: Boolean = false, val email: String? = null,
     val projectUrl: String = "", val publishableKey: String = "", val busy: Boolean = false,
@@ -64,6 +65,7 @@ class CloudSync private constructor(context: Context) {
 
     companion object {
         @Volatile private var instance: CloudSync? = null
+        /** Returns the process-wide cloud synchronization controller. */
         fun get(context: Context): CloudSync = instance ?: synchronized(this) {
             instance ?: CloudSync(context).also { instance = it }
         }
@@ -82,28 +84,34 @@ class CloudSync private constructor(context: Context) {
         }
     }
 
+    /** Refreshes the observable UI state from saved settings. */
     suspend fun reload() = action { updateState() }
+    /** Saves project configuration and refreshes the cloud settings state. */
     suspend fun configure(url: String, key: String) = action {
         settings.configure(url, key)
         if (!settings.enabled) cancelWork()
         updateState("Project saved. Sign in, then enable cloud sync.")
     }
+    /** Requests an email sign-in code through the configured cloud API. */
     suspend fun requestCode(email: String) = action {
         api().sendEmailCode(email.trim())
         updateState("Code requested. Check your email and enter the code on this TV.")
     }
+    /** Exchanges an email code for a saved authenticated cloud session. */
     suspend fun verifyCode(email: String, code: String) = action {
         val session = api().verifyEmailCode(email.trim(), code.trim())
         if (settings.session()?.userId != session.userId) settings.clearSession()
         settings.saveSession(session)
         updateState("Signed in. Cloud sync stays off until you enable it.")
     }
+    /** Persists the synchronization opt-in and updates background work. */
     suspend fun setEnabled(enabled: Boolean) = action {
         if (enabled) require(settings.config() != null && settings.session() != null) { "Configure a project and sign in first." }
         settings.enabled = enabled
         if (enabled) { captureLocal(); observeLocalChanges(); schedule() } else cancelWork()
         updateState(if (enabled) "Cloud sync enabled. Your local data remains available offline." else "Cloud sync paused. Local data is unchanged.")
     }
+    /** Changes a category opt-in and updates its synchronization state. */
     suspend fun setCategory(category: AdvancedSyncCategory, enabled: Boolean) = action {
         require(settings.session() != null) { "Sign in before choosing shared data." }
         settings.categories = if (enabled) settings.categories + category else settings.categories - category
@@ -111,6 +119,7 @@ class CloudSync private constructor(context: Context) {
         updateState(if (enabled) "Category enabled. Only the described data will be shared."
             else "Category paused. Local and existing cloud data are retained.")
     }
+    /** Signs out and clears local session state and scheduled cloud work. */
     suspend fun signOut() = action {
         val session = settings.session()
         val config = settings.config()
@@ -120,6 +129,7 @@ class CloudSync private constructor(context: Context) {
         if (session != null && config != null) runCatching { SupabaseCloudApi(config).signOut(session.accessToken) }
         updateState("Signed out on this TV. Cloud records remain in your project.")
     }
+    /** Clears cloud setup and refreshes the observable settings state. */
     suspend fun reset() = action {
         settings.reset(); cancelWork(); updateState("Cloud setup removed from this TV. Local data is unchanged.")
     }
@@ -168,6 +178,7 @@ class CloudSync private constructor(context: Context) {
         }
     }
 
+    /** Exchanges legacy favorites and progress records for the current session owner. */
     private suspend fun syncLegacy(api: SupabaseCloudApi, session: CloudSession): Int {
         val local = CloudLocalData(graph)
         val favouriteTimes = settings.vault.read("favourites")?.let {
@@ -200,6 +211,7 @@ class CloudSync private constructor(context: Context) {
         return merged
     }
 
+    /** Collects portable channel, group and preference records from local adapters. */
     private suspend fun advancedSnapshot(): List<AdvancedCloudRecord> {
         val now = System.currentTimeMillis()
         val enabled = settings.categories
@@ -212,6 +224,7 @@ class CloudSync private constructor(context: Context) {
         }
     }
 
+    /** Journals changes in the currently enabled advanced categories for one owner. */
     private suspend fun captureAdvanced(owner: String): Int {
         journal.bindOwner(owner)
         return journal.capture(owner, advancedSnapshot(), settings.categories, settings.deviceId, System.currentTimeMillis())
@@ -236,6 +249,7 @@ class CloudSync private constructor(context: Context) {
         return changed
     }
 
+    /** Applies winning advanced records while checking the expected local snapshot. */
     private suspend fun applyAdvancedLocally(winners: List<AdvancedCloudRecord>, expected: List<AdvancedCloudRecord>): Int {
         var changed = groupData.apply(winners, expected)
         changed += channelData.apply(winners, expected)
@@ -251,13 +265,17 @@ class CloudSync private constructor(context: Context) {
         return changed
     }
 
+    /** Decodes a saved legacy record list, treating unreadable storage as empty. */
     private fun readRecords(name: String): List<CloudRecord> = settings.vault.read(name)?.let {
         settings.json.decodeFromString(recordsSerializer, it)
     }.orEmpty()
+    /** Encodes and saves a legacy record list in the cloud vault. */
     private fun saveRecords(name: String, records: List<CloudRecord>) =
         settings.vault.write(name, settings.json.encodeToString(recordsSerializer, records))
+    /** Creates the cloud API client from the saved project configuration. */
     private fun api() = SupabaseCloudApi(settings.config() ?: error("Save your Supabase project URL and publishable key first."))
 
+    /** Runs a cloud settings action while publishing busy state and a safe error message. */
     private suspend fun action(block: suspend () -> Unit) = mutex.withLock {
         withContext(Dispatchers.IO) {
             mutableState.value = mutableState.value.copy(busy = true)
@@ -267,6 +285,7 @@ class CloudSync private constructor(context: Context) {
             } finally { mutableState.value = mutableState.value.copy(busy = false) }
         }
     }
+    /** Publishes the latest saved cloud choices and an optional status message. */
     private fun updateState(message: String? = null) {
         val config = settings.config()
         val session = settings.session()
@@ -277,7 +296,9 @@ class CloudSync private constructor(context: Context) {
                 (if (settings.vault.read(AdvancedCloudJournal.VAULT_NAME) != null) journal.pendingCount(owner) else 0)
             }.orZero() + readRecords("outbox").size)
     }
+    /** Treats an unavailable change count as zero. */
     private fun Int?.orZero(): Int = this ?: 0
+    /** Maps cloud failures to messages suitable for the settings UI. */
     private fun errorMessage(error: Exception): String = when (error) {
         is CloudHttpException -> error.message ?: "Cloud setup needs attention."
         is kotlinx.serialization.SerializationException -> "Cloud data is invalid or uses an unsupported format. Check the supplied migration."
@@ -285,6 +306,7 @@ class CloudSync private constructor(context: Context) {
         is java.security.GeneralSecurityException -> "Encrypted cloud storage is unavailable. Remove cloud setup on this TV, then configure it again."
         else -> "Cloud sync could not connect. Local changes are retained and will retry."
     }
+    /** Subscribes to local changes that can trigger opted-in cloud synchronization. */
     private fun observeLocalChanges() {
         if (observing) return
         observing = true
@@ -332,27 +354,34 @@ class CloudSync private constructor(context: Context) {
             }
         }
     }
+    /** Schedules synchronization after a local change. */
     private fun localChanged() {
         if (settings.enabled) captureSignals.trySend(Unit)
     }
+    /** Updates scheduled cloud work according to the saved opt-in and session state. */
     private fun schedule() {
         val work = PeriodicWorkRequestBuilder<CloudSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints()).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("nuvix_cloud_periodic", ExistingPeriodicWorkPolicy.KEEP, work)
         enqueue()
     }
+    /** Queues network-constrained background cloud synchronization. */
     private fun enqueue() {
         val work = OneTimeWorkRequestBuilder<CloudSyncWorker>().setConstraints(networkConstraints())
             .setInitialDelay(5, TimeUnit.SECONDS).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
         WorkManager.getInstance(context).enqueueUniqueWork("nuvix_cloud_pending", ExistingWorkPolicy.KEEP, work)
     }
+    /** Cancels background work associated with cloud synchronization. */
     private fun cancelWork() {
         WorkManager.getInstance(context).cancelUniqueWork("nuvix_cloud_periodic")
         WorkManager.getInstance(context).cancelUniqueWork("nuvix_cloud_pending")
     }
+    /** Requires network connectivity for background synchronization. */
     private fun networkConstraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 }
 
+/** Runs opted-in cloud synchronization through WorkManager. */
 class CloudSyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
+    /** Executes a background sync and reports success or a retryable failure. */
     override suspend fun doWork(): Result = if (CloudSync.get(applicationContext).syncNow()) Result.success() else Result.retry()
 }

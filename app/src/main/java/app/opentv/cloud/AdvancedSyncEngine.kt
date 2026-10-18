@@ -10,6 +10,7 @@ internal class AdvancedSyncEngine(
     private val push: suspend (List<AdvancedCloudRecord>) -> Unit,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    /** Captures local changes and exchanges enabled categories for one owner, returning the applied count. */
     suspend fun sync(owner: String, device: String, categories: Set<AdvancedSyncCategory>, enabled: Boolean = true): Int {
         val selected = categories - AdvancedSyncCategory.FAVOURITES_PROGRESS
         if (!enabled || selected.isEmpty()) return 0
@@ -30,10 +31,12 @@ internal class AdvancedSyncEngine(
         return changed
     }
 
+    /** Adds the current enabled local categories to the owner's mutation journal. */
     private suspend fun capture(owner: String, device: String, categories: Set<AdvancedSyncCategory>) {
         journal.capture(owner, snapshot(), categories, device, now())
     }
 
+    /** Merges remote and pending records, then applies winners without overwriting newer local edits. */
     private suspend fun reconcile(
         owner: String, device: String, categories: Set<AdvancedSyncCategory>, remote: List<AdvancedCloudRecord>,
     ): Int {

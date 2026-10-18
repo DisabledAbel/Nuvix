@@ -18,11 +18,13 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for sports repository. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class SportsRepositoryTest {
     private lateinit var db: OpenTvDatabase
     private lateinit var repo: SportsRepository
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() = runBlocking {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).allowMainThreadQueries().build()
         repo = SportsRepository(db)
@@ -32,23 +34,30 @@ class SportsRepositoryTest {
             db.categories().upsertAll(listOf(Category("sports", id, "Sports", StreamKind.LIVE)))
         }
     }
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { db.close() }
+    /** Populates the isolated database with the sports schedule fixtures needed by the test. */
     private suspend fun seed(shift: Long = 0) {
         db.channels().upsertAll(listOf(sportsChannel(1, 1, "one"), sportsChannel(2, 2, "two"), sportsChannel(3, 3, "three")))
         db.programmes().upsertAll(listOf(sportsProgramme(1, 1, "one"), sportsProgramme(2, 2, "two", start = SPORTS_NOW + 60_000 + shift), sportsProgramme(3, 3, "three")))
         repo.reconcile(SPORTS_NOW)
     }
+    /** Queries sports event cards using the test's bounded search and visibility filters. */
     private suspend fun cards(pattern: String = "%", limit: Int = 200, excluded: String = "||") =
         db.sports().observeCards(SPORTS_NOW - SportsRepository.DAY, SPORTS_NOW + SportsRepository.HORIZON, pattern, limit, excluded).first()
+    /** Returns the inferred event from the seeded sports schedule fixture. */
     private suspend fun game() = cards().first().event
+    /** Returns eligible provider stream choices for the synthetic sports event. */
     private suspend fun streams(id: String) = repo.streams(id).first()
 
+    /** Checks: one Game Retains All Provider Choices Without Group Key Deduplication. */
     @Test fun oneGameRetainsAllProviderChoicesWithoutGroupKeyDeduplication() = runBlocking {
         seed()
         val cards = cards()
         assertEquals(1, cards.size); assertEquals(3, cards.single().streamCount)
         assertEquals(listOf(1L, 2L, 3L), streams(cards.single().event.id).map { it.channel.sourceId })
     }
+    /** Checks: duplicate Guide Entries Do Not Hide Genuinely Different Providers. */
     @Test fun duplicateGuideEntriesDoNotHideGenuinelyDifferentProviders() = runBlocking {
         seed()
         db.programmes().upsertAll(listOf(sportsProgramme(4, 2, "one")))
@@ -58,6 +67,7 @@ class SportsRepositoryTest {
         assertEquals(3, orderSportsStreams(all, null, SportsStreamSort.CONFIDENCE).size)
         assertEquals(3, cards().single().streamCount)
     }
+    /** Checks: probable Match Is A Suggestion Until Confirmed And Correction Survives Reimport. */
     @Test fun probableMatchIsASuggestionUntilConfirmedAndCorrectionSurvivesReimport() = runBlocking {
         seed(10 * 60_000)
         val event = game()
@@ -71,6 +81,7 @@ class SportsRepositoryTest {
         repo.reconcile(SPORTS_NOW)
         assertTrue(streams(event.id).first { it.channel.id == 2L }.userConfirmed)
     }
+    /** Checks: rejection And Undo Preserve Original Programme And Provider Catalog. */
     @Test fun rejectionAndUndoPreserveOriginalProgrammeAndProviderCatalog() = runBlocking {
         seed()
         val e = game(); val s = streams(e.id).first()
@@ -82,6 +93,7 @@ class SportsRepositoryTest {
         db.sports().undoDecision(s.programme.key, s.channel.sourceId, s.channel.streamId)
         assertEquals(3, cards().single().streamCount)
     }
+    /** Checks: duplicate Feed Evidence Cannot Resurrect A Rejected Provider Choice. */
     @Test fun duplicateFeedEvidenceCannotResurrectARejectedProviderChoice() = runBlocking {
         seed()
         db.programmes().upsertAll(listOf(sportsProgramme(99, 2, "one")))
@@ -93,6 +105,7 @@ class SportsRepositoryTest {
         db.sports().undoEventDecision(e.id, stream.channel.sourceId, stream.channel.streamId)
         assertEquals(3, cards().single().streamCount)
     }
+    /** Checks: click Time Validation Rejects Disabled Removed And Unconfirmed Entries Without Connecting. */
     @Test fun clickTimeValidationRejectsDisabledRemovedAndUnconfirmedEntriesWithoutConnecting() = runBlocking {
         seed(10 * 60_000)
         val e = game(); val all = streams(e.id)
@@ -104,6 +117,7 @@ class SportsRepositoryTest {
         repo.decide(e.id, other.programme.key, other.channel.id, false)
         assertNull(repo.playable(e.id, other))
     }
+    /** Checks: reenabled Feed Rebuilds Its Evidence After Checkpoint Cleanup. */
     @Test fun reenabledFeedRebuildsItsEvidenceAfterCheckpointCleanup() = runBlocking {
         seed()
         db.epgFeeds().setEnabled(1, false); repo.reconcile(SPORTS_NOW)
@@ -111,6 +125,7 @@ class SportsRepositoryTest {
         db.epgFeeds().setEnabled(1, true); repo.reconcile(SPORTS_NOW)
         assertEquals(3, streams(game().id).size)
     }
+    /** Checks: wrong Games Do Not Group And Missing Metadata Does Not Invent A Team. */
     @Test fun wrongGamesDoNotGroupAndMissingMetadataDoesNotInventATeam() = runBlocking {
         seed()
         db.programmes().upsertAll(listOf(sportsProgramme(4, 1, "one", start = SPORTS_NOW + 4 * 60 * 60_000,
@@ -120,6 +135,7 @@ class SportsRepositoryTest {
         assertEquals(3, cards().size)
         assertNull(cards().last().event.homeName)
     }
+    /** Checks: manual Guide Id With Actual Programs Takes Priority Over Fallback Matches. */
     @Test fun manualGuideIdWithActualProgramsTakesPriorityOverFallbackMatches() = runBlocking {
         seed()
         db.channels().upsertAll(listOf(sportsChannel(1, 1, "one").copy(epgOverrideId = "manual")))
@@ -128,6 +144,7 @@ class SportsRepositoryTest {
         assertEquals(listOf(2L, 3L), streams(game().id).map { it.channel.id })
         assertEquals(2, cards().single().streamCount)
     }
+    /** Checks: guide Reminders Across Providers Resolve One Sports Identity. */
     @Test fun guideRemindersAcrossProvidersResolveOneSportsIdentity() = runBlocking {
         seed()
         val e = game(); val all = streams(e.id)
@@ -140,11 +157,13 @@ class SportsRepositoryTest {
         assertEquals(first, reminders.forProgramme(all[2].channel.id, e.startUtcMillis)!!.id)
         assertEquals(first, repo.remind(e.id, all, SPORTS_NOW).id)
     }
+    /** Checks: catalog Presence Without Programme Evidence Does Not Create A Match. */
     @Test fun catalogPresenceWithoutProgrammeEvidenceDoesNotCreateAMatch() = runBlocking {
         db.channels().upsertAll(listOf(sportsChannel()))
         repo.reconcile(SPORTS_NOW)
         assertTrue(cards().isEmpty())
     }
+    /** Checks: disabled Hidden And Locked Provider Choices Are Excluded. */
     @Test fun disabledHiddenAndLockedProviderChoicesAreExcluded() = runBlocking {
         seed()
         db.sources().update(db.sources().byId(2)!!.copy(enabled = false))
@@ -153,6 +172,7 @@ class SportsRepositoryTest {
         assertEquals(1, cards().single().streamCount)
         assertTrue(cards(excluded = "|1:73706F727473|").isEmpty())
     }
+    /** Checks: disabling Feed Immediately Removes Its Streams And Keeps Other Providers. */
     @Test fun disablingFeedImmediatelyRemovesItsStreamsAndKeepsOtherProviders() = runBlocking {
         seed()
         db.epgFeeds().setEnabled(1, false)
@@ -160,6 +180,7 @@ class SportsRepositoryTest {
         repo.reconcile(SPORTS_NOW)
         assertEquals(2, cards().single().streamCount)
     }
+    /** Checks: same Content After Refresh Does Not Apply Decision To A Different Game In The Slot. */
     @Test fun sameContentAfterRefreshDoesNotApplyDecisionToADifferentGameInTheSlot() = runBlocking {
         seed()
         val e = game(); val s = streams(e.id).first()
@@ -171,6 +192,7 @@ class SportsRepositoryTest {
         assertEquals(1, different.streamCount)
         assertFalse(streams(different.event.id).single().rejected)
     }
+    /** Checks: explicit Manual Assignment Moves One Provider Entry And Its Card Count. */
     @Test fun explicitManualAssignmentMovesOneProviderEntryAndItsCardCount() = runBlocking {
         seed()
         val original = game()
@@ -183,6 +205,7 @@ class SportsRepositoryTest {
         assertTrue(streams(manual.id).single().userConfirmed)
         assertEquals(2, streams(original.id).size)
     }
+    /** Checks: favorites Persist Without Account And Reorder Within Their Kind. */
     @Test fun favoritesPersistWithoutAccountAndReorderWithinTheirKind() = runBlocking {
         val a = SportsNames.teamId("nhl", "NYR"); val b = SportsNames.teamId("nhl", "Bruins")
         repo.toggleFavorite("team", a, "nhl", "NYR"); repo.toggleFavorite("team", b, "nhl", "Bruins")
@@ -194,11 +217,13 @@ class SportsRepositoryTest {
         repo.toggleFavorite("team", a, "nhl", "NYR")
         assertEquals(listOf(b), db.sports().favorites("team").map { it.id })
     }
+    /** Checks: invalid Favorite Ids Do Not Persist. */
     @Test fun invalidFavoriteIdsDoNotPersist() = runBlocking {
         try { repo.toggleFavorite("team", "fake", "nhl", "NYR"); fail() } catch (_: IllegalArgumentException) { }
         try { repo.toggleFavorite("league", "unknown", "unknown", "Unknown"); fail() } catch (_: IllegalArgumentException) { }
         assertTrue(repo.favorites.first().isEmpty())
     }
+    /** Checks: repeated And Concurrent Reminder Requests Produce One Game Reminder. */
     @Test fun repeatedAndConcurrentReminderRequestsProduceOneGameReminder() = runBlocking {
         seed()
         val e = game(); val available = streams(e.id)
@@ -209,6 +234,7 @@ class SportsRepositoryTest {
         assertEquals(1, db.reminders().observeAll().first().size)
         assertFalse(db.reminders().forSportsEvent(e.id)!!.autoTune)
     }
+    /** Checks: guide Reminder For Any Matched Provider Is Reused. */
     @Test fun guideReminderForAnyMatchedProviderIsReused() = runBlocking {
         seed()
         val e = game(); val s = streams(e.id)[1]
@@ -217,6 +243,7 @@ class SportsRepositoryTest {
         assertEquals(existing, repo.remind(e.id, streams(e.id), SPORTS_NOW).id)
         assertEquals(1, db.reminders().observeAll().first().size)
     }
+    /** Checks: guide Reconciliation Preserves Verified Timestamp And Accepts Newer Provider Update. */
     @Test fun guideReconciliationPreservesVerifiedTimestampAndAcceptsNewerProviderUpdate() = runBlocking {
         val verified = verifiedEvent().copy(updatedAtMillis = SPORTS_NOW - 60_000)
         db.sports().upsertEvents(listOf(verified))
@@ -227,6 +254,7 @@ class SportsRepositoryTest {
         repo.saveProviderEvents(listOf(update)) { _, _ -> }
         assertEquals(update, db.sports().event(verified.id))
     }
+    /** Checks: sole Verified Candidate Wins Over Older Inferred Event Without Reducing Confidence. */
     @Test fun soleVerifiedCandidateWinsOverOlderInferredEventWithoutReducingConfidence() = runBlocking {
         seed()
         val inferred = game()
@@ -239,6 +267,7 @@ class SportsRepositoryTest {
         assertEquals(3, matched.size)
         assertTrue(matched.all { it.confidence == MatchConfidence.CONFIRMED })
     }
+    /** Checks: multiple Verified Candidates Remain Possible Instead Of Choosing One. */
     @Test fun multipleVerifiedCandidatesRemainPossibleInsteadOfChoosingOne() = runBlocking {
         db.sports().upsertEvents(listOf(verifiedEvent(sourceId = "first"), verifiedEvent(sourceId = "second")))
         seed()
@@ -249,6 +278,7 @@ class SportsRepositoryTest {
         assertTrue(streams(verifiedEvent(sourceId = "first").id).isEmpty())
         assertTrue(streams(verifiedEvent(sourceId = "second").id).isEmpty())
     }
+    /** Checks: provider Metadata Updates Preserve Fired State Until The Start Moves. */
     @Test fun providerMetadataUpdatesPreserveFiredStateUntilTheStartMoves() = runBlocking {
         val event = verifiedEvent()
         db.sports().upsertEvents(listOf(event))
@@ -271,6 +301,7 @@ class SportsRepositoryTest {
             assertTrue(db.reminders().byId(id)!!.fired)
         }
     }
+    /** Checks: rescheduled Verified Event Rearms The Same Reminder And Cancellation Cancels It. */
     @Test fun rescheduledVerifiedEventRearmsTheSameReminderAndCancellationCancelsIt() = runBlocking {
         seed()
         val event = verifiedEvent()
@@ -287,6 +318,7 @@ class SportsRepositoryTest {
         assertEquals(reminder.id to true, changed)
         assertTrue(db.reminders().byId(reminder.id)!!.fired)
     }
+    /** Checks: offline Restart And Cache Clearing Retain User Intent And No Playback Connections. */
     @Test fun offlineRestartAndCacheClearingRetainUserIntentAndNoPlaybackConnections() = runBlocking {
         seed()
         val e = game(); val s = streams(e.id).first()
@@ -300,6 +332,7 @@ class SportsRepositoryTest {
         assertTrue(streams(e.id).first { it.channel.id == s.channel.id }.userConfirmed)
         assertEquals(s.channel.streamId, db.sports().observePreferred(e.id).first()!!.streamId)
     }
+    /** Checks: database Favorite And Browse Filters Apply Before Result Limit. */
     @Test fun databaseFavoriteAndBrowseFiltersApplyBeforeResultLimit() = runBlocking {
         val events = (0..250).map { index ->
             val league = if (index == 250) "nba" else "nhl"
@@ -318,6 +351,7 @@ class SportsRepositoryTest {
             team = events.last().homeTeamId).first()
         assertEquals(events.last().id, team.single().event.id)
     }
+    /** Checks: stream Pagination Includes Every Provider Entry After Deduplicating Evidence. */
     @Test fun streamPaginationIncludesEveryProviderEntryAfterDeduplicatingEvidence() = runBlocking {
         seed()
         db.channels().upsertAll((1000L..1200L).map { sportsChannel(it, 1, "one") })
@@ -328,6 +362,7 @@ class SportsRepositoryTest {
         assertEquals(200, first.size); assertEquals(4, second.size)
         assertEquals(204, (first + second).map { it.channel.id }.distinct().size)
     }
+    /** Checks: rescheduling Drops Old Broadcast Evidence And Rejects Stale Playback Choices. */
     @Test fun reschedulingDropsOldBroadcastEvidenceAndRejectsStalePlaybackChoices() = runBlocking {
         seed()
         val original = game(); val stream = streams(original.id).first()
@@ -342,12 +377,14 @@ class SportsRepositoryTest {
         assertNull(repo.playable(verified.id, previous))
         assertEquals(0, cards().first { it.event.id == verified.id }.streamCount)
     }
+    /** Checks: program Projection Bounds Memory Without Rewriting Raw Epg. */
     @Test fun programProjectionBoundsMemoryWithoutRewritingRawEpg() = runBlocking {
         val p = sportsProgramme().copy(description = "x".repeat(10000))
         db.programmes().upsertAll(listOf(p))
         assertEquals(2000, db.sports().programmeBatch(1, 0, SPORTS_NOW, SPORTS_NOW + SportsRepository.HORIZON).single().description!!.length)
         assertEquals(10000, db.programmes().upcoming(p.epgChannelId, SPORTS_NOW, 10).single().description!!.length)
     }
+    /** Checks: older Provider Payload Cannot Revert A Cached Reschedule. */
     @Test fun olderProviderPayloadCannotRevertACachedReschedule() = runBlocking {
         val initial = verifiedEvent()
         val newer = initial.copy(startUtcMillis = initial.startUtcMillis + SportsRepository.DAY,
@@ -356,6 +393,7 @@ class SportsRepositoryTest {
         repo.saveProviderEvents(listOf(initial)) { _, _ -> fail("Old update changed reminder") }
         assertEquals(newer, db.sports().event(initial.id))
     }
+    /** Checks: search By Channel And Team Is Bounded And Read Only. */
     @Test fun searchByChannelAndTeamIsBoundedAndReadOnly() = runBlocking {
         seed()
         assertEquals(1, cards("%Rangers%").size)
@@ -363,6 +401,7 @@ class SportsRepositoryTest {
         assertTrue(cards("%Missing Team%").isEmpty())
         assertEquals(1, cards(limit = 1).size)
     }
+    /** Checks: unchanged Feeds Keep Checkpoint And Stale Source Update Time. */
     @Test fun unchangedFeedsKeepCheckpointAndStaleSourceUpdateTime() = runBlocking {
         seed()
         val checkpoint = db.sports().feedState(1)

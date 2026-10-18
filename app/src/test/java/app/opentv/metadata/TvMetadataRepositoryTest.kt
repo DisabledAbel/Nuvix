@@ -15,18 +15,24 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+/** Regression tests for tv metadata repository. */
 class TvMetadataRepositoryTest {
     @get:Rule val temp = TemporaryFolder()
+    /** Builds the synthetic provider fixture used by the test. */
     private fun provider() = Series(42, 5, "provider-series", "Synthetic Show (2024)", "category",
         "provider poster", 6.0, 2024, "provider plot", true, 123L,
         "provider background", "provider cast", "provider genre", "123")
+    /** Builds TVmaze metadata used as the primary series display source. */
     private fun primary() = TvmazeDetails(TvShow(7,"Synthetic Show","tt1234567",2024,
         "TVmaze plot","TVmaze genre","TVmaze poster",9.0), "TVmaze background", emptyList(), emptyList(),
         listOf(TvCast(TvPerson(10,"TVmaze actor",null,null,null,null), "Character", null)), emptyList())
+    /** Builds IMDb metadata used as the secondary series display source. */
     private fun secondary() = ImdbTvMeta("tt1234567", "IMDb plot", "IMDb poster", "IMDb genre", "IMDb cast", 8.0, 2024)
+    /** Builds TMDB metadata used when higher-priority series fields are absent. */
     private fun fallback() = TmdbMeta(tmdbId="999", posterUrl="TMDb poster", backdropUrl="TMDb background",
         overview="TMDb plot", cast="TMDb cast", genre="TMDb genre", rating=7.0)
 
+    /** Checks: T Vmaze wins display fields while provider identity favorite rating and cloud key survive. */
     @Test fun `TVmaze wins display fields while provider identity favorite rating and cloud key survive`() {
         val provider = provider()
         val result = mergeTvMetadata(provider, primary(), secondary(), fallback())
@@ -42,6 +48,7 @@ class TvMetadataRepositoryTest {
         // Original provider snapshot is immutable and not overwritten by enrichment.
         assertThat(provider.plot).isEqualTo("provider plot")
     }
+    /** Checks: IM Db is secondary and provider fills gaps before optional TM Db. */
     @Test fun `IMDb is secondary and provider fills gaps before optional TMDb`() {
         val provider = provider()
         val result = mergeTvMetadata(provider, null, secondary(), fallback())
@@ -50,14 +57,18 @@ class TvMetadataRepositoryTest {
         assertThat(mergeTvMetadata(provider, null, null, fallback())).isEqualTo(provider)
         assertThat(mergeTvMetadata(provider.copy(plot=" ",backdropUrl=null),null,null,fallback()).plot).isEqualTo("TMDb plot")
     }
+    /** Checks: sparse T Vmaze data retains provider metadata and never relabels rating. */
     @Test fun `sparse TVmaze data retains provider metadata and never relabels rating`() {
         val sparse = primary().copy(show=primary().show.copy(summary=null,genres=null,poster=null),
             background=null,cast=emptyList())
         assertThat(mergeTvMetadata(provider(),sparse,null,null)).isEqualTo(provider())
     }
+    /** Builds a synthetic provider episode with the requested sequence information. */
     private fun episode(season: Int=1, number: Int=1) = Episode(55,5,"provider-series","provider-episode",
         season,number,"Provider title","Provider plot",1200,"Provider still","https://provider.invalid/stream")
+    /** Builds synthetic TVmaze episode metadata for provider-episode matching. */
     private fun meta(id: Int=100, number: Int?=1) = TvEpisode(id,1,number,"TVmaze title","TVmaze plot","2024-01-01","TVmaze still",30)
+    /** Checks: metadata changes presentation but preserves exact playback object. */
     @Test fun `metadata changes presentation but preserves exact playback object`() {
         val provider = episode()
         val rows = tvEpisodeListings(listOf(provider),listOf(meta(),meta(101,2),meta(102,null)))
@@ -68,17 +79,20 @@ class TvMetadataRepositoryTest {
         assertThat(rows.first().provider!!.streamUrl).isEqualTo("https://provider.invalid/stream")
         assertThat(rows.drop(1).all { it.provider == null }).isTrue()
     }
+    /** Checks: ambiguous numbered metadata and specials never attach to a stream. */
     @Test fun `ambiguous numbered metadata and specials never attach to a stream`() {
         val rows = tvEpisodeListings(listOf(episode()),listOf(meta(),meta(101),meta(102,null)))
         assertThat(rows).hasSize(4)
         assertThat(rows.first().metadata).isNull()
         assertThat(rows.first().title).isEqualTo("Provider title")
     }
+    /** Checks: season is part of the episode match and unknown provider episodes remain playable. */
     @Test fun `season is part of the episode match and unknown provider episodes remain playable`() {
         val rows = tvEpisodeListings(listOf(episode(2,1)),listOf(meta()))
         assertThat(rows).hasSize(2)
         assertThat(rows.single { it.provider != null }.metadata).isNull()
     }
+    /** Checks: pipeline strips trailing year and only calls TM Db for remaining gaps. */
     @Test fun `pipeline strips trailing year and only calls TMDb for remaining gaps`() = runBlocking {
         MockWebServer().use { tv -> MockWebServer().use { imdb ->
             tv.start(); imdb.start()
@@ -96,6 +110,7 @@ class TvMetadataRepositoryTest {
             assertThat(tv.takeRequest().path).isEqualTo("/search/shows?q=Synthetic%20Show")
         } }
     }
+    /** Checks: outages preserve provider rows and invoke existing fallback. */
     @Test fun `outages preserve provider rows and invoke existing fallback`() = runBlocking {
         MockWebServer().use { tv -> MockWebServer().use { imdb ->
             tv.start(); imdb.start()
@@ -118,6 +133,7 @@ class TvMetadataRepositoryTest {
             assertThat(cancelled).isTrue()
         } }
     }
+    /** Checks: secondary IM Db match resolves a T Vmaze title miss by exact ID. */
     @Test fun `secondary IMDb match resolves a TVmaze title miss by exact ID`() = runBlocking {
         MockWebServer().use { tv -> MockWebServer().use { imdb ->
             tv.start(); imdb.start()

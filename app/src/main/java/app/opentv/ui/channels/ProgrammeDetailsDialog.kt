@@ -251,6 +251,7 @@ internal suspend fun setReminder(
     return true
 }
 
+/** Displays an eligible recording action and invokes it only on explicit activation. */
 @Composable
 internal fun RecordActionRow(label: String, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

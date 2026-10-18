@@ -32,6 +32,7 @@ class SmbDataSource(private val settings: AppSettings) : BaseDataSource(true) {
     private var bytesRemaining: Long = 0
     private var opened: Boolean = false
 
+    /** Opens the requested SMB resource using the saved local NAS configuration. */
     override fun open(dataSpec: DataSpec): Long {
         transferInitializing(dataSpec)
         uri = dataSpec.uri
@@ -46,6 +47,7 @@ class SmbDataSource(private val settings: AppSettings) : BaseDataSource(true) {
         return bytesRemaining
     }
 
+    /** Reads bytes from the active SMB file handle. */
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
@@ -58,8 +60,10 @@ class SmbDataSource(private val settings: AppSettings) : BaseDataSource(true) {
         return read
     }
 
+    /** Returns the URI of the currently opened SMB resource. */
     override fun getUri(): Uri? = uri
 
+    /** Closes the SMB file and associated network handles. */
     override fun close() {
         runCatching { handle?.close() }
         handle = null
@@ -70,7 +74,9 @@ class SmbDataSource(private val settings: AppSettings) : BaseDataSource(true) {
         uri = null
     }
 
+    /** Creates independent SMB readers using the local NAS settings. */
     class Factory(private val settings: AppSettings) : DataSource.Factory {
+        /** Creates a fresh SMB data source for a media request. */
         override fun createDataSource(): DataSource = SmbDataSource(settings)
     }
 }
@@ -86,6 +92,7 @@ class RoutingDataSourceFactory(
     private val default: DataSource.Factory,
     private val bySchemes: Map<String, DataSource.Factory>,
 ) : DataSource.Factory {
+    /** Creates a reader that routes SMB requests separately from standard media schemes. */
     override fun createDataSource(): DataSource =
         RoutingDataSource(
             default.createDataSource(),
@@ -93,6 +100,7 @@ class RoutingDataSourceFactory(
         )
 }
 
+/** Delegates each media request to the data source supporting its URI scheme. */
 @OptIn(UnstableApi::class)
 private class RoutingDataSource(
     private val default: DataSource,
@@ -100,25 +108,31 @@ private class RoutingDataSource(
 ) : DataSource {
     private var active: DataSource? = null
 
+    /** Registers a transfer listener with the delegated data sources. */
     override fun addTransferListener(transferListener: TransferListener) {
         default.addTransferListener(transferListener)
         byScheme.values.forEach { it.addTransferListener(transferListener) }
     }
 
+    /** Chooses and opens the data source for the requested URI. */
     override fun open(dataSpec: DataSpec): Long {
         val source = byScheme[dataSpec.uri.scheme?.lowercase().orEmpty()] ?: default
         active = source
         return source.open(dataSpec)
     }
 
+    /** Reads bytes from the data source selected by the active request. */
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
         active?.read(buffer, offset, length) ?: C.RESULT_END_OF_INPUT
 
+    /** Returns the URI reported by the active delegated data source. */
     override fun getUri(): Uri? = active?.uri
 
+    /** Returns response headers from the active delegated data source. */
     override fun getResponseHeaders(): Map<String, List<String>> =
         active?.responseHeaders ?: emptyMap()
 
+    /** Closes the active delegated data source and clears routing state. */
     override fun close() {
         active?.close()
         active = null

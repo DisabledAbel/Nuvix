@@ -17,10 +17,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for runtime buffer. */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class RuntimeBufferTest {
+    /** Checks: changing load control policy keeps allocator and applies without reconstruction. */
     @Test fun `changing load control policy keeps allocator and applies without reconstruction`() {
         val control = ConfigurableLoadControl(BufferPolicy.LARGE, 32 * 1024 * 1024)
         val allocator = control.allocator

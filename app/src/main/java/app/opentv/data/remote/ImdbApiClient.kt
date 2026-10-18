@@ -5,12 +5,14 @@ import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+/** Supplemental IMDb series identity, artwork, plot, cast and rating for presentation. */
 data class ImdbTvMeta(val id: String, val plot: String?, val poster: String?, val genres: String?,
     val cast: String?, val rating: Double?, val year: Int?)
 
 /** Best-effort public IMDbAPI.dev REST adapter; never requires credentials or a paid IMDb service. */
 class ImdbApiClient(private val http: MetadataHttp,
     private val base: HttpUrl = "https://api.imdbapi.dev/".toHttpUrl()) {
+    /** Looks up supplemental series metadata using an IMDb ID or a constrained title and year search. */
     suspend fun series(title: String, year: Int?, imdbId: String?): ImdbTvMeta? {
         val id = imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) } ?: run {
             val results = http.get(base.newBuilder().addPathSegments("search/titles")

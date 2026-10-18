@@ -62,7 +62,9 @@ data class GenreGroup<T>(val genre: String, val items: List<T>)
  * detail page (movie vs series) without a second lookup.
  */
 sealed interface PersonTitle {
+    /** Movie result in a person's combined film and series listing. */
     data class MovieItem(val movie: Movie) : PersonTitle
+    /** Series result in a person's combined film and series listing. */
     data class SeriesItem(val series: Series) : PersonTitle
 }
 
@@ -141,19 +143,24 @@ class CatalogRepository(
     /** TMDB back-fill for VOD detail pages, gated on a user-supplied key. See [TmdbClient]. */
     private val tmdb = TmdbClient(http, settings)
 
+    /** Catalog refresh outcome retaining the affected source and any failure information. */
     sealed interface SyncResult {
+        /** Counts of channels, movies and series loaded by a successful catalog refresh. */
         data class Success(
             val channelCount: Int,
             val movieCount: Int,
             val seriesCount: Int,
         ) : SyncResult
 
+        /** Catalog refresh failure with a display message and optional underlying cause. */
         data class Failed(val reason: String, val cause: Throwable?) : SyncResult
     }
 
+    /** Observes visible channels matching the optional source and category selection. */
     fun observeChannels(sourceId: Long? = null, categoryId: String? = null): Flow<List<Channel>> =
         channelDao.observe(sourceId, categoryId)
 
+    /** Observes the visible subset of channels identified by local row IDs. */
     fun observeChannelsIn(categoryIds: List<String>): Flow<List<Channel>> =
         channelDao.observeInCategories(categoryIds)
 
@@ -165,32 +172,43 @@ class CatalogRepository(
     fun observeChannelsInIncludingHidden(sourceId: Long?, categoryIds: List<String>): Flow<List<Channel>> =
         channelDao.observeInCategoriesIncludingHidden(sourceId, categoryIds)
 
+    /** Observes visible favorite channels in their configured order. */
     fun observeFavouriteChannels(): Flow<List<Channel>> = channelDao.observeFavourites()
 
     /** Reactive number of visible channels on disk — the UI uses this to tell "guide still
      * building" (channels exist) apart from "nothing loaded" (a failed or empty sync). */
     fun observeChannelCount(): Flow<Int> = channelDao.observeVisibleCount()
 
+    /** Observes provider categories for the requested stream kind. */
     fun observeCategories(kind: StreamKind): Flow<List<Category>> = categoryDao.observe(kind)
 
+    /** Observes the locally cached movie catalog for the optional category. */
     fun observeMovies(categoryId: String? = null): Flow<List<Movie>> = movieDao.observe(categoryId)
 
+    /** Observes the locally cached series catalog for the optional category. */
     fun observeSeries(categoryId: String? = null): Flow<List<Series>> = seriesDao.observe(categoryId)
 
+    /** Observes a provider's cached series episodes in playback order. */
     fun observeEpisodes(sourceId: Long, seriesId: String): Flow<List<Episode>> =
         episodeDao.observeForSeries(sourceId, seriesId)
 
+    /** Observes bounded channel-name matches among visible channels. */
     fun searchChannels(query: String): Flow<List<Channel>> = channelDao.search(query)
 
+    /** Observes bounded channel-name matches including hidden channels for management. */
     fun searchChannelsIncludingHidden(query: String): Flow<List<Channel>> =
         channelDao.searchIncludingHidden(query)
 
+    /** Observes bounded movie-name matches from the local catalog. */
     fun searchMovies(query: String): Flow<List<Movie>> = movieDao.search(query)
 
+    /** Observes bounded series-name matches from the local catalog. */
     fun searchSeries(query: String): Flow<List<Series>> = seriesDao.search(query)
 
+    /** Returns the local channel row, or null if it no longer exists. */
     suspend fun channel(id: Long): Channel? = channelDao.byId(id)
 
+    /** Returns the local movie row, or null if it no longer exists. */
     suspend fun movie(id: Long): Movie? = movieDao.byId(id)
 
     /**
@@ -202,12 +220,16 @@ class CatalogRepository(
         tmdb.imdbId(title = movie.name, year = movie.year, isMovie = true, tmdbId = movie.tmdbId)
     }
 
+    /** Returns the local episode row, or null if it no longer exists. */
     suspend fun episode(id: Long): Episode? = episodeDao.byId(id)
 
+    /** Resolves a cached movie by its playback URL. */
     suspend fun movieByStreamUrl(url: String): Movie? = movieDao.byStreamUrl(url)
 
+    /** Resolves a cached episode by its playback URL. */
     suspend fun episodeByStreamUrl(url: String): Episode? = episodeDao.byStreamUrl(url)
 
+    /** Returns the local series row, or null if it no longer exists. */
     suspend fun series(id: Long): app.opentv.data.model.Series? = seriesDao.byId(id)
 
     // ---- Netflix-style home feeds ---------------------------------------------------------------
@@ -233,6 +255,7 @@ class CatalogRepository(
     /** How many movies / series are on disk — a cheap COUNT the home screen uses to tell "the
      *  library grew" from "unchanged since last open" without loading every row. */
     suspend fun movieCount(): Int = withContext(Dispatchers.IO) { movieDao.count() }
+    /** Returns the number of locally cached series. */
     suspend fun seriesCount(): Int = withContext(Dispatchers.IO) { seriesDao.count() }
 
     /**
@@ -487,6 +510,7 @@ class CatalogRepository(
         ProviderSeriesDetail(result, info?.imdbId)
     }
 
+    /** Loads TMDB series metadata when primary and provider display metadata are incomplete. */
     suspend fun tmdbSeriesFallback(series: Series): app.opentv.data.remote.TmdbMeta? =
         withContext(Dispatchers.IO) {
             tmdb.seriesMeta(VodTitleCleaner.clean(series.name), series.year, series.tmdbId)
@@ -518,6 +542,7 @@ class CatalogRepository(
             ?.distinct()
             .orEmpty()
 
+    /** Groups catalog entries using the available genre metadata. */
     private fun <T> groupByGenre(
         items: List<T>,
         genreOf: (T) -> String?,
@@ -550,15 +575,18 @@ class CatalogRepository(
         return if (parts.size == 2 && parts[0] == "movie") parts[1].toLongOrNull() else null
     }
 
+    /** Changes a channel's local favorite state. */
     suspend fun setChannelFavourite(id: Long, favourite: Boolean) =
         channelDao.setFavourite(id, favourite)
 
+    /** Changes a channel's local visibility state. */
     suspend fun setChannelHidden(id: Long, hidden: Boolean) = channelDao.setHidden(id, hidden)
 
     /** Sets (or clears, on blank) a channel's manual rename. Trimmed; a blank name clears it. */
     suspend fun setChannelCustomName(id: Long, name: String?) =
         channelDao.setCustomName(id, name?.trim()?.takeIf { it.isNotBlank() })
 
+    /** Changes a channel's local presentation order. */
     suspend fun setChannelSortIndex(id: Long, sortIndex: Int) = channelDao.setSortIndex(id, sortIndex)
 
     // --- Web channel manager: one-shot reads for the socket-thread server ------------------------
@@ -580,17 +608,26 @@ class CatalogRepository(
     suspend fun channelsInCategoryForManager(sourceId: Long?, categoryId: String): List<Channel> =
         channelDao.channelsInCategoryIncludingHidden(sourceId, categoryId)
 
+    /** Changes a movie's local favorite state. */
     suspend fun setMovieFavourite(id: Long, favourite: Boolean) =
         movieDao.setFavourite(id, favourite)
 
+    /** Returns favorite channel URLs for local network synchronization. */
     // --- Sync helpers: read/apply curation by stable stream URL ---
     suspend fun favouriteChannelUrls(): List<String> = channelDao.favouriteUrls()
+    /** Returns hidden channel URLs for local network synchronization. */
     suspend fun hiddenChannelUrls(): List<String> = channelDao.hiddenUrls()
+    /** Marks channels matching a synchronized stream URL as favorites. */
     suspend fun markChannelFavouriteByUrl(url: String) = channelDao.markFavouriteByUrl(url)
+    /** Marks channels matching a synchronized stream URL as hidden. */
     suspend fun markChannelHiddenByUrl(url: String) = channelDao.markHiddenByUrl(url)
+    /** Returns favorite movie URLs for local network synchronization. */
     suspend fun favouriteMovieUrls(): List<String> = movieDao.favouriteUrls()
+    /** Marks movies matching a synchronized stream URL as favorites. */
     suspend fun markMovieFavouriteByUrl(url: String) = movieDao.markFavouriteByUrl(url)
+    /** Returns favored provider series IDs for local network synchronization. */
     suspend fun favouriteSeriesIds(): List<String> = seriesDao.favouriteSeriesIds()
+    /** Marks matching provider series IDs as favorites. */
     suspend fun markSeriesFavouriteBySeriesId(seriesId: String) =
         seriesDao.markFavouriteBySeriesId(seriesId)
 
@@ -655,6 +692,7 @@ class CatalogRepository(
                 }
     }
 
+    /** Refreshes the Xtream live catalog while retaining existing channel user state. */
     private suspend fun syncXtreamLive(source: Source, nowUtcMillis: Long): SyncResult {
         // Authenticate first so a wrong password produces a clear message rather than
         // four separate confusing failures further down.
@@ -711,6 +749,7 @@ class CatalogRepository(
         return runCatching { stalkerApi.createLink(source, cmd) }.getOrNull() ?: channel.streamUrl
     }
 
+    /** Refreshes Xtream movie and series catalogs while retaining local user choices. */
     private suspend fun syncXtreamVod(source: Source, nowUtcMillis: Long) {
         // VOD is optional: plenty of accounts have live TV only, and a 404 on get_vod_streams
         // must not cost the user their channel list. Movies and series are gated independently so
@@ -739,6 +778,7 @@ class CatalogRepository(
         if (series.isNotEmpty()) seriesDao.replaceCatalogue(source.id, series)
     }
 
+    /** Streams an M3U playlist into the source catalog while preserving existing user state. */
     private suspend fun syncM3u(source: Source, nowUtcMillis: Long): SyncResult {
         val request = Request.Builder()
             .url(source.url)
@@ -928,6 +968,7 @@ class CatalogRepository(
         }
     }
 
+    /** Deletes a provider and its associated local catalog data. */
     suspend fun deleteSource(sourceId: Long) = withContext(Dispatchers.IO) {
         channelDao.deleteForSource(sourceId)
         categoryDao.deleteForSource(sourceId)

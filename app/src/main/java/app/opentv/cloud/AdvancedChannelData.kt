@@ -19,6 +19,7 @@ internal class AdvancedChannelData(
     constructor(graph: ServiceLocator.Graph) : this(database = graph.database,
         blockedCategoryKeys = { graph.settings.hiddenCategories.value })
 
+    /** Local content row and user edits associated with a portable cloud identity. */
     private data class Target(
         val id: Long,
         val favourite: Boolean,
@@ -27,6 +28,7 @@ internal class AdvancedChannelData(
         val sortIndex: Int = 0,
         val touched: Int = 0,
     ) {
+        /** Checks whether the requested field has a user edit eligible for export. */
         // sortIndex is provider assigned; a nonzero value is never evidence of a user edit.
         fun exports(kind: String): Boolean = when (kind) {
             "channel_hidden" -> touched and 2 != 0
@@ -36,12 +38,14 @@ internal class AdvancedChannelData(
         }
     }
 
+    /** Maps portable channel and media identities to matching local rows. */
     private data class Index(
         val channels: Map<String, List<Target>>,
         val movies: Map<String, List<Target>>,
         val series: Map<String, List<Target>>,
     )
 
+    /** Builds local identity indexes, optionally including movies and series. */
     private fun index(includeMedia: Boolean = true): Index {
         val channels = mutableMapOf<String, MutableList<Target>>()
         val blocked = blockedCategoryKeys()

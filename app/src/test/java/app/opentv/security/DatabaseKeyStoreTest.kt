@@ -23,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for database key store. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class DatabaseKeyStoreTest {
@@ -30,6 +31,7 @@ class DatabaseKeyStoreTest {
     private lateinit var preferences: SharedPreferences
     private lateinit var wrappingKey: SecretKey
 
+    /** Creates isolated fixtures before each test. */
     @Before
     fun reset() {
         context = RuntimeEnvironment.getApplication()
@@ -38,6 +40,7 @@ class DatabaseKeyStoreTest {
         wrappingKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
     }
 
+    /** Checks: new database receives a random 256 bit key that survives store recreation. */
     @Test
     fun `new database receives a random 256 bit key that survives store recreation`() {
         val key = store().getOrCreate()
@@ -51,6 +54,7 @@ class DatabaseKeyStoreTest {
         assertThat(store().getOrCreate()).isNotEqualTo(key)
     }
 
+    /** Checks: only the authenticated encrypted key envelope is persisted. */
     @Test
     fun `only the authenticated encrypted key envelope is persisted`() {
         val key = store().getOrCreate()
@@ -71,6 +75,7 @@ class DatabaseKeyStoreTest {
         assertThat(decryptor.doFinal(Base64.decode(parts[2], Base64.NO_WRAP))).isEqualTo(key)
     }
 
+    /** Checks: clearing returned passphrase bytes does not erase the persisted database key. */
     @Test
     fun `clearing returned passphrase bytes does not erase the persisted database key`() {
         val store = store()
@@ -82,6 +87,7 @@ class DatabaseKeyStoreTest {
         assertThat(store().getOrCreate(encryptedDatabaseExists = true)).isEqualTo(expected)
     }
 
+    /** Checks: tampered ciphertext is rejected without replacing the envelope. */
     @Test
     fun `tampered ciphertext is rejected without replacing the envelope`() {
         store().getOrCreate()
@@ -98,6 +104,7 @@ class DatabaseKeyStoreTest {
         assertThat(preferences.getString("wrapped_key", null)).isEqualTo(altered)
     }
 
+    /** Checks: malformed envelope is rejected without regenerating a key. */
     @Test
     fun `malformed envelope is rejected without regenerating a key`() {
         val malformed = "v1:AA==:AA=="
@@ -108,6 +115,7 @@ class DatabaseKeyStoreTest {
         assertThat(preferences.getString("wrapped_key", null)).isEqualTo(malformed)
     }
 
+    /** Checks: missing wrapped key for an existing encrypted database fails closed. */
     @Test
     fun `missing wrapped key for an existing encrypted database fails closed`() {
         assertThrows(IllegalStateException::class.java) {
@@ -117,6 +125,7 @@ class DatabaseKeyStoreTest {
         assertThat(preferences.all).isEmpty()
     }
 
+    /** Checks: lost wrapping key cannot silently replace an existing data key. */
     @Test
     fun `lost wrapping key cannot silently replace an existing data key`() {
         store().getOrCreate()
@@ -130,6 +139,7 @@ class DatabaseKeyStoreTest {
         assertThat(preferences.getString("wrapped_key", null)).isEqualTo(savedEnvelope)
     }
 
+    /** Checks: wrong wrapping key is rejected while preserving recovery data. */
     @Test
     fun `wrong wrapping key is rejected while preserving recovery data`() {
         store().getOrCreate()
@@ -143,5 +153,6 @@ class DatabaseKeyStoreTest {
         assertThat(preferences.getString("wrapped_key", null)).isEqualTo(savedEnvelope)
     }
 
+    /** Creates a database-key store using the test's storage and wrapping key. */
     private fun store() = DatabaseKeyStore(context) { wrappingKey }
 }

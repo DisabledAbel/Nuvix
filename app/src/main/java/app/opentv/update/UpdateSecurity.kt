@@ -5,6 +5,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
 import java.security.MessageDigest
 
+/** Published release identity, APK location, integrity information and supported update schema. */
 @Serializable
 data class UpdateMetadata(
     val schemaVersion: Int,
@@ -17,6 +18,7 @@ data class UpdateMetadata(
     val signingCertificateSha256: String,
 )
 
+/** Update rejection caused by invalid release metadata or APK identity. */
 class UpdateValidationException(message: String) : IllegalStateException(message)
 
 /** Pure validation rules, shared by discovery and the installer and covered by JVM tests. */
@@ -24,6 +26,7 @@ object UpdateSecurity {
     private val digestPattern = Regex("[a-fA-F0-9]{64}")
     private const val MAX_APK_BYTES = 512L * 1024 * 1024
 
+    /** Checks release schema, package, version, APK asset name, size and digest representations. */
     fun validateMetadata(metadata: UpdateMetadata, applicationId: String, assetBytes: Long) {
         requireValid(metadata.schemaVersion == 1, "Unsupported update metadata schema")
         requireValid(metadata.applicationId == applicationId, "Update targets a different application")
@@ -35,6 +38,7 @@ object UpdateSecurity {
         requireValid(digestPattern.matches(metadata.signingCertificateSha256), "Invalid signing certificate SHA-256")
     }
 
+    /** Requires an APK asset URL on the application's allowed release origin and path. */
     fun requireAssetUrl(raw: String, tag: String, asset: String) {
         val url = raw.toHttpUrlOrNull() ?: throw UpdateValidationException("Invalid release asset URL")
         requireValid(
@@ -45,6 +49,7 @@ object UpdateSecurity {
         )
     }
 
+    /** Verifies the downloaded APK's expected size and SHA-256 digest. */
     fun verifyFile(file: File, expectedBytes: Long, expectedSha256: String) {
         requireValid(file.length() == expectedBytes && expectedBytes > 0, "Downloaded APK length does not match")
         val actual = file.inputStream().use { stream ->
@@ -60,6 +65,7 @@ object UpdateSecurity {
         requireValid(actual.equals(expectedSha256, ignoreCase = true), "Downloaded APK SHA-256 does not match")
     }
 
+    /** Checks package, numeric version and signer identity against the installed application. */
     fun validateIdentity(
         installedPackage: String,
         installedVersion: Long,
@@ -78,8 +84,11 @@ object UpdateSecurity {
         requireValid(archiveSigners.size == 1 && archiveSigners.single().equals(update.signingCertificateSha256, true), "APK signing certificate does not match release metadata")
     }
 
+    /** Computes the lowercase hexadecimal SHA-256 digest of the supplied bytes. */
     fun sha256(bytes: ByteArray): String = hex(MessageDigest.getInstance("SHA-256").digest(bytes))
+    /** Encodes digest bytes as lowercase hexadecimal text. */
     private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    /** Throws an update validation error when a required integrity condition is false. */
     private fun requireValid(condition: Boolean, message: String) {
         if (!condition) throw UpdateValidationException(message)
     }

@@ -181,18 +181,29 @@ fun UpdateSettingsControls(viewModel: UpdateViewModel = viewModel()) {
     }
 }
 
+/** Foreground update-check, download and installation state shown by the shared prompt. */
 sealed interface UpdateUiState {
+    /** Update state with no foreground operation or prompt. */
     data object Idle : UpdateUiState
+    /** Update state while stable release metadata is being checked. */
     data object Checking : UpdateUiState
+    /** Update state indicating no eligible newer stable release was found. */
     data object Current : UpdateUiState
+    /** Update state presenting an eligible release for explicit download. */
     data class Available(val update: UpdateChecker.Update) : UpdateUiState
+    /** Update state containing the selected release and current download fraction. */
     data class Downloading(val update: UpdateChecker.Update, val fraction: Float) : UpdateUiState
+    /** Update state awaiting the platform's install-source permission. */
     data class PermissionRequired(val update: UpdateChecker.Update) : UpdateUiState
+    /** Update state tracking the release and submitted Android installer session. */
     data class Installing(val update: UpdateChecker.Update, val sessionId: Int) : UpdateUiState
+    /** Update state after Android reports successful installation. */
     data object Completed : UpdateUiState
+    /** Update failure with display-safe text and optional release context for retry. */
     data class Failed(val update: UpdateChecker.Update?, val message: String) : UpdateUiState
 }
 
+/** Shares update prompt requests and installer outcomes across application entry points. */
 object UpdateHub {
     val state = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
     // The gate and each settings destination have distinct ViewModel owners. Share the operation
@@ -201,12 +212,14 @@ object UpdateHub {
     internal var operation: Job? = null
 }
 
+/** Coordinates foreground release checks, downloads and Android-approved installation. */
 class UpdateViewModel(app: Application) : AndroidViewModel(app) {
     private val checker = UpdateChecker(UpdateNetwork.client, BuildConfig.VERSION_CODE, BuildConfig.APPLICATION_ID)
     private val installer = ApkInstaller()
     private val prefs = UpdatePreferences(app)
     val state = UpdateHub.state.asStateFlow()
 
+    /** Starts a user-initiated stable release check and publishes its result. */
     fun checkNow() {
         if (busy()) return
         UpdateHub.operation = UpdateHub.scope.launch {
@@ -227,6 +240,7 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Downloads, verifies and submits the selected release for Android installation approval. */
     fun install() {
         if (busy()) return
         val update = when (val current = UpdateHub.state.value) {
@@ -255,12 +269,14 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Opens install-source settings for a release awaiting platform permission. */
     fun openPermission() {
         runCatching { installer.openInstallPermission(getApplication()) }.onFailure {
             val update = (UpdateHub.state.value as? UpdateUiState.PermissionRequired)?.update
             UpdateHub.state.value = UpdateUiState.Failed(update, "This device could not open app install settings. Enable the permission in Android settings.")
         }
     }
+    /** Cancels the active foreground update operation. */
     fun cancel() {
         UpdateHub.operation?.cancel()
         val id = prefs.pendingSessionId()
@@ -268,7 +284,9 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
         prefs.clearPendingSession()
         UpdateHub.state.value = UpdateUiState.Idle
     }
+    /** Dismisses the current update prompt when its operation permits it. */
     fun dismiss() { UpdateHub.state.value = UpdateUiState.Idle }
+    /** Checks whether a foreground check, download or installation is in progress. */
     private fun busy(): Boolean = UpdateHub.state.value.let {
         it == UpdateUiState.Checking || it is UpdateUiState.Downloading || it is UpdateUiState.Installing
     }

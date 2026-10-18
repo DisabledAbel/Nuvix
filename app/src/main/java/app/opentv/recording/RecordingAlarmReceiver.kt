@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
  */
 class RecordingAlarmReceiver : BroadcastReceiver() {
 
+    /** Dispatches recording alarms and system rearm events to background recording work. */
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> rescheduleAll(context)
@@ -113,6 +114,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Rearms pending recording alarms after boot or scheduling changes. */
     private fun rescheduleAll(context: Context) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -131,6 +133,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
             !RecordingStorage.isContent(rec.filePath) &&
             !RecordingStorage.isUsbPlaceholder(rec.filePath)
 
+    /** Posts the user-visible action for switching to an imminent recording. */
     private fun notifySwitch(context: Context, rec: Recording) {
         createChannel(context)
         val launch = Intent(context, MainActivity::class.java).apply {
@@ -154,6 +157,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         safeNotify(context, NOTIFICATION_BASE + rec.id.toInt(), builder.build())
     }
 
+    /** Posts an imminent recording warning when notifications are allowed. */
     private fun notifyWarn(context: Context, rec: Recording) {
         createChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -167,6 +171,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         safeNotify(context, WARN_NOTIFICATION_BASE + rec.id.toInt(), builder.build())
     }
 
+    /** Posts a recording notification while tolerating unavailable notification permission. */
     private fun safeNotify(context: Context, id: Int, notification: Notification) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS,
@@ -175,6 +180,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         catch (_: SecurityException) { /* Permission may change between checking and posting. */ }
     }
 
+    /** Creates the recording notification channel on supported Android versions. */
     private fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

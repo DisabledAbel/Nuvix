@@ -18,9 +18,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for recording migration. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class RecordingMigrationTest {
+    /** Checks: v13 migrates with Room validation and preserves old padded booking and profile. */
     @Test fun `v13 migrates with Room validation and preserves old padded booking and profile`() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         val name = "recording-v13-migration.db"

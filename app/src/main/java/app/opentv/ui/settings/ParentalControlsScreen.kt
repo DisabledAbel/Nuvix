@@ -160,6 +160,7 @@ fun ParentalControlsScreen(
     }
 }
 
+/** Displays parental PIN setup, verification and removal controls. */
 @Composable
 private fun PinSection(
     pinIsSet: Boolean,
@@ -223,6 +224,7 @@ private fun PinSection(
     }
 }
 
+/** Displays a PIN entry field with obscured input. */
 @Composable
 private fun PinField(label: String, value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
@@ -236,6 +238,7 @@ private fun PinField(label: String, value: String, onChange: (String) -> Unit) {
     )
 }
 
+/** Requires successful PIN verification before invoking the protected action. */
 @Composable
 private fun PinGate(onCancel: () -> Unit, onSubmit: (String) -> Boolean) {
     var pin by remember { mutableStateOf("") }

@@ -11,6 +11,7 @@ internal class ExclusiveSurfaceOwner<T : Any>(private val bind: (T, Boolean) -> 
     private var attached: T? = null
     private var uncertain = false
 
+    /** Transfers exclusive presentation ownership to the supplied surface owner. */
     fun attach(view: T): Boolean {
         if (uncertain) return false
         if (attached === view) return true
@@ -32,6 +33,7 @@ internal class ExclusiveSurfaceOwner<T : Any>(private val bind: (T, Boolean) -> 
         }
     }
 
+    /** Detaches a surface only if it still owns the current presentation. */
     fun detach(view: T) {
         if (attached === view) {
             attached = null
@@ -39,6 +41,7 @@ internal class ExclusiveSurfaceOwner<T : Any>(private val bind: (T, Boolean) -> 
         }
     }
 
+    /** Clears the currently owned presentation surface. */
     fun clear(): Boolean { attached?.let(::detach); return !uncertain }
     /** Only a newly allocated engine can clear uncertainty about an already released decoder. */
     fun reset() { attached = null; uncertain = false }
@@ -55,8 +58,12 @@ class PlayerSurfaceOwner(private val player: () -> Player?) {
         view.player = if (attach) checkNotNull(player()) { "No active live player" } else null
     }
 
+    /** Transfers the player's video surface to the requested presentation owner. */
     fun attach(view: PlayerView): Boolean = owner.attach(view)
+    /** Detaches only the surface that still belongs to the supplied owner. */
     fun detach(view: PlayerView) = owner.detach(view)
+    /** Clears the player's currently attached video surface. */
     fun clear(): Boolean = owner.clear()
+    /** Clears saved presentation ownership so a new player can attach safely. */
     internal fun reset() = owner.reset()
 }

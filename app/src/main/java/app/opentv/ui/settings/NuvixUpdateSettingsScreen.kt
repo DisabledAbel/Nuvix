@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.opentv.update.UpdateSettingsControls
 
+/** Displays update-channel information, background-check preferences and manual update controls. */
 @Composable
 fun NuvixUpdateSettingsScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

@@ -5,6 +5,7 @@ import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+/** TVmaze show identity and display metadata, separate from provider catalog rows. */
 // These are display/cache models, deliberately separate from provider Room entities and cloud IDs.
 data class TvShow(
     val id: Int, val name: String, val imdbId: String?, val year: Int?,
@@ -12,30 +13,41 @@ data class TvShow(
 ) {
     val url get() = "https://www.tvmaze.com/shows/$id"
 }
+/** TVmaze season numbering, dates, descriptive text and artwork. */
 data class TvSeason(val number: Int, val name: String?, val summary: String?,
     val premiereDate: String?, val endDate: String?, val image: String?, val episodeOrder: Int?)
+/** TVmaze episode identity, numbering, airdate, runtime and display metadata. */
 data class TvEpisode(val id: Int, val season: Int, val number: Int?, val title: String,
     val summary: String?, val airdate: String?, val image: String?, val runtime: Int?)
+/** TVmaze person identity and biographical metadata used by profile navigation. */
 data class TvPerson(val id: Int, val name: String, val image: String?, val birthday: String?,
     val deathday: String?, val country: String?) {
     val route get() = "tvmaze:$id:$name"
     val url get() = "https://www.tvmaze.com/people/$id"
 }
+/** Person and character information for a show's cast credit. */
 data class TvCast(val person: TvPerson, val character: String?, val characterImage: String?)
+/** Person and job information for a show's crew credit. */
 data class TvCrew(val person: TvPerson, val job: String?)
+/** Show and role attached to a person's cast or crew credit. */
 data class TvCredit(val show: TvShow, val role: String?)
+/** Person metadata with deduplicated show credits. */
 data class TvProfile(val person: TvPerson, val credits: List<TvCredit>)
+/** Show metadata assembled with artwork, seasons, episodes, cast and crew. */
 data class TvmazeDetails(val show: TvShow, val background: String?, val seasons: List<TvSeason>,
     val episodes: List<TvEpisode>, val cast: List<TvCast>, val crew: List<TvCrew>)
 
+/** Reads TVmaze metadata without changing provider identities or playback data. */
 class TvmazeClient(private val http: MetadataHttp,
     private val base: HttpUrl = "https://api.tvmaze.com/".toHttpUrl()) {
+    /** Fetches a TVmaze endpoint with safely encoded query parameters through the metadata cache. */
     private suspend fun get(path: String, vararg params: Pair<String, String>): JsonElement? {
         val url = base.newBuilder().addPathSegments(path)
         params.forEach { (key, value) -> url.addQueryParameter(key, value) }
         return http.get(url.build())
     }
 
+    /** Matches by IMDb ID or an unambiguous normalized title and optional year; ambiguity returns null. */
     suspend fun match(title: String, year: Int?, imdbId: String?): TvShow? {
         val imdb = imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
         if (imdb != null) {
@@ -52,6 +64,7 @@ class TvmazeClient(private val http: MetadataHttp,
         return candidates.singleOrNull()
     }
 
+    /** Fetches show artwork, seasons, episodes and credits, deduplicating episode and person entries. */
     suspend fun details(show: TvShow): TvmazeDetails {
         val images = get("shows/${show.id}/images").array().mapNotNull { it.obj() }
         val background = images.filter { it.text("type") == "background" }
@@ -81,6 +94,7 @@ class TvmazeClient(private val http: MetadataHttp,
             cast.distinctBy { it.person.id to it.character }, crew.distinctBy { it.person.id to it.job })
     }
 
+    /** Loads a valid person ID and combines cast and crew credits, or returns null when absent. */
     suspend fun profile(id: Int): TvProfile? {
         if (id <= 0) return null
         val person = parsePerson(get("people/$id")) ?: return null
@@ -98,13 +112,20 @@ class TvmazeClient(private val http: MetadataHttp,
     }
 }
 
+/** Normalizes a title to lowercase letters and digits for exact metadata matching. */
 internal fun normalizeTitle(title: String) = title.lowercase(java.util.Locale.ROOT)
     .replace(Regex("[^\\p{L}\\p{N}]"), "")
+/** Returns this JSON value as an object, or null for a different shape. */
 internal fun JsonElement?.obj() = this as? JsonObject
+/** Returns this JSON value as an array, using an empty list for other shapes. */
 internal fun JsonElement?.array() = (this as? JsonArray).orEmpty()
+/** Reads a nonblank primitive string field, or null when unavailable. */
 internal fun JsonObject.text(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+/** Reads an integer primitive field, or null when unavailable or malformed. */
 internal fun JsonObject.int(key: String) = (this[key] as? JsonPrimitive)?.intOrNull
+/** Prefers the original image URL and falls back to the medium image. */
 internal fun JsonObject.image() = this["image"].obj()?.let { it.text("original") ?: it.text("medium") }
+/** Parses a show with a required ID and name, or returns null when those fields are missing. */
 internal fun parseShow(element: JsonElement?): TvShow? {
     val o = element.obj() ?: return null
     return TvShow(o.int("id") ?: return null, o.text("name") ?: return null,
@@ -113,6 +134,7 @@ internal fun parseShow(element: JsonElement?): TvShow? {
             .joinToString(", ").takeIf { it.isNotBlank() }, o.image(),
         (o["rating"].obj()?.get("average") as? JsonPrimitive)?.doubleOrNull)
 }
+/** Parses a person with a required ID and name, or returns null when those fields are missing. */
 internal fun parsePerson(element: JsonElement?): TvPerson? {
     val o = element.obj() ?: return null
     return TvPerson(o.int("id") ?: return null, o.text("name") ?: return null, o.image(),

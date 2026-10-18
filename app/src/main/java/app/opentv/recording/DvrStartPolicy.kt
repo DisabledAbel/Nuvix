@@ -5,6 +5,7 @@ import app.opentv.data.model.Recording
 
 /** Only a due recording can preempt a lower-priority owner of capacity it needs right now. */
 internal object DvrStartPolicy {
+    /** Selects optional account connections eligible for release before recording admission. */
     fun victims(
         due: Recording,
         active: List<Recording>,

@@ -223,6 +223,7 @@ fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = view
     }
 }
 
+/** Displays a titled horizontal shelf of sports events. */
 @Composable
 private fun GameShelf(title: String, cards: List<SportsEventCard>, state: SportsHubState, restore: String?, empty: String,
     onFocus: (String) -> Unit, onOpen: (String) -> Unit) {
@@ -239,6 +240,7 @@ private fun GameShelf(title: String, cards: List<SportsEventCard>, state: Sports
     }
 }
 
+/** Displays an event's schedule and available-stream summary without tuning on focus. */
 @Composable
 internal fun SportsGameCard(card: SportsEventCard, now: Long, favorite: Boolean, showScores: Boolean = true, restore: Boolean = false,
     onFocus: () -> Unit = {}, onClick: () -> Unit) {
@@ -263,6 +265,7 @@ internal fun SportsGameCard(card: SportsEventCard, now: Long, favorite: Boolean,
     LaunchedEffect(restore) { if (restore) requester.requestFocus() }
 }
 
+/** Displays a focusable team or league favorite action. */
 @Composable
 private fun FavoriteChoice(f: SportsFavorite, selected: Boolean, onToggle: () -> Unit, onBrowse: () -> Unit, onMove: (Int) -> Unit) {
     Column(Modifier.widthIn(min = 200.dp, max = 300.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -274,6 +277,7 @@ private fun FavoriteChoice(f: SportsFavorite, selected: Boolean, onToggle: () ->
     }
 }
 
+/** Displays selected-event details, stream choices and explicit matching or reminder actions. */
 @Composable
 private fun SportsDetails(state: SportsHubState, event: SportsEvent, reminderSet: Boolean, onBack: () -> Unit,
     onPlay: (SportsStream) -> Unit, onRemind: () -> Unit, onCancelReminder: () -> Unit,
@@ -376,6 +380,7 @@ private fun SportsDetails(state: SportsHubState, event: SportsEvent, reminderSet
     }
 }
 
+/** Displays one provider stream choice with explicit play and preference actions. */
 @Composable
 internal fun SportsStreamCard(stream: SportsStream, preferred: Boolean, onPlay: () -> Unit, onFavorite: () -> Unit,
     onConfirm: () -> Unit, onReject: () -> Unit, onPrefer: () -> Unit, onAssign: () -> Unit,
@@ -419,6 +424,7 @@ internal fun SportsBroadcastChooser(streams: List<SportsStream>, onChoose: (Spor
     }
 }
 
+/** Displays saved Sports Hub browsing, suggestion and cache controls. */
 @Composable
 private fun SportsSettings(state: SportsHubState, onBack: () -> Unit, onChange: (SportsPreferences) -> Unit,
     onClear: () -> Unit, onFavorite: (String, String, String, String) -> Unit, onMove: (SportsFavorite, Int) -> Unit) {
@@ -445,6 +451,7 @@ internal fun SportsAction(label: String, selected: Boolean = false, onClick: () 
     SportsSurface(Modifier.widthIn(max = 600.dp), onClick = onClick, selected = selected) { Text(label, style = MaterialTheme.typography.bodyLarge) }
 }
 
+/** Applies shared focusable card styling to Sports Hub content. */
 @Composable
 private fun SportsSurface(modifier: Modifier = Modifier, onFocus: () -> Unit = {}, onClick: () -> Unit,
     selected: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
@@ -457,5 +464,6 @@ private fun SportsSurface(modifier: Modifier = Modifier, onFocus: () -> Unit = {
         .semantics { this.selected = selected }.clickable(role = Role.Button, onClick = onClick).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp), content = content)
 }
 
+/** Formats an event timestamp using the local sports schedule presentation. */
 internal fun sportsTime(time: Long): String = DateTimeFormatter.ofPattern("EEE, MMM d · HH:mm z")
     .format(Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()))

@@ -24,16 +24,19 @@ class XmltvTimeTest {
 
     private lateinit var original: TimeZone
 
+    /** Creates isolated fixtures before each test. */
     @Before
     fun setUp() {
         original = TimeZone.getDefault()
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After
     fun tearDown() {
         TimeZone.setDefault(original)
     }
 
+    /** Checks: parses a timestamp with a positive offset. */
     @Test
     fun `parses a timestamp with a positive offset`() {
         // 2026-07-27 18:30:00 +0100 == 17:30:00 UTC
@@ -42,6 +45,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("20260727183000 +0100")).isEqualTo(expected)
     }
 
+    /** Checks: parses a timestamp with a negative offset. */
     @Test
     fun `parses a timestamp with a negative offset`() {
         // 2026-07-27 13:30:00 -0400 == 17:30:00 UTC
@@ -50,6 +54,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("20260727133000 -0400")).isEqualTo(expected)
     }
 
+    /** Checks: a missing offset is treated as UTC regardless of the device zone. */
     @Test
     fun `a missing offset is treated as UTC regardless of the device zone`() {
         val expected = utcMillis(2026, 7, 27, 18, 30, 0)
@@ -61,6 +66,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("20260727183000")).isEqualTo(expected)
     }
 
+    /** Checks: result does not depend on the device time zone. */
     @Test
     fun `result does not depend on the device time zone`() {
         val raw = "20260727183000 +0100"
@@ -74,6 +80,7 @@ class XmltvTimeTest {
         assertThat(inLondon).isEqualTo(inAuckland)
     }
 
+    /** Checks: handles half hour and colon separated offsets. */
     @Test
     fun `handles half hour and colon separated offsets`() {
         // 2026-07-27 23:00:00 +0530 == 17:30:00 UTC
@@ -83,6 +90,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("20260727230000 +05:30")).isEqualTo(expected)
     }
 
+    /** Checks: accepts truncated forms. */
     @Test
     fun `accepts truncated forms`() {
         assertThat(XmltvParser.parseXmltvTime("202607271830"))
@@ -93,6 +101,7 @@ class XmltvTimeTest {
             .isEqualTo(utcMillis(2026, 7, 27, 0, 0, 0))
     }
 
+    /** Checks: rejects rubbish instead of guessing. */
     @Test
     fun `rejects rubbish instead of guessing`() {
         assertThat(XmltvParser.parseXmltvTime(null)).isNull()
@@ -101,6 +110,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("2026")).isNull()
     }
 
+    /** Checks: Z and UTC suffixes mean zero offset. */
     @Test
     fun `Z and UTC suffixes mean zero offset`() {
         val expected = utcMillis(2026, 7, 27, 18, 30, 0)
@@ -109,6 +119,7 @@ class XmltvTimeTest {
         assertThat(XmltvParser.parseXmltvTime("20260727183000 UTC")).isEqualTo(expected)
     }
 
+    /** Builds a UTC epoch timestamp for deterministic XMLTV time assertions. */
     private fun utcMillis(
         year: Int,
         month: Int,

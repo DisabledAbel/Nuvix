@@ -6,13 +6,17 @@ import app.opentv.data.model.PlaybackPosition
 
 /** Builds an explicit content index without using stream URLs or credential-bearing source rows. */
 internal class CloudLocalData(private val graph: ServiceLocator.Graph) {
+    /** Exported legacy records and the identities currently marked as favorites. */
     data class Snapshot(val records: List<CloudRecord>, val existingFavouriteIdentities: Set<String>)
+    /** Local media kind and row ID resolved from a portable identity. */
     private data class Target(val kind: String, val id: Long)
+    /** Lookup tables for local favorites, media and profiles used during legacy synchronization. */
     private data class Index(
         val favourites: Map<String, List<Target>>, val activeFavourites: Set<String>,
         val media: Map<String, List<Target>>, val profiles: Map<String, List<Long>>,
     )
 
+    /** Builds portable identity lookups from the current database contents. */
     private suspend fun index(): Index {
         val favourites = mutableMapOf<String, MutableList<Target>>()
         val selected = mutableSetOf<String>()
@@ -47,6 +51,7 @@ internal class CloudLocalData(private val graph: ServiceLocator.Graph) {
             .mapValues { (_, profiles) -> profiles.map { it.id } })
     }
 
+    /** Collects favorites and playback progress while retaining known favorite mutation times. */
     suspend fun gather(device: String, favouriteTimes: MutableMap<String, Long>): Snapshot {
         val index = index()
         val now = System.currentTimeMillis()

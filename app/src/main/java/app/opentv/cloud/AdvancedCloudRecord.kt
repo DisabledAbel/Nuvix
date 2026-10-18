@@ -97,6 +97,7 @@ data class AdvancedCloudRecord(
         }
     }
 
+    /** Compares record values while ignoring mutation timestamps and device IDs. */
     internal fun samePayload(other: AdvancedCloudRecord): Boolean = identity() == other.identity() &&
         schemaVersion == other.schemaVersion && deleted == other.deleted && textValue == other.textValue &&
         boolValue == other.boolValue && intValue == other.intValue && entries == other.entries
@@ -120,6 +121,7 @@ data class AdvancedCloudRecord(
         private val HASH = Regex("[a-f0-9]{64}")
         private val PACKAGE = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
 
+        /** Checks text length and excludes control characters from portable values. */
         private fun safeText(value: String, minimum: Int): Boolean =
             value.codePointCount(0, value.length) in minimum..120 && value.none { it.code < 32 || it.code == 127 } &&
                 // Unpaired UTF-16 surrogates do not have a valid PostgreSQL UTF-8 representation.
@@ -127,9 +129,11 @@ data class AdvancedCloudRecord(
     }
 }
 
+/** Checks for the canonical UUID representation accepted by the cloud protocol. */
 internal fun canonicalUuid(value: String): Boolean = value.length == 36 &&
     runCatching { UUID.fromString(value).toString() == value }.getOrDefault(false)
 
+/** Combines record kind and key into the identity used for cloud conflict resolution. */
 fun AdvancedCloudRecord.identity(): String = "$kind:$recordKey"
 
 /** A deleted group UUID is permanently retired; creation requires a fresh UUID. */

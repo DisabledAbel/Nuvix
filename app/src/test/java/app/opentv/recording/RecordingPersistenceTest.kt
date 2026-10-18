@@ -20,18 +20,22 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for recording persistence. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class RecordingPersistenceTest {
     private lateinit var db: OpenTvDatabase
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), OpenTvDatabase::class.java)
             .allowMainThreadQueries().build()
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun tearDown() = db.close()
 
+    /** Checks: duplicate deliveries claim a durable recording only once. */
     @Test fun `duplicate deliveries claim a durable recording only once`() = runBlocking {
         val id = db.recordings().insert(recording())
         val claims = (1..8).map { async { db.recordings().claimScheduled(id, 1234) } }.awaitAll()
@@ -41,6 +45,7 @@ class RecordingPersistenceTest {
         assertThat(db.recordings().beginFinalizing(id)).isEqualTo(0)
     }
 
+    /** Checks: interruption preserves partial locator bytes and independent preferences. */
     @Test fun `interruption preserves partial locator bytes and independent preferences`() = runBlocking {
         val id = db.recordings().insert(recording().copy(status = RecordingStatus.RECORDING, sizeBytes = 42, protectedRecording = true))
         db.recordings().failInterrupted()
@@ -52,6 +57,7 @@ class RecordingPersistenceTest {
         assertThat(recovered.lockPadding).isFalse()
     }
 
+    /** Checks: history is persisted in stable chronological order. */
     @Test fun `history is persisted in stable chronological order`() = runBlocking {
         val id = db.recordings().insert(recording())
         db.recordingEvents().insert(RecordingEvent(recordingId = id, atMillis = 20, kind = "padding", message = "End padding trimmed"))
@@ -59,6 +65,7 @@ class RecordingPersistenceTest {
         assertThat(db.recordingEvents().forRecording(id).map { it.kind }).containsExactly("scheduled", "padding").inOrder()
     }
 
+    /** Checks: core airing identity survives padding overrides and conflict trimming. */
     @Test fun `core airing identity survives padding overrides and conflict trimming`() = runBlocking {
         val id = db.recordings().insert(recording().copy(programmeStartMillis = 1000, programmeEndMillis = 2000,
             scheduledStartMillis = 800, scheduledEndMillis = 2300, seriesRuleId = 4))
@@ -67,6 +74,7 @@ class RecordingPersistenceTest {
         assertThat(db.recordings().countForRuleAt(4, 1, 1000)).isEqualTo(1)
     }
 
+    /** Checks: preference edits cannot return an already claimed recording to scheduled. */
     @Test fun `preference edits cannot return an already claimed recording to scheduled`() = runBlocking {
         val id = db.recordings().insert(recording())
         db.recordings().claimScheduled(id, 1000)
@@ -81,6 +89,7 @@ class RecordingPersistenceTest {
         assertThat(db.recordings().setScheduledStatus(id, RecordingStatus.FAILED, "Late start rejection")).isEqualTo(0)
     }
 
+    /** Checks: retry atomically archives partial bytes once and preserves protection preferences. */
     @Test fun `retry atomically archives partial bytes once and preserves protection preferences`() = runBlocking {
         val partial = recording().copy(status = RecordingStatus.PARTIAL, sizeBytes = 99, protectedRecording = true, lockPadding = true)
         val id = db.recordings().insert(partial)
@@ -98,6 +107,7 @@ class RecordingPersistenceTest {
         assertThat(retry.lockPadding).isTrue()
     }
 
+    /** Checks: a new padding lock prevents a stale conflict plan from trimming its window. */
     @Test fun `a new padding lock prevents a stale conflict plan from trimming its window`() = runBlocking {
         val id = db.recordings().insert(recording().copy(scheduledStartMillis = 1000, scheduledEndMillis = 2000))
         db.recordings().setProtection(id, protectedRecording = false, lockPadding = true)
@@ -106,6 +116,7 @@ class RecordingPersistenceTest {
         assertThat(db.recordings().byId(id)?.scheduledEndMillis).isEqualTo(2000)
     }
 
+    /** Provides the recording fixture used by the current scheduling or capture scenario. */
     private fun recording() = Recording(channelId = 1, sourceId = 1, channelName = "News", title = "News",
         filePath = "/recordings/test.ts", streamUrl = "https://example.invalid/live.ts", status = RecordingStatus.SCHEDULED)
 }

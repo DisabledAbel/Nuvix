@@ -24,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for advanced channel data. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class AdvancedChannelDataTest {
@@ -33,6 +34,7 @@ class AdvancedChannelDataTest {
     private lateinit var adapter: AdvancedChannelData
     private val streamCanary = "https://provider.invalid/private-user/private-pass/live/42.m3u8"
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setUp() = runBlocking {
         database = newDatabase()
         adapter = AdvancedChannelData(database) { blocked }
@@ -40,31 +42,39 @@ class AdvancedChannelDataTest {
         Unit
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun tearDown() { database.close() }
 
+    /** Creates an isolated in-memory Room database for cloud adapter tests. */
     private fun newDatabase(): OpenTvDatabase = Room.inMemoryDatabaseBuilder(
         RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).allowMainThreadQueries().build()
 
+    /** Provides a synthetic provider configuration for the test's requested source identity. */
     private fun source(id: Long = 1, enabled: Boolean = true) = Source(id = id, name = "Provider", kind = SourceKind.XTREAM,
         url = "https://provider.invalid", username = "private-user", password = "private-pass", enabled = enabled)
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(id: Long = 1, source: Long = 1, name: String = "BBC One", epg: String? = "bbc.one", category: String? = "general") =
         Channel(id = id, sourceId = source, streamId = "provider-local-$id", name = name, displayName = name,
             categoryId = category, logoUrl = null, epgChannelId = epg, number = null, streamUrl = streamCanary)
 
+    /** Builds a synthetic provider movie with configurable local and portable identities. */
     private fun movie(id: Long = 1, source: Long = 1, name: String = "Movie", tmdb: String = "123") = Movie(
         id = id, sourceId = source, streamId = "movie-$id", name = name, categoryId = "films", posterUrl = null,
         rating = null, year = 2025, plot = null, durationSeconds = null, containerExtension = "mp4",
         streamUrl = streamCanary, tmdbId = tmdb)
 
+    /** Provides a synthetic provider series for metadata or synchronization tests. */
     private fun series(id: Long = 1, source: Long = 1, name: String = "Series", tmdb: String = "321") = Series(
         id = id, sourceId = source, seriesId = "series-$id", name = name, categoryId = "shows", posterUrl = null,
         rating = null, year = 2024, plot = null, tmdbId = tmdb)
 
+    /** Builds a synthetic cloud record for validation and merge assertions. */
     private fun record(kind: String, key: String = CloudIdentity.channel("BBC One", "bbc.one"),
         text: String? = null, bool: Boolean? = null, number: Int? = null) = AdvancedCloudRecord(
         key, kind, System.currentTimeMillis(), device, textValue = text, boolValue = bool, intValue = number)
 
+    /** Checks: snapshots Only Public Identity And Organization Fields. */
     @Test fun snapshotsOnlyPublicIdentityAndOrganizationFields() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 5, syncTouched = 15)))
         database.movies().upsertAll(listOf(movie().copy(favouriteTouched = true)))
@@ -81,6 +91,7 @@ class AdvancedChannelDataTest {
         }
     }
 
+    /** Checks: matching Other Tv Uses Fingerprint And Never Overwrites Playable Fields. */
     @Test fun matchingOtherTvUsesFingerprintAndNeverOverwritesPlayableFields() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "News", sortIndex = 7, favourite = true, syncTouched = 15)))
         database.movies().upsertAll(listOf(movie().copy(favourite = true)))
@@ -101,6 +112,7 @@ class AdvancedChannelDataTest {
         } finally { receiving.close() }
     }
 
+    /** Checks: field Updates Preserve Independent Local Edits And Support Clearing Names. */
     @Test fun fieldUpdatesPreserveIndependentLocalEditsAndSupportClearingNames() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(hidden = true, customName = "Local name", sortIndex = 8, favourite = true)))
         assertEquals(1, adapter.apply(listOf(record("channel_order", number = 2))))
@@ -111,6 +123,7 @@ class AdvancedChannelDataTest {
         assertTrue(database.channels().byId(1)!!.favourite)
     }
 
+    /** Checks: explicit Favourite False Removes Matching Channel Movie And Series Favourites. */
     @Test fun explicitFavouriteFalseRemovesMatchingChannelMovieAndSeriesFavourites() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(favourite = true)))
         database.movies().upsertAll(listOf(movie().copy(favourite = true)))
@@ -124,6 +137,7 @@ class AdvancedChannelDataTest {
         assertFalse(database.series().byId(1)!!.favourite)
     }
 
+    /** Checks: ambiguous Channels And Media Are Skipped In Both Directions. */
     @Test fun ambiguousChannelsAndMediaAreSkippedInBothDirections() = runBlocking {
         database.sources().insert(source(2))
         database.channels().upsertAll(listOf(channel(), channel(2, 2)))
@@ -139,6 +153,7 @@ class AdvancedChannelDataTest {
         assertEquals(channel(2, 2), database.channels().byId(2))
     }
 
+    /** Checks: missing Channels Are Retried When Available And Never Created. */
     @Test fun missingChannelsAreRetriedWhenAvailableAndNeverCreated() = runBlocking {
         val remote = record("channel_name", text = "News")
         assertTrue(adapter.snapshot(device, System.currentTimeMillis()).isEmpty())
@@ -151,6 +166,7 @@ class AdvancedChannelDataTest {
         assertTrue(adapter.snapshot(device, System.currentTimeMillis()).isEmpty())
     }
 
+    /** Checks: disabled Sources Do Not Upload Or Receive Changes And Do Not Cause Ambiguity. */
     @Test fun disabledSourcesDoNotUploadOrReceiveChangesAndDoNotCauseAmbiguity() = runBlocking {
         database.sources().insert(source(2, enabled = false))
         database.channels().upsertAll(listOf(channel(), channel(2, 2)))
@@ -166,6 +182,7 @@ class AdvancedChannelDataTest {
         assertTrue(database.channels().byId(1)!!.hidden)
     }
 
+    /** Checks: parental Restrictions Stay Local And Cannot Be Overridden By Cloud. */
     @Test fun parentalRestrictionsStayLocalAndCannotBeOverriddenByCloud() = runBlocking {
         database.categories().upsertAll(listOf(Category("general", 1, "UK| ADULT HD", StreamKind.LIVE)))
         blocked += ChannelNameNormalizer.normalize("UK| ADULT HD").groupKey
@@ -175,6 +192,7 @@ class AdvancedChannelDataTest {
         assertEquals(channel().copy(hidden = true), database.channels().byId(1))
     }
 
+    /** Checks: local Edit After Engine Snapshot Cannot Be Overwritten By Remote Apply. */
     @Test fun localEditAfterEngineSnapshotCannotBeOverwrittenByRemoteApply() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(customName = "Original", sortIndex = 1)))
         val expected = adapter.snapshot(device, System.currentTimeMillis())
@@ -185,6 +203,7 @@ class AdvancedChannelDataTest {
         assertEquals(9, database.channels().byId(1)!!.sortIndex)
     }
 
+    /** Checks: large Untouched Provider Catalogue Never Seeds The Journal. */
     @Test fun largeUntouchedProviderCatalogueNeverSeedsTheJournal() = runBlocking {
         database.channels().upsertAll((1L..33_400L).map { id ->
             channel(id, name = "Channel $id", epg = "channel.$id").copy(sortIndex = id.toInt(), hidden = id % 10 == 0L)
@@ -199,6 +218,7 @@ class AdvancedChannelDataTest {
         assertEquals(0, journal.pendingCount(owner))
     }
 
+    /** Checks: explicit Resets Survive Refresh And Remain Sparse. */
     @Test fun explicitResetsSurviveRefreshAndRemainSparse() = runBlocking {
         database.channels().upsertAll(listOf(channel().copy(sortIndex = 42)))
         database.movies().upsertAll(listOf(movie()))
@@ -219,6 +239,7 @@ class AdvancedChannelDataTest {
         assertTrue(records.filter { it.boolValue != null }.all { it.boolValue == false })
     }
 
+    /** Checks: sparse Expected Snapshot Still Applies Remote But Protects An In Flight Local Edit. */
     @Test fun sparseExpectedSnapshotStillAppliesRemoteButProtectsAnInFlightLocalEdit() = runBlocking {
         database.channels().upsertAll(listOf(channel()))
         val expected = adapter.snapshot(device, System.currentTimeMillis())
@@ -229,6 +250,7 @@ class AdvancedChannelDataTest {
         assertEquals("Remote", database.channels().byId(1)!!.customName)
     }
 
+    /** Checks: malformed Unknown Future And Deleted Records Leave Local Data Intact. */
     @Test fun malformedUnknownFutureAndDeletedRecordsLeaveLocalDataIntact() = runBlocking {
         database.channels().upsertAll(listOf(channel()))
         val good = record("channel_hidden", bool = true)

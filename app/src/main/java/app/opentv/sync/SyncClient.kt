@@ -22,6 +22,7 @@ class SyncClient(private val httpClient: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Fetches a portable user-state bundle from a paired LAN server. */
     suspend fun pull(address: String, code: String): Result<SyncBundle> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanAddress = address.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')

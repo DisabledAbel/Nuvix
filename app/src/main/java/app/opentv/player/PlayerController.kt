@@ -92,14 +92,19 @@ class PlayerController(
     /** Channel-surf debounce for this controller — longer for the preview so browsing is calm. */
     private val switchDebounceMillis = if (preview) PREVIEW_SWITCH_DEBOUNCE_MILLIS else SWITCH_DEBOUNCE_MILLIS
 
+    /** Playback status shown by the player UI. */
     sealed interface State {
+        /** Player state with no active media request. */
         data object Idle : State
+        /** Player state waiting for media data for the selected title. */
         data class Buffering(val title: String) : State
+        /** Player state actively presenting the selected title. */
         data class Playing(val title: String) : State
         /** Playback stopped and retries are exhausted. [message] is written for humans. */
         data class Error(val title: String, val message: String, val canRetry: Boolean) : State
     }
 
+    /** Playback URL, title and request options for one explicit media start. */
     data class Request(
         val url: String,
         val title: String,
@@ -161,6 +166,7 @@ class PlayerController(
      * genuinely will not fix themselves.
      */
     private val loadErrorPolicy = object : DefaultLoadErrorHandlingPolicy() {
+        /** Chooses the retry delay for a recoverable media load failure. */
         override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
             val statusCode =
                 (info.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode
@@ -173,8 +179,10 @@ class PlayerController(
             }
         }
 
+        /** Returns the retry allowance for the media data type. */
         override fun getMinimumLoadableRetryCount(dataType: Int): Int = MAX_LOAD_RETRIES
 
+        /** Calculates bounded exponential retry backoff for repeated load failures. */
         private fun backoffFor(errorCount: Int): Long =
             if (errorCount > MAX_LOAD_RETRIES) C_TIME_UNSET
             else minOf(INITIAL_BACKOFF_MILLIS * (1L shl (errorCount - 1)), MAX_BACKOFF_MILLIS)
@@ -195,6 +203,7 @@ class PlayerController(
     private val bufferSettings = BufferSettings.get(context)
     private val lowMemory = BufferSettings.isLowMemory(context)
 
+    /** Resolves the current buffering preferences for this device. */
     private fun effectiveBuffer(configuration: BufferConfiguration): BufferPolicy {
         if (preview) return BufferPolicy.PREVIEW
         val selected = configuration.resolve(lowMemory)
@@ -295,6 +304,7 @@ class PlayerController(
         start(request, debounce, resetFailures = true)
     }
 
+    /** Starts an explicit media request and updates controller state and diagnostics. */
     private fun start(request: Request, debounce: Boolean, resetFailures: Boolean) {
         if (released) return
         // Cancelling here is what makes fast channel-changing safe: the previous switch never
@@ -347,6 +357,7 @@ class PlayerController(
         }
     }
 
+    /** Retries the most recently selected media request. */
     fun retry() {
         current?.let { start(it, debounce = false, resetFailures = true) }
     }
@@ -390,6 +401,7 @@ class PlayerController(
         explicitTextSelection = false
     }
 
+    /** Updates subtitle selection according to the saved playback preference. */
     fun setSubtitlesEnabled(enabled: Boolean) {
         if (!enabled) {
             disableText()
@@ -426,21 +438,25 @@ class PlayerController(
             .build()
     }
 
+    /** Seeks backward by the controller's configured jump interval. */
     fun seekBackward() {
         if (player.isCurrentMediaItemSeekable) player.seekBack()
     }
 
+    /** Seeks forward by the controller's configured jump interval. */
     fun seekForward() {
         if (player.isCurrentMediaItemSeekable) player.seekForward()
     }
 
     val isSeekable: Boolean get() = player.isCurrentMediaItemSeekable
 
+    /** Finds the first supported track in a track group. */
     private fun firstSupportedIndex(group: Tracks.Group): Int {
         for (i in 0 until group.length) if (group.isTrackSupported(i)) return i
         return 0
     }
 
+    /** Stops current playback and clears its active media state. */
     fun stop() {
         if (released) return
         generation++
@@ -454,6 +470,7 @@ class PlayerController(
         _state.value = State.Idle
     }
 
+    /** Releases the player, diagnostics and controller-owned resources. */
     fun release() {
         if (released) return
         released = true

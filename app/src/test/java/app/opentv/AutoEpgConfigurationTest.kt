@@ -29,6 +29,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for auto epg configuration. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class AutoEpgConfigurationTest {
@@ -38,16 +39,19 @@ class AutoEpgConfigurationTest {
     private val now = XmltvParser.parseXmltvTime("20300101000000 +0000")!!
     private val suppressed = mutableSetOf<String>()
 
+    /** Creates isolated fixtures before each test. */
     @Before fun prepare() {
         database = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).build()
         server = MockWebServer().also { it.start() }
         directory = File(RuntimeEnvironment.getApplication().cacheDir, "auto-epg-test").also { it.mkdirs() }
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun cleanUp() {
         database.close(); server.shutdown(); directory.deleteRecursively()
     }
 
+    /** Creates an isolated guide repository with configurable discovery and automatic-feed settings. */
     private fun repository(discovery: AutoEpgDiscovery? = null, enabled: Boolean = true): EpgRepository {
         val http = OkHttpClient()
         return EpgRepository(database.programmes(), database.epgFeeds(), database.epgAliases(), database.channels(),
@@ -56,17 +60,20 @@ class AutoEpgConfigurationTest {
             suppressFeed = { url, value -> if (value) suppressed.add(url) else suppressed.remove(url) })
     }
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(name: String, override: String? = null) = Channel(
         sourceId = 1, streamId = name, name = name, groupKey = ChannelNameNormalizer.normalize(name).groupKey,
         categoryId = null, logoUrl = null, epgChannelId = null, epgOverrideId = override,
         number = null, streamUrl = "https://example.com/stream",
     )
 
+    /** Builds a synthetic guide-channel alias for discovery and matching tests. */
     private fun guide(id: String, name: String) = """
         <tv><channel id="$id"><display-name>$name</display-name></channel>
         <programme channel="$id" start="20300101000000 +0000" stop="20300101010000 +0000"><title>Current show</title></programme></tv>
     """.trimIndent()
 
+    /** Checks: scans every unresolved channel and commits matches before the next guide. */
     @Test fun `scans every unresolved channel and commits matches before the next guide`() = runBlocking {
         database.channels().upsertAll(listOf(channel("UK| BBC ONE HD"), channel("US| CNN FHD"), channel("CA| Manual", "chosen.ca")))
         var scanned: List<Channel> = emptyList()
@@ -89,6 +96,7 @@ class AutoEpgConfigurationTest {
         assertThat(server.requestCount).isEqualTo(2) // Newly assigned ids and downloads are cached.
     }
 
+    /** Checks: empty source falls back and never assigns an unpopulated id. */
     @Test fun `empty source falls back and never assigns an unpopulated id`() = runBlocking {
         database.channels().upsertAll(listOf(channel("BBC One")))
         val repo = repository(AutoEpgDiscovery { DiscoveryResult(listOf(
@@ -104,6 +112,7 @@ class AutoEpgConfigurationTest {
         assertThat(database.epgAliases().all().map { it.epgId }).doesNotContain("wrong")
     }
 
+    /** Checks: automatic off and suppressed feeds never trigger discovery downloads. */
     @Test fun `automatic off and suppressed feeds never trigger discovery downloads`() = runBlocking {
         database.channels().upsertAll(listOf(channel("BBC One")))
         var called = false
@@ -116,6 +125,7 @@ class AutoEpgConfigurationTest {
         assertThat(server.requestCount).isEqualTo(0)
     }
 
+    /** Checks: country scoped matches reject collisions and ids without future programmes. */
     @Test fun `country scoped matches reject collisions and ids without future programmes`() = runBlocking {
         database.channels().upsertAll(listOf(channel("UK| News"), channel("US| News"), channel("News"), channel("Expired"), channel("Missing")))
         val feed = database.epgFeeds().insert(EpgFeed(name = "Cached", url = server.url("/guide.xml").toString()))
@@ -141,6 +151,7 @@ class AutoEpgConfigurationTest {
         assertThat(database.channels().allForMatching().mapNotNull { it.matchedEpgId }).isEmpty()
     }
 
+    /** Checks: turning a discovered feed off survives another automatic scan. */
     @Test fun `turning a discovered feed off survives another automatic scan`() = runBlocking {
         database.channels().upsertAll(listOf(channel("BBC One")))
         val url = server.url("/uk.xml").toString()
@@ -156,6 +167,7 @@ class AutoEpgConfigurationTest {
         assertThat(server.requestCount).isEqualTo(1)
     }
 
+    /** Checks: download limit resumes remaining candidates on the next refresh. */
     @Test fun `download limit resumes remaining candidates on the next refresh`() = runBlocking {
         database.channels().upsertAll(listOf(channel("Target")))
         val guides = (1..13).map { DiscoveredGuide("Guide $it", server.url("/$it.xml").toString()) }

@@ -18,6 +18,7 @@ internal class RecordingCapture(
     private val retryDelayMillis: Long = 1_500L,
     private val maxEmptyConnections: Int = 5,
 ) {
+    /** Capture byte count and optional failure information from the stream writer. */
     data class Result(val bytes: Long, val error: String? = null)
 
     /** Storage failures terminate immediately; only transport failures are reconnected. */

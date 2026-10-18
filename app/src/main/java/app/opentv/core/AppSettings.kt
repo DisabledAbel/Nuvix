@@ -75,11 +75,13 @@ class AppSettings private constructor(context: Context) {
     private val _lastGuidePosition = MutableStateFlow(readGuidePosition())
     val lastGuidePosition: StateFlow<GuidePosition?> = _lastGuidePosition.asStateFlow()
 
+    /** Persists the guide layout preference and updates its observable value. */
     fun setGuideLayout(layout: GuideLayout) {
         prefs.edit().putString(KEY_GUIDE_LAYOUT, layout.name).apply()
         _guideLayout.value = layout
     }
 
+    /** Persists the guide density preference and updates its observable value. */
     fun setGuideDensity(density: GuideTimelineDensity) {
         prefs.edit().putString(KEY_GUIDE_DENSITY, density.name).apply()
         _guideDensity.value = density
@@ -104,21 +106,25 @@ class AppSettings private constructor(context: Context) {
         _guideDefaultFilter.value = filter
     }
 
+    /** Persists the guide sort preference and updates its observable value. */
     fun setGuideSort(sort: GuideChannelSort) {
         prefs.edit().putString(KEY_GUIDE_SORT, sort.name).apply()
         _guideSort.value = sort
     }
 
+    /** Persists the show guide artwork preference and updates its observable value. */
     fun setShowGuideArtwork(visible: Boolean) {
         prefs.edit().putBoolean(KEY_GUIDE_ARTWORK, visible).apply()
         _showGuideArtwork.value = visible
     }
 
+    /** Persists the show guide progress preference and updates its observable value. */
     fun setShowGuideProgress(visible: Boolean) {
         prefs.edit().putBoolean(KEY_GUIDE_PROGRESS, visible).apply()
         _showGuideProgress.value = visible
     }
 
+    /** Persists the remember guide position preference and updates its observable value. */
     fun setRememberGuidePosition(remember: Boolean) {
         val editor = prefs.edit().putBoolean(KEY_GUIDE_REMEMBER, remember)
         if (!remember) editor.remove(KEY_GUIDE_POSITION_CHANNEL).remove(KEY_GUIDE_POSITION_TIME)
@@ -137,14 +143,18 @@ class AppSettings private constructor(context: Context) {
         _lastGuidePosition.value = position
     }
 
+    /** Reads an enum preference, returning [fallback] for missing or invalid storage. */
     private inline fun <reified T : Enum<T>> readGuideEnum(key: String, fallback: T): T {
         val saved = prefs.all[key] as? String
         return enumValues<T>().firstOrNull { it.name == saved } ?: fallback
     }
 
+    /** Reads a guide boolean with a safe fallback for invalid storage. */
     private fun readGuideBoolean(key: String, fallback: Boolean): Boolean = prefs.all[key] as? Boolean ?: fallback
+    /** Reads a valid saved guide row ID, returning null for absent or malformed values. */
     private fun readGuideId(key: String): Long? = (prefs.all[key] as? Long)?.takeIf { it > 0 }
 
+    /** Restores a valid remembered channel and time position from guide settings. */
     private fun readGuidePosition(): GuidePosition? {
         if (!_rememberGuidePosition.value) return null
         val channel = readGuideId(KEY_GUIDE_POSITION_CHANNEL) ?: return null
@@ -198,12 +208,15 @@ class AppSettings private constructor(context: Context) {
     val diagnosticsDetailed = _diagnosticsDetailed.asStateFlow()
     private val _diagnosticsTechnical = MutableStateFlow(prefs.getBoolean("diagnostics_technical", true))
     val diagnosticsTechnical = _diagnosticsTechnical.asStateFlow()
+    /** Persists the diagnostics enabled preference and updates its observable value. */
     fun setDiagnosticsEnabled(value: Boolean) {
         prefs.edit().putBoolean("diagnostics_enabled", value).apply(); _diagnosticsEnabled.value = value
     }
+    /** Persists the diagnostics detailed preference and updates its observable value. */
     fun setDiagnosticsDetailed(value: Boolean) {
         prefs.edit().putBoolean("diagnostics_detailed", value).apply(); _diagnosticsDetailed.value = value
     }
+    /** Persists the diagnostics technical preference and updates its observable value. */
     fun setDiagnosticsTechnical(value: Boolean) {
         prefs.edit().putBoolean("diagnostics_technical", value).apply(); _diagnosticsTechnical.value = value
     }
@@ -235,14 +248,17 @@ class AppSettings private constructor(context: Context) {
     private val _automaticEpg = MutableStateFlow(prefs.getBoolean(KEY_AUTO_EPG, true))
     val automaticEpg: StateFlow<Boolean> = _automaticEpg.asStateFlow()
 
+    /** Persists the automatic epg preference and updates its observable value. */
     fun setAutomaticEpg(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_EPG, enabled).apply()
         _automaticEpg.value = enabled
     }
 
+    /** Checks whether automatic discovery was locally suppressed for this guide URL. */
     fun isEpgFeedSuppressed(url: String): Boolean =
         epgFeedKey(url) in prefs.getStringSet(KEY_EPG_SUPPRESSED, emptySet()).orEmpty()
 
+    /** Adds or removes the URL digest used to suppress automatic guide discovery. */
     fun suppressEpgFeed(url: String, suppressed: Boolean) {
         val urls = prefs.getStringSet(KEY_EPG_SUPPRESSED, emptySet()).orEmpty().toMutableSet()
         val key = epgFeedKey(url)
@@ -250,6 +266,7 @@ class AppSettings private constructor(context: Context) {
         prefs.edit().putStringSet(KEY_EPG_SUPPRESSED, urls).apply()
     }
 
+    /** Hashes a guide URL so suppression storage does not retain credentials or signed query strings. */
     // Custom guide URLs can contain passwords or signed query strings. Persist only a digest.
     private fun epgFeedKey(url: String): String = java.security.MessageDigest.getInstance("SHA-256")
         .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
@@ -259,6 +276,7 @@ class AppSettings private constructor(context: Context) {
     private val _activeProfileId = MutableStateFlow(prefs.getLong(KEY_ACTIVE_PROFILE, 1L))
     val activeProfileId: StateFlow<Long> = _activeProfileId.asStateFlow()
 
+    /** Persists the active profile preference and updates its observable value. */
     fun setActiveProfile(id: Long) {
         prefs.edit().putLong(KEY_ACTIVE_PROFILE, id).apply()
         _activeProfileId.value = id
@@ -282,72 +300,86 @@ class AppSettings private constructor(context: Context) {
     private val _hiddenUnlocked = MutableStateFlow(false)
     val hiddenUnlocked: StateFlow<Boolean> = _hiddenUnlocked.asStateFlow()
 
+    /** Stores the parental PIN hash and publishes that a PIN is configured. */
     fun setPin(pin: String) {
         prefs.edit().putString(KEY_PIN_HASH, hashPin(pin)).apply()
         _pinIsSet.value = true
     }
 
+    /** Removes the stored parental PIN and resets the unlocked state. */
     fun clearPin() {
         prefs.edit().remove(KEY_PIN_HASH).apply()
         _pinIsSet.value = false
         _hiddenUnlocked.value = true
     }
 
+    /** Checks the supplied PIN against its saved hash; succeeds when no PIN is configured. */
     fun verifyPin(pin: String): Boolean {
         val stored = prefs.getString(KEY_PIN_HASH, null) ?: return true
         return stored == hashPin(pin)
     }
 
+    /** Persists the hidden categories preference and updates its observable value. */
     fun setHiddenCategories(keys: Set<String>) {
         prefs.edit().putStringSet(KEY_HIDDEN_CATS, keys).apply()
         _hiddenCategories.value = keys.toSet()
     }
 
+    /** Updates the in-memory parental unlock state for the current process. */
     fun setHiddenUnlocked(unlocked: Boolean) {
         _hiddenUnlocked.value = unlocked
     }
 
+    /** Computes the stored digest representation of a parental PIN. */
     private fun hashPin(pin: String): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         val bytes = digest.digest("opentv-pin::$pin".toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
+    /** Persists the theme mode preference and updates its observable value. */
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME, mode.name).apply()
         _themeMode.value = mode
     }
 
+    /** Persists the channel layout preference and updates its observable value. */
     fun setChannelLayout(layout: ChannelLayout) {
         prefs.edit().putString(KEY_CHANNEL_LAYOUT, layout.name).apply()
         _channelLayout.value = layout
     }
 
+    /** Persists the subtitles enabled preference and updates its observable value. */
     fun setSubtitlesEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SUBTITLES, enabled).apply()
         _subtitlesEnabled.value = enabled
     }
 
+    /** Persists the guide preview video preference and updates its observable value. */
     fun setGuidePreviewVideo(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_PREVIEW_VIDEO, enabled).apply()
         _guidePreviewVideo.value = enabled
     }
 
+    /** Persists the guide preview sound preference and updates its observable value. */
     fun setGuidePreviewSound(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_PREVIEW_SOUND, enabled).apply()
         _guidePreviewSound.value = enabled
     }
 
+    /** Persists the persistent live playback preference and updates its observable value. */
     fun setPersistentLivePlayback(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_PERSISTENT_LIVE, enabled).apply()
         _persistentLivePlayback.value = enabled
     }
 
+    /** Persists the live preview preference and updates its observable value. */
     fun setLivePreview(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_LIVE_PREVIEW, enabled).apply()
         _livePreview.value = enabled
     }
 
+    /** Persists the continue audio while browsing preference and updates its observable value. */
     fun setContinueAudioWhileBrowsing(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_BROWSING_AUDIO, enabled).apply()
         _continueAudioWhileBrowsing.value = enabled
@@ -357,6 +389,7 @@ class AppSettings private constructor(context: Context) {
     private val _resumeLastChannel = MutableStateFlow(prefs.getBoolean(KEY_RESUME_LAST, false))
     val resumeLastChannel: StateFlow<Boolean> = _resumeLastChannel.asStateFlow()
 
+    /** Persists the resume last channel preference and updates its observable value. */
     fun setResumeLastChannel(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_RESUME_LAST, enabled).apply()
         _resumeLastChannel.value = enabled
@@ -372,6 +405,7 @@ class AppSettings private constructor(context: Context) {
     private val _recordPadEndMinutes = MutableStateFlow(prefs.getInt(KEY_PAD_END, 5))
     val recordPadEndMinutes: StateFlow<Int> = _recordPadEndMinutes.asStateFlow()
 
+    /** Persists the record padding preference and updates its observable value. */
     fun setRecordPadding(startMinutes: Int, endMinutes: Int) {
         val s = startMinutes.coerceIn(0, 30)
         val e = endMinutes.coerceIn(0, 60)
@@ -388,6 +422,7 @@ class AppSettings private constructor(context: Context) {
     private val _recordAutoSwitch = MutableStateFlow(prefs.getBoolean(KEY_REC_AUTOSWITCH, false))
     val recordAutoSwitch: StateFlow<Boolean> = _recordAutoSwitch.asStateFlow()
 
+    /** Persists the record auto switch preference and updates its observable value. */
     fun setRecordAutoSwitch(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_REC_AUTOSWITCH, enabled).apply()
         _recordAutoSwitch.value = enabled
@@ -400,6 +435,7 @@ class AppSettings private constructor(context: Context) {
     private val _livePauseEnabled = MutableStateFlow(prefs.getBoolean(KEY_LIVE_PAUSE, false))
     val livePauseEnabled: StateFlow<Boolean> = _livePauseEnabled.asStateFlow()
 
+    /** Persists the live pause enabled preference and updates its observable value. */
     fun setLivePauseEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_LIVE_PAUSE, enabled).apply()
         _livePauseEnabled.value = enabled
@@ -421,11 +457,13 @@ class AppSettings private constructor(context: Context) {
     private val _seriesEnabled = MutableStateFlow(prefs.getBoolean(KEY_CONTENT_SERIES, true))
     val seriesEnabled: StateFlow<Boolean> = _seriesEnabled.asStateFlow()
 
+    /** Persists the live enabled preference and updates its observable value. */
     fun setLiveEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_CONTENT_LIVE, enabled).apply()
         _liveEnabled.value = enabled
     }
 
+    /** Persists the movies enabled preference and updates its observable value. */
     fun setMoviesEnabled(enabled: Boolean) {
         // Also reset the VOD freshness stamp so the next Movies/Shows open re-syncs immediately
         // rather than waiting out the cache TTL — turning a content type on should show it now.
@@ -436,6 +474,7 @@ class AppSettings private constructor(context: Context) {
         _moviesEnabled.value = enabled
     }
 
+    /** Persists the series enabled preference and updates its observable value. */
     fun setSeriesEnabled(enabled: Boolean) {
         prefs.edit()
             .putBoolean(KEY_CONTENT_SERIES, enabled)
@@ -452,6 +491,7 @@ class AppSettings private constructor(context: Context) {
     private val _languageTag = MutableStateFlow(prefs.getString(KEY_LANGUAGE, "").orEmpty())
     val languageTag: StateFlow<String> = _languageTag.asStateFlow()
 
+    /** Persists the language tag preference and updates its observable value. */
     fun setLanguageTag(tag: String) {
         prefs.edit().putString(KEY_LANGUAGE, tag).apply()
         _languageTag.value = tag
@@ -470,15 +510,18 @@ class AppSettings private constructor(context: Context) {
     private val _playerResizeMode = MutableStateFlow(prefs.getInt(KEY_RESIZE_MODE, 0))
     val playerResizeMode: StateFlow<Int> = _playerResizeMode.asStateFlow()
 
+    /** Persists the player resize mode preference and updates its observable value. */
     fun setPlayerResizeMode(mode: Int) {
         prefs.edit().putInt(KEY_RESIZE_MODE, mode).apply()
         _playerResizeMode.value = mode
     }
 
+    /** Reads the saved theme mode with a default for unsupported values. */
     private fun readThemeMode(): ThemeMode =
         runCatching { ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "") }
             .getOrDefault(ThemeMode.SYSTEM)
 
+    /** Reads the saved channel layout with a default for unsupported values. */
     private fun readChannelLayout(): ChannelLayout =
         runCatching { ChannelLayout.valueOf(prefs.getString(KEY_CHANNEL_LAYOUT, null) ?: "") }
             .getOrDefault(ChannelLayout.GRID)
@@ -534,11 +577,13 @@ class AppSettings private constructor(context: Context) {
     private val _smbPassword = MutableStateFlow(privateSettings.getString(KEY_SMB_PASS, "").orEmpty())
     val smbPassword: StateFlow<String> = _smbPassword.asStateFlow()
 
+    /** Persists the recording target preference and updates its observable value. */
     fun setRecordingTarget(target: RecordingTarget) {
         prefs.edit().putString(KEY_REC_TARGET, target.name).apply()
         _recordingTarget.value = target
     }
 
+    /** Saves NAS connection fields, encrypts the password and publishes the updated local configuration. */
     fun setSmbConfig(host: String, share: String, folder: String, user: String, password: String) {
         privateSettings.putString(KEY_SMB_PASS, password)
         prefs.edit()
@@ -554,6 +599,7 @@ class AppSettings private constructor(context: Context) {
         _smbPassword.value = password
     }
 
+    /** Reads the saved recording destination with a default for unsupported values. */
     private fun readRecordingTarget(): RecordingTarget =
         runCatching { RecordingTarget.valueOf(prefs.getString(KEY_REC_TARGET, null) ?: "") }
             .getOrDefault(RecordingTarget.INTERNAL)
@@ -573,6 +619,7 @@ class AppSettings private constructor(context: Context) {
     private val _nasAutoSync = MutableStateFlow(prefs.getBoolean(KEY_NAS_AUTO_SYNC, false))
     val nasAutoSync: StateFlow<Boolean> = _nasAutoSync.asStateFlow()
 
+    /** Persists the nas auto sync preference and updates its observable value. */
     fun setNasAutoSync(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NAS_AUTO_SYNC, enabled).apply()
         _nasAutoSync.value = enabled
@@ -599,6 +646,7 @@ class AppSettings private constructor(context: Context) {
     private val _tmdbApiKey = MutableStateFlow(privateSettings.getString(KEY_TMDB_KEY, "").orEmpty())
     val tmdbApiKey: StateFlow<String> = _tmdbApiKey.asStateFlow()
 
+    /** Persists the tmdb api key preference and updates its observable value. */
     fun setTmdbApiKey(key: String) {
         val trimmed = key.trim()
         privateSettings.putString(KEY_TMDB_KEY, trimmed)
@@ -615,20 +663,24 @@ class AppSettings private constructor(context: Context) {
     private val _stremioAddons = MutableStateFlow(readStremioAddons())
     val stremioAddons: StateFlow<List<StremioAddon>> = _stremioAddons.asStateFlow()
 
+    /** Adds an add-on to the saved list and publishes the updated selection. */
     fun addStremioAddon(addon: StremioAddon) {
         val deduped = _stremioAddons.value.filterNot { it.manifestUrl.equals(addon.manifestUrl, ignoreCase = true) }
         persistStremioAddons(deduped + addon)
     }
 
+    /** Removes the add-on identified by its manifest URL. */
     fun removeStremioAddon(manifestUrl: String) {
         persistStremioAddons(_stremioAddons.value.filterNot { it.manifestUrl == manifestUrl })
     }
 
+    /** Stores the serialized add-on list in the private settings vault. */
     private fun persistStremioAddons(list: List<StremioAddon>) {
         privateSettings.putString(KEY_STREMIO_ADDONS, addonJson.encodeToString(list))
         _stremioAddons.value = list
     }
 
+    /** Decodes saved add-ons, using an empty list when none can be read. */
     private fun readStremioAddons(): List<StremioAddon> {
         // A corrupt JSON value can be retained for recovery; authentication/key failures must
         // propagate instead of silently replacing a user's encrypted add-ons with an empty list.
@@ -696,6 +748,7 @@ class AppSettings private constructor(context: Context) {
 
         @Volatile private var instance: AppSettings? = null
 
+        /** Returns the process-wide application settings store. */
         fun get(context: Context): AppSettings =
             instance ?: synchronized(this) {
                 instance ?: AppSettings(context).also { instance = it }

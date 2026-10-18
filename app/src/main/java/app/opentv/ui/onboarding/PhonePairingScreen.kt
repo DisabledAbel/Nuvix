@@ -114,6 +114,7 @@ fun PhonePairingScreen(
     }
 }
 
+/** Displays the active phone-pairing address, QR code and cancellation action. */
 @Composable
 private fun Listening(session: PairingServer.Session, onCancel: () -> Unit) {
     // Generated once per session rather than on every recomposition — encoding is not free

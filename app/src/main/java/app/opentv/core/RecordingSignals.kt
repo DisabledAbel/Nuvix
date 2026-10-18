@@ -47,20 +47,24 @@ object RecordingSignals {
     /** Recordings whose auto-switch the viewer chose to skip ("keep watching"). */
     private val suppressed = ConcurrentHashMap.newKeySet<Long>()
 
+    /** Publishes a request to watch a recording at the specified time. */
     fun requestWatch(recordingId: Long, nowMillis: Long) {
         if (recordingId > 0 && recordingId !in suppressed) {
             _watch.value = Watch(recordingId, nowMillis)
         }
     }
 
+    /** Clears the handled recording watch request. */
     fun consumeWatch() {
         _watch.value = null
     }
 
+    /** Publishes an imminent recording warning for the foreground UI. */
     fun warn(imminent: Imminent) {
         if (imminent.recordingId !in suppressed) _imminent.value = imminent
     }
 
+    /** Clears the currently displayed imminent recording warning. */
     fun clearImminent() {
         _imminent.value = null
     }

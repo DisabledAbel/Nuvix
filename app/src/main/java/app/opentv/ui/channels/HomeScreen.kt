@@ -751,6 +751,7 @@ fun HomeScreen(
     }
 }
 
+/** Displays a focusable guide category or filter entry in the navigation rail. */
 @Composable
 private fun RailEntry(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Text(
@@ -773,6 +774,7 @@ private fun RailEntry(label: String, selected: Boolean, onClick: () -> Unit, mod
     )
 }
 
+/** Displays a channel, its current program and explicit channel-selection action. */
 @Composable
 private fun ChannelRow(
     row: ChannelsViewModel.Row,
@@ -854,6 +856,7 @@ private fun ChannelRow(
     }
 }
 
+/** Displays guide loading feedback while channel data is unavailable. */
 @Composable
 private fun LoadingState(isSyncing: Boolean) {
     val s by app.opentv.core.StatusBus.message.collectAsState()
@@ -900,6 +903,7 @@ private fun LoadingState(isSyncing: Boolean) {
     }
 }
 
+/** Displays the guide's empty-favorites guidance. */
 @Composable
 private fun NoFavouritesState() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -950,6 +954,7 @@ private fun ChannelsErrorState(onRetry: () -> Unit, onEditProvider: () -> Unit) 
     }
 }
 
+/** Displays the guide's empty-channel guidance and available next action. */
 @Composable
 private fun EmptyState(onAddSource: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -969,8 +974,10 @@ private fun EmptyState(onAddSource: () -> Unit) {
 /** UTC in the database, device zone on screen. Converted here and nowhere else. */
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+/** Formats an epoch timestamp as a localized guide time label. */
 private fun formatTime(utcMillis: Long): String = timeFormat.format(Date(utcMillis))
 
+/** Returns the display label for the selected guide filter. */
 @Composable
 private fun guideFilterLabel(filter: GuideChannelFilter): String = stringResource(
     when (filter) {

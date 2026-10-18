@@ -117,6 +117,7 @@ fun SettingsHubScreen(
     }
 }
 
+/** Settings destination icon, title, supporting text and activation callback. */
 private data class HubEntry(
     val icon: ImageVector,
     val title: String,
@@ -124,6 +125,7 @@ private data class HubEntry(
     val onClick: () -> Unit,
 )
 
+/** Displays a focusable settings destination and its supporting text. */
 @Composable
 private fun HubRow(entry: HubEntry) {
     var focused by remember { mutableStateOf(false) }
@@ -169,6 +171,7 @@ private fun HubRow(entry: HubEntry) {
     }
 }
 
+/** Displays a focusable text action within the settings hub. */
 @Composable
 internal fun HubTextButton(label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

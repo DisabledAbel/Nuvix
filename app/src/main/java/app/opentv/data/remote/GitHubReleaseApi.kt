@@ -30,6 +30,7 @@ data class GitHubRelease(
     fun apkAsset(): GitHubAsset? = assets.singleOrNull { it.name == "nuvix.apk" }
 }
 
+/** Release asset name, browser download URL and published byte size. */
 @Serializable
 data class GitHubAsset(
     val name: String = "",

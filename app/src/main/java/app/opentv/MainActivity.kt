@@ -100,17 +100,20 @@ import app.opentv.ui.vod.SeriesDetailScreen
 import app.opentv.ui.vod.VodPlayerScreen
 import app.opentv.update.UpdateGate
 
+/** Hosts TV navigation, live playback, locale selection and picture-in-picture transitions. */
 class MainActivity : ComponentActivity() {
     private var homeGeneration by mutableIntStateOf(0)
     private var liveSession: LivePlaybackSession? = null
 
 
+    /** Applies the saved UI locale before Android inflates activity resources. */
     // Apply the chosen UI language before any view or resource is resolved. A language change in
     // settings calls recreate(), which re-runs this with the new tag.
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(app.opentv.core.LocaleUtils.wrap(newBase))
     }
 
+    /** Initializes the Compose host and handles any incoming playback request. */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -154,11 +157,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Marks the activity as foreground for live playback policy. */
     override fun onStart() {
         super.onStart()
         liveSession?.setForeground(true)
     }
 
+    /** Updates live playback policy when the activity leaves the foreground. */
     override fun onStop() {
         // A retained ViewModel keeps the same player during configuration changes. Process death
         // creates a new owner and only the existing startup preference may request a new stream.
@@ -166,16 +171,19 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    /** Passes Android memory pressure to the shared live playback session. */
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         liveSession?.onMemoryPressure(level)
     }
 
+    /** Releases optional live resources when Android reports low memory. */
     override fun onLowMemory() {
         super.onLowMemory()
         liveSession?.onMemoryPressure(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
     }
 
+    /** Detaches the activity from the shared live playback session. */
     override fun onDestroy() {
         val session = liveSession
         // A device that rejected surface cleanup cannot retain a View into a destroyed Activity.
@@ -185,6 +193,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /** Handles playback and home intents delivered to the existing activity. */
     // singleTask: a reminder tapped while the app is already running arrives here, not a fresh
     // onCreate. Either way the requested channel is handed to the nav graph via [PlayRequests].
     override fun onNewIntent(intent: Intent) {
@@ -193,6 +202,7 @@ class MainActivity : ComponentActivity() {
         handlePlayIntent(intent)
     }
 
+    /** Consumes an explicit channel request from an intent and forwards it to navigation. */
     private fun handlePlayIntent(intent: Intent?) {
         app.opentv.update.UpdateScheduler.handleIntent(this, intent)
         if (app.opentv.launcher.LauncherController.isHomeIntent(intent)) homeGeneration++
@@ -212,10 +222,12 @@ class MainActivity : ComponentActivity() {
         maybeEnterPip()
     }
 
+    /** Checks platform and device support for picture-in-picture. */
     private fun supportsPip(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
+    /** Attempts picture-in-picture only when playback and device state allow it. */
     fun maybeEnterPip() {
         if (!app.opentv.core.PipState.eligible || !app.opentv.core.PipState.isPlaying) return
         enterPipNow()
@@ -241,8 +253,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Exposes device picture-in-picture availability to Compose controls. */
     fun pipSupported(): Boolean = supportsPip()
 
+    /** Synchronizes system picture-in-picture state with playback presentation. */
     override fun onPictureInPictureModeChanged(
         isInPictureInPictureMode: Boolean,
         newConfig: Configuration,
@@ -261,6 +275,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Defines navigation destinations and builders for parameterized routes. */
 object Routes {
     const val HOME = "home"
     const val ADD_SOURCE = "add-source"
@@ -295,17 +310,24 @@ object Routes {
     // the player can look up the way a channel is.
     const val VOD_PLAYER = "vod?key={key}&url={url}&title={title}&ua={ua}"
 
+    /** Builds the fullscreen live player route for a channel row ID. */
     fun player(channelId: Long) = "player/$channelId"
+    /** Builds the detail route for a provider series row ID. */
     fun seriesDetail(seriesId: Long) = "series/$seriesId"
+    /** Builds the detail route for a provider movie row ID. */
     fun movieDetail(movieId: Long) = "movie/$movieId"
+    /** Builds the provider editor route for a source row ID. */
     fun editSource(sourceId: Long) = "edit-source/$sourceId"
+    /** Encodes a person identifier for the metadata profile route. */
     fun person(name: String) = "person?name=${java.net.URLEncoder.encode(name, "UTF-8")}"
+    /** Encodes media identity, URL, title and user agent into the VOD playback route. */
     fun vodPlayer(key: String, url: String, title: String, ua: String): String {
         fun e(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
         return "vod?key=${e(key)}&url=${e(url)}&title=${e(title)}&ua=${e(ua)}"
     }
 }
 
+/** Connects navigation destinations to shared view models and the live playback session. */
 @Composable
 private fun NuvixNavigation(
     isTelevision: Boolean,

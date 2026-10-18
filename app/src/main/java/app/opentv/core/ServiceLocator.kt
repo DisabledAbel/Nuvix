@@ -34,11 +34,13 @@ object ServiceLocator {
 
     @Volatile private var instance: Graph? = null
 
+    /** Returns the application dependency graph, creating it on first access. */
     fun get(context: Context): Graph =
         instance ?: synchronized(this) {
             instance ?: Graph(context.applicationContext).also { instance = it }
         }
 
+    /** Owns the shared database, network clients, repositories and local settings stores. */
     class Graph(context: Context) {
         private val appContext = context.applicationContext
 

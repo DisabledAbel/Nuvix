@@ -23,7 +23,10 @@ data class CustomChannelGroup(
     val deleted: Boolean = false,
 )
 
+/** Room serialization for ordered portable custom-group member identities. */
 class CustomGroupConverters {
+    /** Encodes the ordered group member list as JSON for Room storage. */
     @TypeConverter fun membersToJson(value: List<String>): String = Json.encodeToString(value)
+    /** Decodes stored group membership, falling back to an empty list for invalid JSON. */
     @TypeConverter fun jsonToMembers(value: String): List<String> = Json.decodeFromString(value)
 }

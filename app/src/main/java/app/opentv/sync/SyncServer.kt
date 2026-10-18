@@ -34,13 +34,18 @@ import kotlinx.coroutines.launch
  */
 class SyncServer(private val scope: CoroutineScope) {
 
+    /** LAN address, listening port and pairing code for a shared synchronization bundle. */
     data class Session(val host: String, val port: Int, val code: String) {
         val address: String get() = "$host:$port"
     }
 
+    /** Observable lifecycle of the temporary LAN synchronization server. */
     sealed interface State {
+        /** Server state with no active sharing listener. */
         data object Idle : State
+        /** Server state exposing the current authorized sharing session. */
         data class Sharing(val session: Session) : State
+        /** Server failure with an explanation suitable for the synchronization UI. */
         data class Failed(val reason: String) : State
     }
 
@@ -53,6 +58,7 @@ class SyncServer(private val scope: CoroutineScope) {
     private var wrongAttempts = 0
     @Volatile private var running = false
 
+    /** Starts a temporary LAN server exposing the prepared synchronization bundle. */
     fun start(bundleJson: String) {
         if (running) return
         val host = lanAddress() ?: run {
@@ -96,6 +102,7 @@ class SyncServer(private val scope: CoroutineScope) {
         }
     }
 
+    /** Closes the sharing listener and clears its session state. */
     fun stop() {
         running = false
         runCatching { serverSocket?.close() }
@@ -105,6 +112,7 @@ class SyncServer(private val scope: CoroutineScope) {
         if (_state.value is State.Sharing) _state.value = State.Idle
     }
 
+    /** Checks the pairing code and serves the portable bundle to an authorized LAN request. */
     private fun handle(client: Socket) {
         client.soTimeout = SOCKET_TIMEOUT_MILLIS
         if (!PairingHttp.isPrivateAddress(client.inetAddress?.hostAddress)) {
@@ -143,6 +151,7 @@ class SyncServer(private val scope: CoroutineScope) {
         output.write(PairingHttp.httpResponse("200 OK", "application/json", bundle))
     }
 
+    /** Finds a local network address suitable for displaying the sharing session. */
     private fun lanAddress(): String? {
         val candidates = mutableListOf<InetAddress>()
         runCatching {

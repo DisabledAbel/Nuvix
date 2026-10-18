@@ -81,6 +81,7 @@ class SportsRepository(private val db: OpenTvDatabase) {
         partial
     } }
 
+    /** Loads a bounded page of eligible provider streams associated with an event. */
     fun streams(eventId: String, excludedCategories: String = "||", offset: Int = 0) = combine(dao.observeStreams(eventId, excludedCategories, offset), dao.observeEvent(eventId)) { rows, event ->
         rows.map { row ->
             SportsStream(row.channel, row.programme, row.providerName,
@@ -110,6 +111,7 @@ class SportsRepository(private val db: OpenTvDatabase) {
         }
     }
 
+    /** Saves the selected preferred provider-channel choice for an event. */
     suspend fun prefer(eventId: String, stream: SportsStream) {
         require(stream.available && !stream.rejected)
         dao.prefer(SportsPreferred(eventId, stream.channel.sourceId, stream.channel.streamId))
@@ -131,6 +133,7 @@ class SportsRepository(private val db: OpenTvDatabase) {
         channel
     }
 
+    /** Adds or removes a league or team from saved sports favorites. */
     suspend fun toggleFavorite(kind: String, id: String, leagueId: String, name: String) = withContext(Dispatchers.IO) {
         require(kind in setOf("team", "league", "sport"))
         require(name.length in 1..120 && name.none { it.isISOControl() })
@@ -146,6 +149,7 @@ class SportsRepository(private val db: OpenTvDatabase) {
         }
     }
 
+    /** Moves a favorite league or team within its persisted order. */
     suspend fun moveFavorite(kind: String, id: String, delta: Int) = withContext(Dispatchers.IO) { db.withTransaction {
         val ordered = dao.favorites(kind).toMutableList()
         val from = ordered.indexOfFirst { it.id == id }

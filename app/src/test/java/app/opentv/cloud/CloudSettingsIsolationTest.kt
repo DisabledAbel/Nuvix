@@ -11,16 +11,19 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for cloud settings isolation. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class CloudSettingsIsolationTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
     private lateinit var settings: CloudSettings
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         context.getSharedPreferences("nuvix_cloud_flags", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.noBackupFilesDir, "cloud_v1").deleteRecursively()
         settings = CloudSettings(context)
     }
+    /** Checks: existing Enabled Users Keep Only Original Category And New Installs Remain Off. */
     @Test fun existingEnabledUsersKeepOnlyOriginalCategoryAndNewInstallsRemainOff() {
         assertFalse(settings.enabled)
         assertEquals(AdvancedSyncCategory.DEFAULTS, settings.categories)
@@ -29,12 +32,14 @@ class CloudSettingsIsolationTest {
         assertTrue(reopened.enabled)
         assertEquals(setOf(AdvancedSyncCategory.FAVOURITES_PROGRESS), reopened.categories)
     }
+    /** Checks: category Selections Persist And Can All Be Disabled. */
     @Test fun categorySelectionsPersistAndCanAllBeDisabled() {
         settings.categories = setOf(AdvancedSyncCategory.APP_FAVOURITES, AdvancedSyncCategory.HOME_PREFERENCES)
         assertEquals(settings.categories, CloudSettings(context).categories)
         settings.categories = emptySet()
         assertTrue(CloudSettings(context).categories.isEmpty())
     }
+    /** Checks: sign Out Clears Every Account Bound Queue Without Deleting Local Preferences. */
     @Test fun signOutClearsEveryAccountBoundQueueWithoutDeletingLocalPreferences() {
         val directory = File(context.noBackupFilesDir, "cloud_v1")
         val accountFiles = listOf("session", "outbox", "acknowledged", "favourites", "advanced_journal")
@@ -53,11 +58,13 @@ class CloudSettingsIsolationTest {
         assertFalse(File(directory, "advanced_journal.tmp").exists())
         assertEquals("[\"com.example.local\"]", launcher.getString("favorite_packages", null))
     }
+    /** Checks: category Names Not Recognized By This Client Cannot Enable An Unknown Payload. */
     @Test fun categoryNamesNotRecognizedByThisClientCannotEnableAnUnknownPayload() {
         context.getSharedPreferences("nuvix_cloud_flags", Context.MODE_PRIVATE).edit()
             .putStringSet("categories", setOf("PROVIDER_CREDENTIALS", "APP_FAVOURITES")).commit()
         assertEquals(setOf(AdvancedSyncCategory.APP_FAVOURITES), settings.categories)
     }
+    /** Checks: project Configuration Rejects Insecure Origins And Privileged Keys Before Storage. */
     @Test fun projectConfigurationRejectsInsecureOriginsAndPrivilegedKeysBeforeStorage() {
         for ((url, key) in listOf(
             "http://project.invalid" to "sb_publishable_this_is_test_only",
@@ -67,6 +74,7 @@ class CloudSettingsIsolationTest {
         )) assertTrue(runCatching { settings.configure(url, key) }.isFailure)
         assertNull(settings.config())
     }
+    /** Checks: malformed Owner Cannot Be Saved Into The Encrypted Session. */
     @Test fun malformedOwnerCannotBeSavedIntoTheEncryptedSession() {
         assertTrue(runCatching {
             settings.saveSession(CloudSession("not-an-owner", "test@example.invalid", "test", "test", 1000))

@@ -18,13 +18,16 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for public epg discovery. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class PublicEpgDiscoveryTest {
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(name: String, id: String? = null) = Channel(sourceId = 1, streamId = name, name = name,
         groupKey = ChannelNameNormalizer.normalize(name).groupKey, categoryId = null, logoUrl = null,
         epgChannelId = id, number = null, streamUrl = "https://provider.test/private")
 
+    /** Checks: directory resolves relative XML links and excludes non guides and credentials. */
     @Test fun `directory resolves relative XML links and excludes non guides and credentials`() {
         val parsed = PublicEpgDiscovery.parseDirectory("https://iptv-epg.org/guides", """
             <a href="/guides/gb.xml.gz">United <b>Kingdom</b></a>
@@ -41,6 +44,7 @@ class PublicEpgDiscoveryTest {
         assertThat(PublicEpgDiscovery.relevantTo(DiscoveredGuide("Global", "https://guides.test/all.xml"), setOf("CA"))).isTrue()
     }
 
+    /** Checks: streamed catalog accepts only advertised downloadable XML sources. */
     @Test fun `streamed catalog accepts only advertised downloadable XML sources`() {
         val entries = PublicEpgDiscovery.readGuides("""[
           {"channel":null,"site_name":"Unmapped","sources":[{"url":"https://guides.test/missing.xml","format":"XML"}]},
@@ -57,6 +61,7 @@ class PublicEpgDiscoveryTest {
         assertThat(entries.single().urls).containsExactly("https://guides.test/us.xml", "https://guides.test/us.xml.gz")
     }
 
+    /** Checks: mixed countries and unprefixed exact names select all relevant regional fallbacks. */
     @Test fun `mixed countries and unprefixed exact names select all relevant regional fallbacks`() = runBlocking<Unit> {
         val server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
@@ -84,6 +89,7 @@ class PublicEpgDiscoveryTest {
         } finally { server.shutdown() }
     }
 
+    /** Checks: a broken catalog still tries directory and regional fallback. */
     @Test fun `a broken catalog still tries directory and regional fallback`() = runBlocking<Unit> {
         val server = MockWebServer().also { it.start() }
         server.enqueue(MockResponse().setResponseCode(503))

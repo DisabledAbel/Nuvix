@@ -27,10 +27,12 @@ object SleepTimer {
     /** The options offered in the UI, in minutes. */
     val presets = listOf(15, 30, 45, 60, 90, 120)
 
+    /** Arms the sleep deadline relative to the current time. */
     fun armMinutes(minutes: Int) {
         _deadline.value = System.currentTimeMillis() + minutes * 60_000L
     }
 
+    /** Cancels the active sleep deadline. */
     fun clear() {
         _deadline.value = null
     }

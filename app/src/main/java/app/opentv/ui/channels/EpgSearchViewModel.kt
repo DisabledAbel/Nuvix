@@ -29,8 +29,10 @@ class EpgSearchViewModel(app: Application) : AndroidViewModel(app) {
     private val input = MutableStateFlow("")
     private val filter = MutableStateFlow(EpgSearchFilter.ALL)
 
+    /** Bounded program search results with loading and query feedback state. */
     data class State(val results: List<ProgrammeSearchResult> = emptyList(), val loading: Boolean = false)
 
+    /** Updates the program search request and its selected filters. */
     fun search(query: String, selectedFilter: EpgSearchFilter) {
         input.value = query
         filter.value = selectedFilter

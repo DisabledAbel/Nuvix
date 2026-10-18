@@ -16,6 +16,7 @@ import org.junit.Test
  */
 class M3uParserTest {
 
+    /** Checks: parses a well formed playlist. */
     @Test
     fun `parses a well formed playlist`() {
         val playlist = """
@@ -41,6 +42,7 @@ class M3uParserTest {
         assertThat(first.streamUrl).isEqualTo("http://example.com:8080/live/u/p/1.m3u8")
     }
 
+    /** Checks: a URL with no EXTINF is skipped without losing the rest. */
     @Test
     fun `a URL with no EXTINF is skipped without losing the rest`() {
         val playlist = """
@@ -57,6 +59,7 @@ class M3uParserTest {
         assertThat(result.channels.single().name).isEqualTo("Good Channel")
     }
 
+    /** Checks: falls back to tvg-name when the display name after the comma is empty. */
     @Test
     fun `falls back to tvg-name when the display name after the comma is empty`() {
         val playlist = """
@@ -70,6 +73,7 @@ class M3uParserTest {
         assertThat(channel.name).isEqualTo("Fallback Name")
     }
 
+    /** Checks: duplicate tvg-ids do not collide. */
     @Test
     fun `duplicate tvg-ids do not collide`() {
         // Providers routinely list SD and HD variants under one tvg-id. The unique index on
@@ -88,6 +92,7 @@ class M3uParserTest {
         assertThat(result.channels.single().name).isEqualTo("Channel SD")
     }
 
+    /** Checks: channels without a tvg-id still get a stable id derived from the url. */
     @Test
     fun `channels without a tvg-id still get a stable id derived from the url`() {
         val playlist = """
@@ -105,6 +110,7 @@ class M3uParserTest {
         assertThat(first.epgChannelId).isNull()
     }
 
+    /** Checks: unknown directives between EXTINF and the url are ignored. */
     @Test
     fun `unknown directives between EXTINF and the url are ignored`() {
         val playlist = """
@@ -121,6 +127,7 @@ class M3uParserTest {
         assertThat(channels.single().streamUrl).isEqualTo("http://example.com/a.m3u8")
     }
 
+    /** Checks: channel numbers come from tvg-chno when present. */
     @Test
     fun `channel numbers come from tvg-chno when present`() {
         val playlist = """
@@ -132,6 +139,7 @@ class M3uParserTest {
         assertThat(M3uParser.parse(playlist, sourceId = 1).channels.single().number).isEqualTo(101)
     }
 
+    /** Checks: an empty playlist yields no channels rather than throwing. */
     @Test
     fun `an empty playlist yields no channels rather than throwing`() {
         val result = M3uParser.parse("#EXTM3U\n", sourceId = 1)

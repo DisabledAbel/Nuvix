@@ -14,24 +14,30 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for account connection manager. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class AccountConnectionManagerTest {
     private lateinit var context: Context
+    /** Provides a synthetic provider configuration for the test's requested source identity. */
     private fun source(id: Long = 1, username: String = "private-user") = Source(
         id = id, name = "Provider $id", kind = SourceKind.XTREAM, url = "https://provider.example:8443",
         username = username, password = "private-password",
     )
+    /** Builds a generation-scoped synthetic provider connection request. */
     private fun request(id: String, sourceId: Long = 1, purpose: ConnectionPurpose = ConnectionPurpose.LIVE) =
         ConnectionRequest(id, 1, sourceId, purpose)
+    /** Reserves fixture connection capacity and returns the successfully admitted ownership token. */
     private fun reserve(manager: AccountConnectionManager, request: ConnectionRequest) =
         (manager.reserve(request) as ReservationResult.Reserved).token
 
+    /** Creates isolated fixtures before each test. */
     @Before fun reset() {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("nuvix_connection_settings", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
+    /** Checks: exact Accounts Share Identity Across Sources And Password Rotation. */
     @Test fun exactAccountsShareIdentityAcrossSourcesAndPasswordRotation() {
         val account = AccountConnectionManager.accountIdentity(source())
         assertEquals(account, AccountConnectionManager.accountIdentity(source(2)))
@@ -42,6 +48,7 @@ class AccountConnectionManagerTest {
         assertTrue(account.matches(Regex("acct_[0-9a-f]{64}")))
     }
 
+    /** Checks: different Playlist Urls Remain Independent Until Explicitly Linked. */
     @Test fun differentPlaylistUrlsRemainIndependentUntilExplicitlyLinked() {
         val a = source().copy(kind = SourceKind.M3U, url = "https://playlist.example/a?token=secret-a")
         val b = a.copy(id = 2, url = "https://playlist.example/b?token=secret-b")
@@ -53,6 +60,7 @@ class AccountConnectionManagerTest {
         assertEquals(2, manager.snapshotForSource(2)!!.effectiveMaximum)
     }
 
+    /** Checks: settings And Association Persist But Live Reservations And Approvals Do Not. */
     @Test fun settingsAndAssociationPersistButLiveReservationsAndApprovalsDoNot() {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())
@@ -73,6 +81,7 @@ class AccountConnectionManagerTest {
         }
     }
 
+    /** Checks: association Merges Exact Identity Copies Transitively Including Future Imports. */
     @Test fun associationMergesExactIdentityCopiesTransitivelyIncludingFutureImports() {
         val manager = AccountConnectionManager.createForTest(context)
         listOf(source(), source(2), source(3, "second"), source(4, "third")).forEach(manager::registerSource)
@@ -92,6 +101,7 @@ class AccountConnectionManagerTest {
         assertEquals(1, reloaded.snapshotForSource(6)!!.effectiveMaximum)
     }
 
+    /** Checks: clearing Association Keeps All Exact Identity Copies Together. */
     @Test fun clearingAssociationKeepsAllExactIdentityCopiesTogether() {
         val manager = AccountConnectionManager.createForTest(context)
         listOf(source(), source(2), source(3, "second")).forEach(manager::registerSource)
@@ -103,6 +113,7 @@ class AccountConnectionManagerTest {
         assertEquals(manager.accountKeyForSource(1), manager.accountKeyForSource(4))
     }
 
+    /** Checks: active Account Cannot Be Split By Association Or Have Metadata Changed By Unsaved Identity. */
     @Test fun activeAccountCannotBeSplitByAssociationOrHaveMetadataChangedByUnsavedIdentity() {
         val manager = AccountConnectionManager.createForTest(context)
         manager.updateProviderAccount(source(), 2, 1, 100)
@@ -117,6 +128,7 @@ class AccountConnectionManagerTest {
         assertEquals(100L, manager.snapshotForSource(1)!!.providerObservationTimeMillis)
     }
 
+    /** Checks: refreshed Metadata Respects Explicit Unknown And Does Not Persist Server Usage. */
     @Test fun refreshedMetadataRespectsExplicitUnknownAndDoesNotPersistServerUsage() {
         val manager = AccountConnectionManager.createForTest(context)
         manager.updateProviderAccount(source(), 4, 2, 100)
@@ -133,6 +145,7 @@ class AccountConnectionManagerTest {
         assertNull(reloaded.snapshotForSource(1)!!.providerObservationTimeMillis)
     }
 
+    /** Checks: recording Waits For Actual Owner Close And Does Not Revoke Another Recording. */
     @Test fun recordingWaitsForActualOwnerCloseAndDoesNotRevokeAnotherRecording() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())
@@ -154,6 +167,7 @@ class AccountConnectionManagerTest {
         assertEquals(1, manager.snapshotForSource(1)!!.locallyReserved)
     }
 
+    /** Checks: failed Owner Close Cannot Create Capacity. */
     @Test fun failedOwnerCloseCannotCreateCapacity() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())
@@ -198,14 +212,20 @@ class AccountConnectionManagerTest {
         assertEquals(3, manager.snapshotForSource(1)!!.locallyReserved)
     }
 
+    /** Checks: exhausted Recording Limit Preserves Optional Viewers On Linked Playlists. */
     @Test fun exhaustedRecordingLimitPreservesOptionalViewersOnLinkedPlaylists() = runTest {
         assertRecordingOnlyCapacityPreservesViewers(1)
     }
 
+    /** Checks: unknown Additional Recording Preserves Optional Viewers Without Approval. */
     @Test fun unknownAdditionalRecordingPreservesOptionalViewersWithoutApproval() = runTest {
         assertRecordingOnlyCapacityPreservesViewers(null)
     }
 
+    /**
+     * Verifies that recording admission cannot reclaim ordinary viewing connections at the tested
+     * allowance.
+     */
     private suspend fun assertRecordingOnlyCapacityPreservesViewers(maximum: Int?) {
         for (state in listOf(ReservationState.PENDING, ReservationState.ACTIVE, ReservationState.RELEASING)) {
             val manager = AccountConnectionManager.createForTest(context)
@@ -235,6 +255,7 @@ class AccountConnectionManagerTest {
         }
     }
 
+    /** Checks: spare Recording Capacity Still Reclaims A Viewer And Keeps The Existing Recording. */
     @Test fun spareRecordingCapacityStillReclaimsAViewerAndKeepsTheExistingRecording() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())
@@ -252,6 +273,7 @@ class AccountConnectionManagerTest {
         assertEquals(2, manager.snapshotForSource(1)!!.locallyReserved)
     }
 
+    /** Checks: unknown First Recording Still Reclaims A Viewer Without Reusing Consent. */
     @Test fun unknownFirstRecordingStillReclaimsAViewerWithoutReusingConsent() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())
@@ -266,6 +288,7 @@ class AccountConnectionManagerTest {
         assertEquals(1, manager.snapshotForSource(1)!!.locallyReserved)
     }
 
+    /** Checks: unknown Scheduled Recording Cannot Reuse Prior One Shot Consent. */
     @Test fun unknownScheduledRecordingCannotReusePriorOneShotConsent() = runTest {
         val manager = AccountConnectionManager.createForTest(context)
         manager.registerSource(source())

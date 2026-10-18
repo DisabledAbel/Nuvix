@@ -6,8 +6,10 @@ import java.text.Normalizer
 import java.util.Locale
 import kotlin.math.abs
 
+/** Known league identity with sport, display name and matching aliases. */
 data class SportsLeague(val id: String, val name: String, val sportId: String, val aliases: List<String>)
 
+/** Known league definitions and alias lookup used by guide-derived sports matching. */
 object SportsLeagues {
     // Definitions are identifiers, not assertions that a league has a schedule API.
     val all = listOf(
@@ -25,7 +27,9 @@ object SportsLeagues {
         SportsLeague("bundesliga", "Bundesliga", "soccer", listOf("german bundesliga", "bundesliga germany")),
         SportsLeague("serie-a", "Serie A", "soccer", listOf("italian serie a", "serie a italy")),
     )
+    /** Returns a known league by stable ID, or null when unsupported. */
     fun byId(id: String) = all.firstOrNull { it.id == id }
+    /** Finds a known league using normalized guide text and its aliases. */
     fun identify(text: String): SportsLeague? {
         val normalized = " ${SportsNames.normalize(text)} "
         // Multiple explicit competitions are ambiguous; do not choose the first.
@@ -33,7 +37,9 @@ object SportsLeagues {
     }
 }
 
+/** Normalization and stable identity helpers for league and team names. */
 object SportsNames {
+    /** Normalizes Unicode, casing and separators for sports name comparisons. */
     fun normalize(name: String): String = Normalizer.normalize(name.take(500), Normalizer.Form.NFKD)
         .replace(Regex("\\p{M}"), "").lowercase(Locale.ROOT)
         .replace('&', ' ').replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim().replace(Regex("\\s+"), " ")
@@ -49,15 +55,19 @@ object SportsNames {
         "nfl" to mapOf("kc chiefs" to "kansas city chiefs", "chiefs" to "kansas city chiefs",
             "sf 49ers" to "san francisco 49ers", "49ers" to "san francisco 49ers"),
     )
+    /** Extracts a displayable team name from guide-derived participant text. */
     fun teamName(leagueId: String, name: String): String {
         val normal = normalize(name)
         return aliases[leagueId]?.get(normal) ?: normal
     }
+    /** Builds a team identity scoped to its league or competition. */
     fun teamId(leagueId: String, name: String) = "$leagueId:${sportsHash(teamName(leagueId, name))}"
 }
 
+/** Sport, league and participant evidence extracted from guide program metadata. */
 data class ParsedSportsProgramme(val league: SportsLeague?, val sport: String, val first: String?, val second: String?)
 
+/** Parses guide sports evidence and derives conservative event associations. */
 object SportsMatching {
     const val START_TOLERANCE = 20 * 60 * 1000L
     private val versus = Regex("\\s+(?:vs\\.?|v\\.?|versus|@|at)\\s+", RegexOption.IGNORE_CASE)
@@ -66,6 +76,7 @@ object SportsMatching {
         "basketball" to "basketball", "baseball" to "baseball", "cricket" to "cricket", "tennis" to "tennis",
         "rugby" to "rugby", "golf" to "golf", "sport" to "sports", "sports" to "sports")
 
+    /** Extracts sports, league and participant evidence from a guide program. */
     fun parse(p: Programme): ParsedSportsProgramme? {
         if (p.title.length !in 1..300 || p.title.any { it.isISOControl() } || p.durationMillis !in 1..24*60*60*1000L) return null
         val metadata = "${p.category.orEmpty()} ${p.title} ${p.description.orEmpty().take(2000)}"
@@ -86,6 +97,7 @@ object SportsMatching {
         return ParsedSportsProgramme(league, sport, pair?.get(0), pair?.get(1))
     }
 
+    /** Builds an inferred event from parsed sports evidence and its program window. */
     fun inferred(p: Programme, now: Long): SportsEvent? {
         val parsed = parse(p) ?: return null
         val leagueId = parsed.league?.id.orEmpty()
@@ -122,8 +134,10 @@ object SportsMatching {
             abs(a.startUtcMillis - b.startUtcMillis) <= START_TOLERANCE
 }
 
+/** Ordering choices for the provider streams associated with a sports event. */
 enum class SportsStreamSort { CONFIDENCE, FAVORITES, PROVIDER }
 
+/** Orders event stream choices using the selected preference and available channel evidence. */
 fun orderSportsStreams(streams: List<SportsStream>, preferred: SportsPreferred?, sort: SportsStreamSort): List<SportsStream> =
     streams.distinctBy { Triple(it.channel.sourceId, it.channel.streamId, it.programme.key) }
         .sortedWith(compareBy<SportsStream> { it.confidence.ordinal }

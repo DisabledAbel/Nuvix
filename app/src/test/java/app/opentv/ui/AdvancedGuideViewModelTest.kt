@@ -61,6 +61,7 @@ class AdvancedGuideViewModelTest {
     private var vmCount = 0
     private val viewModels = mutableListOf<ChannelsViewModel>()
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
         listOf("opentv_settings", "nuvix_private_settings", "nuvix_recent_channels").forEach {
@@ -89,6 +90,7 @@ class AdvancedGuideViewModelTest {
         }
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun close(): Unit = runBlocking {
         collectors.cancel()
         store.clear()
@@ -100,14 +102,17 @@ class AdvancedGuideViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Replaces a lazy application-graph dependency with the isolated guide test fixture. */
     private fun setDelegate(name: String, value: Any) {
         ServiceLocator.Graph::class.java.getDeclaredField("${name}\$delegate")
             .apply { isAccessible = true }.set(graph, lazyOf(value))
     }
 
+    /** Constructs a fresh settings store to exercise persisted state independently of the singleton. */
     private fun freshSettings() = AppSettings::class.java.getDeclaredConstructor(Context::class.java)
         .apply { isAccessible = true }.newInstance(app)
 
+    /** Creates a channel view model using the test application's isolated dependencies. */
     private fun viewModel(): ChannelsViewModel = ChannelsViewModel(app).also {
         viewModels += it
         store.put("guide-${vmCount++}", it)
@@ -115,22 +120,26 @@ class AdvancedGuideViewModelTest {
         it.channelsPresent.launchIn(collectors)
     }
 
+    /** Provides a synthetic provider configuration for the test's requested source identity. */
     private suspend fun source(id: Long, enabled: Boolean = true) = database.sources().insert(
         Source(id = id, name = "Offline source $id", kind = SourceKind.M3U,
             url = "https://source-$id.example.invalid/fixture.m3u", enabled = enabled),
     )
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(id: Long, sourceId: Long = 1, favourite: Boolean = false, hidden: Boolean = false) = Channel(
         id = id, sourceId = sourceId, streamId = "provider-$id", name = "Channel $id",
         categoryId = null, logoUrl = null, epgChannelId = "guide-$id", number = id.toInt(),
         streamUrl = "https://source-$sourceId.example.invalid/live/$id", favourite = favourite, hidden = hidden,
     )
 
+    /** Waits until guide rows match the expected ordered channel identities. */
     private suspend fun awaitIds(vm: ChannelsViewModel, vararg ids: Long): List<ChannelsViewModel.Row> = withTimeout(10_000) {
         combine(vm.rows, vm.guideLoaded) { rows, loaded -> rows to loaded }
             .first { (rows, loaded) -> loaded && rows.map { it.primary.id } == ids.toList() }.first
     }
 
+    /** Checks: settings Changes Update An Existing Guide And Do Not Leave Provider Or Favourite Scope. */
     @Test fun settingsChangesUpdateAnExistingGuideAndDoNotLeaveProviderOrFavouriteScope(): Unit = runBlocking {
         source(1); source(2)
         database.channels().upsertAll(listOf(channel(1), channel(2, 2, favourite = true)))
@@ -152,6 +161,7 @@ class AdvancedGuideViewModelTest {
         assertThat(vm.selectedSource.value).isEqualTo(1L)
     }
 
+    /** Checks: selected Provider And Custom Group Restore In New View Models. */
     @Test fun selectedProviderAndCustomGroupRestoreInNewViewModels(): Unit = runBlocking {
         source(1); source(2)
         val one = channel(1)
@@ -180,6 +190,7 @@ class AdvancedGuideViewModelTest {
         assertThat(restoredGroup.selectedSource.value).isNull()
     }
 
+    /** Checks: changing Filter From Settings Clears The Previous Category Scope. */
     @Test fun changingFilterFromSettingsClearsThePreviousCategoryScope(): Unit = runBlocking {
         source(1)
         database.categories().upsertAll(listOf(
@@ -199,6 +210,7 @@ class AdvancedGuideViewModelTest {
         assertThat(vm.selectedCategory.value).isNull()
     }
 
+    /** Checks: empty Filters Complete Loading And Can Return To All Without Changing The Catalogue. */
     @Test fun emptyFiltersCompleteLoadingAndCanReturnToAllWithoutChangingTheCatalogue(): Unit = runBlocking {
         source(1)
         database.channels().upsertAll(listOf(channel(1)))
@@ -216,6 +228,7 @@ class AdvancedGuideViewModelTest {
         assertThat(database.channels().byId(1)).isEqualTo(channel(1))
     }
 
+    /** Checks: hidden Ambiguous And Disabled Source Channels Cannot Appear In Groups. */
     @Test fun hiddenAmbiguousAndDisabledSourceChannelsCannotAppearInGroups(): Unit = runBlocking {
         source(1); source(2); source(3, enabled = false)
         val visibleAmbiguous = channel(1)
@@ -235,6 +248,10 @@ class AdvancedGuideViewModelTest {
         assertThat(database.channels().byId(2)?.hidden).isTrue()
     }
 
+    /**
+     * Checks: focused Guide Position And Filter Changes Do Not Change Watch History Or Initialize
+     * Playback.
+     */
     @Test fun focusedGuidePositionAndFilterChangesDoNotChangeWatchHistoryOrInitializePlayback(): Unit = runBlocking {
         source(1)
         database.channels().upsertAll(listOf(channel(1), channel(2)))
@@ -257,6 +274,7 @@ class AdvancedGuideViewModelTest {
         }
     }
 
+    /** Checks: programme Hydration Tracks Only The Visible Slice Of A Larger Catalogue. */
     @Test fun programmeHydrationTracksOnlyTheVisibleSliceOfALargerCatalogue(): Unit = runBlocking {
         source(1)
         val channels = (1L..90L).map { channel(it) }

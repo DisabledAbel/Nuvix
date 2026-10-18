@@ -25,12 +25,14 @@ import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+/** Schedules opted-in background release checks and their user-visible notifications. */
 object UpdateScheduler {
     private const val WORK_NAME = "nuvix_stable_update_check"
     private const val EXTRA_SHOW_UPDATE = "nuvix.show_update"
     private const val CHANNEL = "nuvix_updates"
     private const val NOTIFICATION_ID = 405
 
+    /** Reconciles background update work with the saved update preferences. */
     fun initialize(context: Context) {
         val prefs = UpdatePreferences(context)
         val manager = WorkManager.getInstance(context)
@@ -58,10 +60,12 @@ object UpdateScheduler {
         }
     }
 
+    /** Checks whether Android permits this application to show update notifications. */
     fun canNotify(context: Context): Boolean =
         (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
+    /** Posts an update notification with an explicit action opening the shared update prompt. */
     @SuppressLint("MissingPermission") // canNotify checks both runtime permission and app settings below.
     fun notifyAvailable(context: Context, update: UpdateChecker.Update, downloaded: Boolean) {
         if (!UpdatePreferences(context).notifications || !canNotify(context)) return
@@ -89,6 +93,7 @@ object UpdateScheduler {
 
 /** Background checks never stop, replace or otherwise interact with a playback session. */
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    /** Checks for an eligible stable update and reports it according to notification preferences. */
     override suspend fun doWork(): Result {
         val prefs = UpdatePreferences(applicationContext)
         if (!prefs.automaticChecks) return Result.success()

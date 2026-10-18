@@ -56,6 +56,7 @@ class RecordingService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var lastStartId = 0
 
+    /** In-process capture job and resources tracked for one recording. */
     private class Capture {
         @Volatile var call: Call? = null
         @Volatile var userStopped = false
@@ -63,8 +64,10 @@ class RecordingService : Service() {
         lateinit var job: Job
     }
 
+    /** Declines binding because capture is controlled through explicit service commands. */
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Initializes the foreground recording service and its notification channel. */
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -73,6 +76,7 @@ class RecordingService : Service() {
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
     }
 
+    /** Dispatches explicit recording start and stop commands. */
     @Synchronized
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastStartId = startId
@@ -91,6 +95,7 @@ class RecordingService : Service() {
         return START_NOT_STICKY
     }
 
+    /** Claims a scheduled recording and starts its tracked capture job. */
     @Synchronized
     private fun startCapture(id: Long) {
         if (captures.containsKey(id)) return
@@ -104,6 +109,7 @@ class RecordingService : Service() {
         capture.job.start()
     }
 
+    /** Reserves account capacity, opens storage and finalizes capture status and resources. */
     private suspend fun runCapture(id: Long, capture: Capture) {
         val graph = ServiceLocator.get(applicationContext)
         val repo = graph.recordingRepository
@@ -203,6 +209,7 @@ class RecordingService : Service() {
         }
     }
 
+    /** Requests capture termination for the specified recording. */
     private fun stopCapture(id: Long) {
         val capture = captures[id] ?: return
         capture.userStopped = true
@@ -217,6 +224,7 @@ class RecordingService : Service() {
         if (captures.isEmpty()) stopSelfSafely() else updateNotification()
     }
 
+    /** Stops the service when no capture jobs remain. */
     @Synchronized
     private fun stopSelfSafely() {
         if (captures.isNotEmpty() || !stopSelfResult(lastStartId)) return
@@ -245,6 +253,7 @@ class RecordingService : Service() {
         runCatching { startForeground(NOTIFICATION_ID, buildNotification(captures.size)) }
     }
 
+    /** Cancels active jobs and releases service-owned resources. */
     override fun onDestroy() {
         runningService = null
         captures.values.forEach { it.call?.cancel() }
@@ -255,6 +264,7 @@ class RecordingService : Service() {
 
     // ---- Wake lock ---------------------------------------------------------------------------
 
+    /** Keeps the CPU awake while recording capture requires background work. */
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -266,6 +276,7 @@ class RecordingService : Service() {
         }
     }
 
+    /** Releases the recording service's CPU wake lock. */
     private fun releaseWakeLock() {
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         wakeLock = null
@@ -273,11 +284,13 @@ class RecordingService : Service() {
 
     // ---- Notification ------------------------------------------------------------------------
 
+    /** Refreshes the foreground notification to reflect current recording activity. */
     private fun updateNotification() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(captures.size))
     }
 
+    /** Builds the ongoing recording notification and its supported actions. */
     private fun buildNotification(count: Int): Notification {
         val text = when (count) {
             0, 1 -> getString(R.string.rec_notification_one)
@@ -292,6 +305,7 @@ class RecordingService : Service() {
             .build()
     }
 
+    /** Creates the foreground recording notification channel on supported Android versions. */
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -310,6 +324,7 @@ class RecordingService : Service() {
     companion object {
         private const val LATE_START_GRACE_MILLIS = 5_000L
 
+        /** Checks whether capture begins beyond the grace period after a known program start. */
         internal fun isLateStart(recording: Recording, atMillis: Long): Boolean {
             // Legacy padded windows do not establish the programme's actual start time.
             val programmeStart = recording.programmeStartMillis.takeIf { it > 0 } ?: return false
@@ -327,6 +342,7 @@ class RecordingService : Service() {
         private const val ACTION_STOP_ALL = "app.opentv.recording.STOP_ALL"
         private const val EXTRA_ID = "recordingId"
 
+        /** Sends an explicit request to start a recording capture service. */
         fun start(context: Context, recordingId: Long) {
             val intent = Intent(context, RecordingService::class.java).apply {
                 action = ACTION_START
@@ -339,11 +355,13 @@ class RecordingService : Service() {
             }
         }
 
+        /** Stops an existing capture without creating an idle service from the background. */
         fun stop(context: Context, recordingId: Long) {
             // A stop must never create an idle service from the background.
             runningService?.stopCapture(recordingId)
         }
 
+        /** Stops a recording selected by account-capacity conflict policy. */
         suspend fun stopForConflict(recordingId: Long) {
             val capture = runningService?.captures?.get(recordingId) ?: return
             capture.stopReason = "Higher-priority recording required this account's capacity"
@@ -352,6 +370,7 @@ class RecordingService : Service() {
             capture.job.join() // Capacity is reusable only after actual I/O and sink closure.
         }
 
+        /** Waits for the tracked capture job to finish closing its resources. */
         suspend fun awaitCaptureStopped(recordingId: Long) {
             runningService?.captures?.get(recordingId)?.job?.join()
         }

@@ -54,9 +54,11 @@ object RecordingStorage {
         val resolvedLocator: String? = null,
         private val closer: () -> Unit,
     ) {
+        /** Closes the capture destination and its owned storage resources. */
         fun close() = closer()
     }
 
+    /** Builds the NAS connection configuration from protected local settings. */
     fun smbConfig(settings: AppSettings): SmbConfig = SmbConfig(
         host = settings.smbHost.value,
         share = settings.smbShare.value,
@@ -179,6 +181,7 @@ object RecordingStorage {
     private fun mimeForFilename(filename: String): String =
         if (filename.endsWith(".ts", ignoreCase = true)) "video/mp2t" else "video/*"
 
+    /** Deletes the recording output through its local, document-tree or SMB storage backend. */
     fun delete(context: Context, settings: AppSettings, locator: String) {
         when {
             SmbClient.isSmb(locator) -> runCatching { SmbClient.delete(smbConfig(settings), locator) }

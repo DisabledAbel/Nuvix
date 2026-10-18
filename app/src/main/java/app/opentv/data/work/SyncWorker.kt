@@ -33,6 +33,7 @@ class SyncWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
 
+    /** Refreshes local provider and guide data through the shared application graph. */
     override suspend fun doWork(): Result {
         val graph = ServiceLocator.get(applicationContext)
         val now = System.currentTimeMillis()
@@ -96,6 +97,7 @@ class SyncWorker(
             )
         }
 
+        /** Registers periodic catalog and guide refresh work with WorkManager. */
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
                 .setConstraints(

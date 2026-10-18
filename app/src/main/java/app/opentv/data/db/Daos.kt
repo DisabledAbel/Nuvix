@@ -37,36 +37,46 @@ import kotlinx.coroutines.flow.Flow
 /** Rows per upsert statement. Keeps a 40,000-channel playlist from building one huge query. */
 private const val UPSERT_CHUNK = 500
 
+/** Room queries and mutations for source records. */
 @Dao
 interface SourceDao {
+    /** Observes the stored source rows as they change. */
     @Query("SELECT * FROM sources ORDER BY id")
     fun observeAll(): Flow<List<Source>>
 
+    /** Returns source rows that are currently enabled. */
     @Query("SELECT * FROM sources WHERE enabled = 1 ORDER BY id")
     suspend fun enabled(): List<Source>
 
+    /** Returns the source row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM sources WHERE id = :id")
     suspend fun byId(id: Long): Source?
 
+    /** Inserts a source row using the declared Room conflict policy and returns its row ID. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(source: Source): Long
 
+    /** Updates the stored source row using its primary key. */
     @Update
     suspend fun update(source: Source)
 
+    /** Deletes the source row with the supplied local ID. */
     @Query("DELETE FROM sources WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /** Records the timestamp of the source's last successful catalog refresh. */
     @Query("UPDATE sources SET lastCatalogSyncMillis = :millis WHERE id = :id")
     suspend fun markCatalogSynced(id: Long, millis: Long)
 }
 
+/** Room queries and mutations for channel records. */
 @Dao
 interface ChannelDao {
     /** Bounded home shelves avoid materialising a full provider catalogue. */
     @Query("SELECT * FROM channels WHERE hidden = 0 ORDER BY favourite DESC, sortIndex, displayName LIMIT :limit")
     fun observeHomeChannels(limit: Int = 24): Flow<List<Channel>>
 
+    /** Observes visible channels matching the supplied local row IDs. */
     @Query("SELECT * FROM channels WHERE id IN (:ids) AND hidden = 0")
     fun observeByIds(ids: List<Long>): Flow<List<Channel>>
 
@@ -80,6 +90,7 @@ interface ChannelDao {
         ORDER BY channels.sortIndex, channels.displayName LIMIT :limit""")
     fun observeSportsChannels(limit: Int = 200): Flow<List<Channel>>
 
+    /** Observes visible channels matching the optional source and category filters. */
     @Query(
         """
         SELECT * FROM channels
@@ -91,6 +102,7 @@ interface ChannelDao {
     )
     fun observe(sourceId: Long?, categoryId: String?): Flow<List<Channel>>
 
+    /** Observes visible favorite channels in user order, then display-name order. */
     @Query("SELECT * FROM channels WHERE favourite = 1 AND hidden = 0 ORDER BY sortIndex, displayName")
     fun observeFavourites(): Flow<List<Channel>>
 
@@ -158,6 +170,7 @@ interface ChannelDao {
     )
     suspend fun channelCountsByCategory(): List<CategoryChannelCount>
 
+    /** Observes a bounded name search over visible channels, prioritizing favorites and user order. */
     @Query(
         """
         SELECT * FROM channels
@@ -180,6 +193,7 @@ interface ChannelDao {
     )
     fun searchIncludingHidden(query: String, limit: Int = 200): Flow<List<Channel>>
 
+    /** Returns the channel row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM channels WHERE id = :id")
     suspend fun byId(id: Long): Channel?
 
@@ -193,6 +207,7 @@ interface ChannelDao {
     )
     suspend fun variantsInGroup(groupKey: String): List<Channel>
 
+    /** Counts channel rows belonging to the source. */
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countForSource(sourceId: Long): Int
 
@@ -204,15 +219,19 @@ interface ChannelDao {
     @Query("SELECT COUNT(*) FROM channels WHERE hidden = 0")
     fun observeVisibleCount(): Flow<Int>
 
+    /** Updates the favorite flag and marks that field as locally edited for synchronization. */
     @Query("UPDATE channels SET favourite = :favourite, syncTouched = syncTouched | 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
+    /** Updates visibility and marks that field as locally edited for synchronization. */
     @Query("UPDATE channels SET hidden = :hidden, syncTouched = syncTouched | 2 WHERE id = :id")
     suspend fun setHidden(id: Long, hidden: Boolean)
 
+    /** Updates the user-supplied name and marks that field as locally edited. */
     @Query("UPDATE channels SET customName = :name, syncTouched = syncTouched | 4 WHERE id = :id")
     suspend fun setCustomName(id: Long, name: String?)
 
+    /** Updates user ordering and marks that field as locally edited. */
     @Query("UPDATE channels SET sortIndex = :sortIndex, syncTouched = syncTouched | 8 WHERE id = :id")
     suspend fun setSortIndex(id: Long, sortIndex: Int)
 
@@ -224,22 +243,28 @@ interface ChannelDao {
     @Query("UPDATE channels SET streamUrl = :url WHERE id = :id")
     suspend fun updateStreamUrl(id: Long, url: String)
 
+    /** Returns stream URLs identifying locally favored channels for LAN synchronization. */
     // --- Sync: identify favourites/hidden by stream URL (stable across devices) ---
     @Query("SELECT streamUrl FROM channels WHERE favourite = 1")
     suspend fun favouriteUrls(): List<String>
 
+    /** Returns stream URLs identifying hidden channels for LAN synchronization. */
     @Query("SELECT streamUrl FROM channels WHERE hidden = 1")
     suspend fun hiddenUrls(): List<String>
 
+    /** Marks all channels with the matching stream URL as favorites. */
     @Query("UPDATE channels SET favourite = 1 WHERE streamUrl = :url")
     suspend fun markFavouriteByUrl(url: String)
 
+    /** Marks all channels with the matching stream URL as hidden. */
     @Query("UPDATE channels SET hidden = 1 WHERE streamUrl = :url")
     suspend fun markHiddenByUrl(url: String)
 
+    /** Updates the automatically matched guide channel ID. */
     @Query("UPDATE channels SET matchedEpgId = :epgId WHERE id = :id")
     suspend fun setMatchedEpgId(id: Long, epgId: String?)
 
+    /** Sets or clears the user's explicit guide-channel mapping. */
     @Query("UPDATE channels SET epgOverrideId = :epgId WHERE id = :id")
     suspend fun setEpgOverride(id: Long, epgId: String?)
 
@@ -247,6 +272,7 @@ interface ChannelDao {
     @Query("SELECT * FROM channels")
     suspend fun allForMatching(): List<Channel>
 
+    /** Inserts or updates the supplied channel rows. */
     @Upsert
     suspend fun upsertAll(channels: List<Channel>)
 
@@ -265,6 +291,7 @@ interface ChannelDao {
     @Query("DELETE FROM channels WHERE sourceId = :sourceId AND lastSeenMillis < :syncStamp")
     suspend fun deleteStale(sourceId: Long, syncStamp: Long)
 
+    /** Deletes channel rows belonging to the source. */
     @Query("DELETE FROM channels WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 
@@ -304,12 +331,15 @@ interface ChannelDao {
         deleteStale(sourceId, syncStamp)
     }
 
+    /** Returns source-scoped channel rows so user edits can survive a catalog refresh. */
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId")
     suspend fun userStateForSource(sourceId: Long): List<Channel>
 }
 
+/** Room queries and mutations for category records. */
 @Dao
 interface CategoryDao {
+    /** Observes categories of the requested stream kind in user and name order. */
     @Query("SELECT * FROM categories WHERE kind = :kind ORDER BY sortIndex, name")
     fun observe(kind: StreamKind): Flow<List<Category>>
 
@@ -322,9 +352,11 @@ interface CategoryDao {
     @Query("SELECT id, name FROM categories WHERE id IN (:ids)")
     suspend fun namesFor(ids: Set<String>): List<CategoryName>
 
+    /** Inserts or updates the supplied category rows. */
     @Upsert
     suspend fun upsertAll(categories: List<Category>)
 
+    /** Deletes category rows belonging to the source. */
     @Query("DELETE FROM categories WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 }
@@ -335,50 +367,66 @@ data class CategoryName(val id: String, val name: String)
 /** Projection for [ChannelDao.channelCountsByCategory]. */
 data class CategoryChannelCount(val sourceId: Long, val categoryId: String, val count: Int)
 
+/** Room queries and mutations for epg feed records. */
 @Dao
 interface EpgFeedDao {
+    /** Observes feeds with built-in feeds first, then local ID order. */
     @Query("SELECT * FROM epg_feeds ORDER BY builtIn DESC, id")
     fun observeAll(): Flow<List<EpgFeed>>
 
+    /** Returns all stored epg feed rows. */
     @Query("SELECT * FROM epg_feeds")
     suspend fun all(): List<EpgFeed>
 
+    /** Returns epg feed rows that are currently enabled. */
     @Query("SELECT * FROM epg_feeds WHERE enabled = 1")
     suspend fun enabled(): List<EpgFeed>
 
+    /** Returns the guide feed attached to a provider source, if present. */
     @Query("SELECT * FROM epg_feeds WHERE providerSourceId = :sourceId")
     suspend fun forProvider(sourceId: Long): EpgFeed?
 
+    /** Returns the epg feed row matching the supplied URL, or null if absent. */
     @Query("SELECT * FROM epg_feeds WHERE url = :url")
     suspend fun byUrl(url: String): EpgFeed?
 
+    /** Inserts a epg feed row using the declared Room conflict policy and returns its row ID. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(feed: EpgFeed): Long
 
+    /** Updates the stored epg feed row using its primary key. */
     @Update
     suspend fun update(feed: EpgFeed)
 
+    /** Updates whether the epg feed row is enabled. */
     @Query("UPDATE epg_feeds SET enabled = :enabled WHERE id = :id")
     suspend fun setEnabled(id: Long, enabled: Boolean)
 
+    /** Records a feed's latest synchronization timestamp and result message. */
     @Query("UPDATE epg_feeds SET lastSyncMillis = :millis, lastResult = :result WHERE id = :id")
     suspend fun markSynced(id: Long, millis: Long, result: String)
 
+    /** Deletes the epg feed row with the supplied local ID. */
     @Query("DELETE FROM epg_feeds WHERE id = :id")
     suspend fun delete(id: Long)
 }
 
+/** Room queries and mutations for epg channel alias records. */
 @Dao
 interface EpgChannelAliasDao {
+    /** Returns all stored epg channel alias rows. */
     @Query("SELECT * FROM epg_channels")
     suspend fun all(): List<EpgChannelAlias>
 
+    /** Returns the total number of stored epg channel alias rows. */
     @Query("SELECT COUNT(*) FROM epg_channels")
     suspend fun count(): Int
 
+    /** Inserts or updates the supplied epg channel alias rows. */
     @Upsert
     suspend fun upsertAll(aliases: List<EpgChannelAlias>)
 
+    /** Deletes epg channel alias rows belonging to the guide feed. */
     @Query("DELETE FROM epg_channels WHERE feedId = :feedId")
     suspend fun deleteForFeed(feedId: Long)
 }
@@ -390,6 +438,7 @@ data class ProgrammeSearchResult(
     @Relation(parentColumn = "channelId", entityColumn = "id") val channel: Channel,
 )
 
+/** Room queries and mutations for programme records. */
 @Dao
 interface ProgrammeDao {
     /** The visible channel batch only; callers keep ids below SQLite's legacy bind limit. */
@@ -410,6 +459,7 @@ interface ProgrammeDao {
     """)
     fun observeEpgChannelIds(fromUtcMillis: Long, toUtcMillis: Long): Flow<List<String>>
 
+    /** Observes guide channel IDs with a currently airing program from an enabled feed. */
     @Query("""
         SELECT DISTINCT epgChannelId FROM programmes
         WHERE feedId IN (SELECT id FROM epg_feeds WHERE enabled = 1)
@@ -490,6 +540,7 @@ interface ProgrammeDao {
     )
     fun observeNow(nowUtcMillis: Long): Flow<List<Programme>>
 
+    /** Observes a bounded list of current or future programs for a guide channel from enabled feeds. */
     @Query(
         """
         SELECT * FROM programmes
@@ -500,6 +551,7 @@ interface ProgrammeDao {
     )
     suspend fun upcoming(channelId: String, nowUtcMillis: Long, limit: Int): List<Programme>
 
+    /** Counts programme rows belonging to the guide feed. */
     @Query("SELECT COUNT(*) FROM programmes WHERE feedId = :feedId")
     suspend fun countForFeed(feedId: Long): Int
 
@@ -511,6 +563,7 @@ interface ProgrammeDao {
     @Query("SELECT DISTINCT p.epgChannelId FROM programmes p INNER JOIN epg_feeds f ON f.id = p.feedId WHERE f.enabled = 1 AND p.endUtcMillis > :nowUtcMillis")
     suspend fun activeChannelIds(nowUtcMillis: Long): List<String>
 
+    /** Inserts or updates the supplied programme rows. */
     @Upsert
     suspend fun upsertAll(programmes: List<Programme>)
 
@@ -518,12 +571,15 @@ interface ProgrammeDao {
     @Query("DELETE FROM programmes WHERE endUtcMillis < :beforeUtcMillis")
     suspend fun deleteEndedBefore(beforeUtcMillis: Long)
 
+    /** Deletes programme rows belonging to the guide feed. */
     @Query("DELETE FROM programmes WHERE feedId = :feedId")
     suspend fun deleteForFeed(feedId: Long)
 }
 
+/** Room queries and mutations for movie records. */
 @Dao
 interface MovieDao {
+    /** Observes movies in the optional category, newest additions first. */
     @Query(
         """
         SELECT * FROM movies
@@ -533,9 +589,11 @@ interface MovieDao {
     )
     fun observe(categoryId: String?): Flow<List<Movie>>
 
+    /** Observes favorite movies in name order. */
     @Query("SELECT * FROM movies WHERE favourite = 1 ORDER BY name")
     fun observeFavourites(): Flow<List<Movie>>
 
+    /** Observes a bounded name search over movie rows. */
     @Query("SELECT * FROM movies WHERE name LIKE '%' || :query || '%' ORDER BY name LIMIT :limit")
     fun search(query: String, limit: Int = 200): Flow<List<Movie>>
 
@@ -598,6 +656,7 @@ interface MovieDao {
     )
     suspend fun moviesByDirector(name: String, limit: Int): List<Movie>
 
+    /** Returns the movie row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM movies WHERE id = :id")
     suspend fun byId(id: Long): Movie?
 
@@ -605,22 +664,28 @@ interface MovieDao {
     @Query("SELECT * FROM movies WHERE streamUrl = :url LIMIT 1")
     suspend fun byStreamUrl(url: String): Movie?
 
+    /** Updates the movie favorite flag and records that it was explicitly edited. */
     @Query("UPDATE movies SET favourite = :favourite, favouriteTouched = 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
+    /** Returns favorite movie URLs for LAN synchronization. */
     // --- Sync: favourites by stream URL ---
     @Query("SELECT streamUrl FROM movies WHERE favourite = 1")
     suspend fun favouriteUrls(): List<String>
 
+    /** Marks movies with the matching stream URL as favorites. */
     @Query("UPDATE movies SET favourite = 1 WHERE streamUrl = :url")
     suspend fun markFavouriteByUrl(url: String)
 
+    /** Inserts or updates the supplied movie rows. */
     @Upsert
     suspend fun upsertAll(movies: List<Movie>)
 
+    /** Returns source-scoped movie rows so user edits can survive a catalog refresh. */
     @Query("SELECT * FROM movies WHERE sourceId = :sourceId")
     suspend fun userStateForSource(sourceId: Long): List<Movie>
 
+    /** Replaces a source catalog transactionally while preserving existing favorite edits. */
     @Transaction
     suspend fun replaceCatalogue(sourceId: Long, incoming: List<Movie>) {
         val previous = userStateForSource(sourceId).associateBy { it.streamId }
@@ -632,12 +697,15 @@ interface MovieDao {
         }
     }
 
+    /** Deletes movie rows belonging to the source. */
     @Query("DELETE FROM movies WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 }
 
+/** Room queries and mutations for series records. */
 @Dao
 interface SeriesDao {
+    /** Observes series in the optional category, newest additions first. */
     @Query(
         """
         SELECT * FROM series
@@ -647,6 +715,7 @@ interface SeriesDao {
     )
     fun observe(categoryId: String?): Flow<List<Series>>
 
+    /** Observes a bounded name search over series rows. */
     @Query("SELECT * FROM series WHERE name LIKE '%' || :query || '%' ORDER BY name LIMIT :limit")
     fun search(query: String, limit: Int = 200): Flow<List<Series>>
 
@@ -686,25 +755,32 @@ interface SeriesDao {
     )
     suspend fun seriesWithActor(name: String, limit: Int): List<Series>
 
+    /** Returns the series row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM series WHERE id = :id")
     suspend fun byId(id: Long): Series?
 
+    /** Updates the series favorite flag and records that it was explicitly edited. */
     @Query("UPDATE series SET favourite = :favourite, favouriteTouched = 1 WHERE id = :id")
     suspend fun setFavourite(id: Long, favourite: Boolean)
 
+    /** Returns provider series IDs for locally favored series. */
     // --- Sync: favourites by provider series id (series carry no stream URL) ---
     @Query("SELECT seriesId FROM series WHERE favourite = 1")
     suspend fun favouriteSeriesIds(): List<String>
 
+    /** Marks series with the matching provider series ID as favorites. */
     @Query("UPDATE series SET favourite = 1 WHERE seriesId = :seriesId")
     suspend fun markFavouriteBySeriesId(seriesId: String)
 
+    /** Inserts or updates the supplied series rows. */
     @Upsert
     suspend fun upsertAll(items: List<Series>)
 
+    /** Returns source-scoped series rows so user edits can survive a catalog refresh. */
     @Query("SELECT * FROM series WHERE sourceId = :sourceId")
     suspend fun userStateForSource(sourceId: Long): List<Series>
 
+    /** Replaces a source catalog transactionally while preserving existing favorite edits. */
     @Transaction
     suspend fun replaceCatalogue(sourceId: Long, incoming: List<Series>) {
         val previous = userStateForSource(sourceId).associateBy { it.seriesId }
@@ -716,39 +792,50 @@ interface SeriesDao {
         }
     }
 
+    /** Deletes series rows belonging to the source. */
     @Query("DELETE FROM series WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 }
 
+/** Room queries and mutations for episode records. */
 @Dao
 interface EpisodeDao {
+    /** Observes a provider's series episodes ordered by season and episode number. */
     @Query("SELECT * FROM episodes WHERE sourceId = :sourceId AND seriesId = :seriesId ORDER BY season, episodeNumber")
     fun observeForSeries(sourceId: Long, seriesId: String): Flow<List<Episode>>
 
+    /** Returns the episode row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM episodes WHERE id = :id")
     suspend fun byId(id: Long): Episode?
 
+    /** Returns the first episode with the matching playback URL, or null if absent. */
     @Query("SELECT * FROM episodes WHERE streamUrl = :url LIMIT 1")
     suspend fun byStreamUrl(url: String): Episode?
 
+    /** Inserts or updates the supplied episode rows. */
     @Upsert
     suspend fun upsertAll(episodes: List<Episode>)
 
+    /** Deletes episode rows belonging to the source. */
     @Query("DELETE FROM episodes WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 }
 
+/** Room queries and mutations for playback position records. */
 @Dao
 interface PlaybackPositionDao {
+    /** Returns the resume position for a profile and media key, or null if absent. */
     @Query("SELECT * FROM playback_positions WHERE profileId = :profileId AND mediaKey = :key")
     suspend fun get(profileId: Long, key: String): PlaybackPosition?
 
+    /** Observes a bounded list of a profile's most recently updated resume positions. */
     @Query(
         "SELECT * FROM playback_positions WHERE profileId = :profileId " +
             "ORDER BY updatedAtMillis DESC LIMIT :limit",
     )
     fun observeRecent(profileId: Long, limit: Int = 30): Flow<List<PlaybackPosition>>
 
+    /** Returns all stored playback position rows. */
     @Query("SELECT * FROM playback_positions")
     suspend fun all(): List<PlaybackPosition>
 
@@ -756,30 +843,39 @@ interface PlaybackPositionDao {
     @Query("SELECT * FROM playback_positions WHERE profileId = :profileId")
     suspend fun forProfile(profileId: Long): List<PlaybackPosition>
 
+    /** Inserts or updates the supplied playback position row. */
     @Upsert
     suspend fun upsert(position: PlaybackPosition)
 
+    /** Deletes the resume position for the given profile and media key. */
     @Query("DELETE FROM playback_positions WHERE profileId = :profileId AND mediaKey = :key")
     suspend fun delete(profileId: Long, key: String)
 }
 
+/** Room queries and mutations for profile records. */
 @Dao
 interface ProfileDao {
+    /** Observes the stored profile rows as they change. */
     @Query("SELECT * FROM profiles ORDER BY id")
     fun observeAll(): Flow<List<Profile>>
 
+    /** Returns all stored profile rows. */
     @Query("SELECT * FROM profiles ORDER BY id")
     suspend fun all(): List<Profile>
 
+    /** Returns the first profile with the exact name, or null if absent. */
     @Query("SELECT * FROM profiles WHERE name = :name LIMIT 1")
     suspend fun byName(name: String): Profile?
 
+    /** Inserts a profile row using the declared Room conflict policy and returns its row ID. */
     @Insert
     suspend fun insert(profile: Profile): Long
 
+    /** Updates a profile's display name. */
     @Query("UPDATE profiles SET name = :name WHERE id = :id")
     suspend fun rename(id: Long, name: String)
 
+    /** Deletes the profile row with the supplied local ID. */
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -788,6 +884,7 @@ interface ProfileDao {
     suspend fun deletePositions(id: Long)
 }
 
+/** Room queries and mutations for recording records. */
 @Dao
 interface RecordingDao {
     /** The library, newest first — scheduled and in-progress float to the top by recency. */
@@ -798,12 +895,15 @@ interface RecordingDao {
     @Query("SELECT * FROM recordings WHERE status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
     fun observeActive(): Flow<List<Recording>>
 
+    /** Returns recordings currently preparing, capturing or finalizing. */
     @Query("SELECT * FROM recordings WHERE status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
     suspend fun active(): List<Recording>
 
+    /** Returns pending scheduled recordings ordered by their padded start time. */
     @Query("SELECT * FROM recordings WHERE status = 'SCHEDULED' ORDER BY scheduledStartMillis")
     suspend fun scheduled(): List<Recording>
 
+    /** Returns the recording row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM recordings WHERE id = :id")
     suspend fun byId(id: Long): Recording?
 
@@ -836,9 +936,11 @@ interface RecordingDao {
     )
     suspend fun bookingAt(channelId: Long, startMillis: Long): Recording?
 
+    /** Inserts a recording row using the declared Room conflict policy and returns its row ID. */
     @Insert
     suspend fun insert(recording: Recording): Long
 
+    /** Updates the stored recording row using its primary key. */
     @Update
     suspend fun update(recording: Recording)
 
@@ -846,21 +948,27 @@ interface RecordingDao {
     @Query("UPDATE recordings SET status = 'PREPARING', startedAtMillis = :startedAt, error = NULL WHERE id = :id AND status = 'SCHEDULED'")
     suspend fun claimScheduled(id: Long, startedAt: Long): Int
 
+    /** Claims a preparing or capturing recording for finalization; returns the affected row count. */
     @Query("UPDATE recordings SET status = 'FINALIZING' WHERE id = :id AND status IN ('PREPARING', 'RECORDING')")
     suspend fun beginFinalizing(id: Long): Int
 
+    /** Updates recording protection and padding-lock flags independently. */
     @Query("UPDATE recordings SET protectedRecording = :protectedRecording, lockPadding = :lockPadding WHERE id = :id")
     suspend fun setProtection(id: Long, protectedRecording: Boolean, lockPadding: Boolean)
 
+    /** Changes the capture window only for scheduled recordings with unlocked padding. */
     @Query("UPDATE recordings SET scheduledStartMillis = :startMillis, scheduledEndMillis = :endMillis WHERE id = :id AND status = 'SCHEDULED' AND lockPadding = 0")
     suspend fun setScheduledWindow(id: Long, startMillis: Long, endMillis: Long): Int
 
+    /** Updates padding and derived capture times only while the recording is scheduled. */
     @Query("UPDATE recordings SET padStartMinutes = :startMinutes, padEndMinutes = :endMinutes, scheduledStartMillis = :startMillis, scheduledEndMillis = :endMillis WHERE id = :id AND status = 'SCHEDULED'")
     suspend fun setPadding(id: Long, startMinutes: Int, endMinutes: Int, startMillis: Long, endMillis: Long): Int
 
+    /** Cancels a pending recording and returns the affected row count. */
     @Query("UPDATE recordings SET status = 'CANCELED', error = 'Canceled by user' WHERE id = :id AND status = 'SCHEDULED'")
     suspend fun cancelScheduled(id: Long): Int
 
+    /** Resets an eligible failed, partial or missed recording for another capture attempt. */
     @Query("UPDATE recordings SET status = 'SCHEDULED', filePath = :filePath, sizeBytes = 0, startedAtMillis = 0, endedAtMillis = 0, error = NULL WHERE id = :id AND status IN ('FAILED', 'PARTIAL', 'MISSED', 'CANCELED')")
     suspend fun prepareRetry(id: Long, filePath: String): Int
 
@@ -873,12 +981,15 @@ interface RecordingDao {
         return prepareRetry(id, filePath) == 1
     }
 
+    /** Updates the recording status and optional error text. */
     @Query("UPDATE recordings SET status = :status, error = :error WHERE id = :id")
     suspend fun setStatus(id: Long, status: RecordingStatus, error: String? = null)
 
+    /** Updates status only while the recording remains scheduled; returns the affected count. */
     @Query("UPDATE recordings SET status = :status, error = :error WHERE id = :id AND status = 'SCHEDULED'")
     suspend fun setScheduledStatus(id: Long, status: RecordingStatus, error: String? = null): Int
 
+    /** Records the number of captured bytes. */
     @Query("UPDATE recordings SET sizeBytes = :bytes WHERE id = :id")
     suspend fun setSize(id: Long, bytes: Long)
 
@@ -886,16 +997,19 @@ interface RecordingDao {
     @Query("UPDATE recordings SET filePath = :filePath WHERE id = :id")
     suspend fun setFilePath(id: Long, filePath: String)
 
+    /** Records capture start and status only after the preparing stage was claimed. */
     @Query(
         "UPDATE recordings SET status = :status, startedAtMillis = :startedAt WHERE id = :id AND status = 'PREPARING'"
     )
     suspend fun markStarted(id: Long, status: RecordingStatus, startedAt: Long)
 
+    /** Persists terminal status, completion time, byte count and any error. */
     @Query(
         "UPDATE recordings SET status = :status, endedAtMillis = :endedAt, sizeBytes = :bytes, error = :error WHERE id = :id"
     )
     suspend fun markFinished(id: Long, status: RecordingStatus, endedAt: Long, bytes: Long, error: String?)
 
+    /** Deletes the recording row with the supplied local ID. */
     @Query("DELETE FROM recordings WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -907,43 +1021,57 @@ interface RecordingDao {
     suspend fun failInterrupted()
 }
 
+/** Room queries and mutations for recording event records. */
 @Dao
 interface RecordingEventDao {
+    /** Observes a recording's activity history in timestamp and insertion order. */
     @Query("SELECT * FROM recording_events WHERE recordingId = :recordingId ORDER BY atMillis, id")
     fun observeForRecording(recordingId: Long): Flow<List<RecordingEvent>>
 
+    /** Returns the recording's activity history in timestamp and insertion order. */
     @Query("SELECT * FROM recording_events WHERE recordingId = :recordingId ORDER BY atMillis, id")
     suspend fun forRecording(recordingId: Long): List<RecordingEvent>
 
+    /** Inserts a recording event row using the declared Room conflict policy and returns its row ID. */
     @Insert
     suspend fun insert(event: RecordingEvent): Long
 
+    /** Removes activity history belonging to the recording. */
     @Query("DELETE FROM recording_events WHERE recordingId = :recordingId")
     suspend fun deleteForRecording(recordingId: Long)
 }
 
+/** Room queries and mutations for series rule records. */
 @Dao
 interface SeriesRuleDao {
+    /** Observes the stored series rule rows as they change. */
     @Query("SELECT * FROM series_rules ORDER BY createdAtMillis DESC")
     fun observeAll(): Flow<List<SeriesRule>>
 
+    /** Returns series rule rows that are currently enabled. */
     @Query("SELECT * FROM series_rules WHERE enabled = 1")
     suspend fun enabled(): List<SeriesRule>
 
+    /** Returns a series rule for the channel and normalized title, or null if absent. */
     @Query("SELECT * FROM series_rules WHERE channelId = :channelId AND titleKey = :titleKey LIMIT 1")
     suspend fun forChannelTitle(channelId: Long, titleKey: String): SeriesRule?
 
+    /** Inserts a series rule row using the declared Room conflict policy and returns its row ID. */
     @Insert
     suspend fun insert(rule: SeriesRule): Long
 
+    /** Deletes the series rule row with the supplied local ID. */
     @Query("DELETE FROM series_rules WHERE id = :id")
     suspend fun delete(id: Long)
 }
 
+/** Room queries and mutations for reminder records. */
 @Dao
 interface ReminderDao {
+    /** Looks up the reminder associated with a stable sports event ID. */
     @Query("SELECT * FROM reminders WHERE sportsEventId=:eventId LIMIT 1")
     suspend fun forSportsEvent(eventId: String): Reminder?
+    /** Updates the stored reminder row using its primary key. */
     @Update suspend fun update(reminder: Reminder)
 
     /** A guide action can resolve the same game on a different provider without a second alarm. */
@@ -965,10 +1093,12 @@ interface ReminderDao {
         AND (d.accepted=1 OR (d.accepted IS NULL AND sp.confidence='CONFIRMED' AND sp.startUtcMillis=event.startUtcMillis)) LIMIT 2""")
     suspend fun sportsIdentities(channelId: Long, startMillis: Long): List<String>
 
+    /** Finds an existing reminder by program identity or shared sports event identity. */
     @Transaction
     suspend fun forProgrammeOrSports(channelId: Long, startMillis: Long): Reminder? =
         forProgramme(channelId, startMillis) ?: sportsIdentities(channelId, startMillis).singleOrNull()?.let { forSportsEvent(it) }
 
+    /** Inserts a reminder transactionally unless a matching program or sports reminder already exists. */
     @Transaction
     suspend fun insertDeduplicated(reminder: Reminder): Long {
         forProgrammeOrSports(reminder.channelId, reminder.startUtcMillis)?.let { return it.id }
@@ -984,6 +1114,7 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE fired = 0 AND startUtcMillis > :nowMillis ORDER BY startUtcMillis")
     suspend fun upcoming(nowMillis: Long): List<Reminder>
 
+    /** Returns the reminder row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM reminders WHERE id = :id")
     suspend fun byId(id: Long): Reminder?
 
@@ -995,15 +1126,19 @@ interface ReminderDao {
     @Query("SELECT startUtcMillis FROM reminders WHERE channelId = :channelId AND fired = 0")
     fun observeStartsForChannel(channelId: Long): Flow<List<Long>>
 
+    /** Inserts a reminder row using the declared Room conflict policy and returns its row ID. */
     @Insert
     suspend fun insert(reminder: Reminder): Long
 
+    /** Marks a reminder as delivered so it is not rearmed. */
     @Query("UPDATE reminders SET fired = 1 WHERE id = :id")
     suspend fun markFired(id: Long)
 
+    /** Deletes the reminder row with the supplied local ID. */
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /** Deletes reminders matching the channel and program start time. */
     @Query("DELETE FROM reminders WHERE channelId = :channelId AND startUtcMillis = :startMillis")
     suspend fun deleteForProgramme(channelId: Long, startMillis: Long)
 

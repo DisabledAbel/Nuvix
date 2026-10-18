@@ -24,6 +24,7 @@ object ReminderScheduler {
     const val ACTION_REMIND = "app.opentv.reminder.ALARM_REMIND"
     private const val EXTRA_ID = "reminderId"
 
+    /** Schedules the reminder using exact alarms when permitted and a fallback otherwise. */
     fun set(context: Context, reminderId: Long, triggerAtMillis: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pending = pendingIntent(context, reminderId)
@@ -39,19 +40,23 @@ object ReminderScheduler {
         }
     }
 
+    /** Cancels the scheduled alarm for a reminder. */
     fun cancel(context: Context, reminderId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pendingIntent(context, reminderId))
     }
 
+    /** Reads the reminder ID from the alarm intent, returning -1 when absent. */
     fun reminderIdFrom(intent: Intent): Long = intent.getLongExtra(EXTRA_ID, -1L)
 
+    /** Builds an explicit reminder alarm intent with a stable reminder identity. */
     private fun intentFor(context: Context, reminderId: Long): Intent =
         Intent(context, ReminderAlarmReceiver::class.java).apply {
             action = ACTION_REMIND
             putExtra(EXTRA_ID, reminderId)
         }
 
+    /** Builds the immutable PendingIntent used to schedule or cancel a reminder alarm. */
     private fun pendingIntent(context: Context, reminderId: Long): PendingIntent =
         PendingIntent.getBroadcast(
             context,

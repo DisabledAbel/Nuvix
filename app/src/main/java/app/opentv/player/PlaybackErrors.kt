@@ -23,6 +23,7 @@ import java.net.UnknownHostException
 @OptIn(UnstableApi::class)
 object PlaybackErrors {
 
+    /** Maps player failures to actionable messages without exposing private stream credentials. */
     fun describe(error: PlaybackException): String {
         val causes = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
         causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.let {
@@ -76,6 +77,7 @@ object PlaybackErrors {
         }
     }
 
+    /** Maps an HTTP response status to a playback-facing explanation. */
     fun describeHttpStatus(code: Int): String = when (code) {
         401 -> "The server rejected these credentials. Check the username and password."
         403 -> "The server refused this stream (403). Often this means the account is already " +

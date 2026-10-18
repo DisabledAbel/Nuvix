@@ -14,13 +14,16 @@ internal class GuidePreviewConnection(
     private var generation = 0L
     private var reservation: ReservationToken? = null
 
+    /** Starts a new preview generation and invalidates stale tune ownership. */
     fun beginTune(): Long {
         stop()
         return generation
     }
 
+    /** Checks whether a callback belongs to the latest preview tune generation. */
     fun isCurrent(attempt: Long): Boolean = attempt == generation
 
+    /** Associates a reserved connection token with the current preview generation. */
     fun attach(token: ReservationToken, attempt: Long): Boolean {
         if (!isCurrent(attempt)) {
             connections.release(token)
@@ -31,10 +34,13 @@ internal class GuidePreviewConnection(
         return true
     }
 
+    /** Checks whether the preview still owns the supplied connection token. */
     fun owns(token: ReservationToken): Boolean = reservation == token
 
+    /** Marks the current preview reservation active after its connection opens. */
     fun markActive() { reservation?.let(connections::markActive) }
 
+    /** Invalidates the preview generation and releases its connection ownership. */
     fun stop(attempt: Long? = null) {
         if (attempt != null && !isCurrent(attempt)) return
         generation++
@@ -49,6 +55,7 @@ internal class GuidePreviewConnection(
         releaseReservation()
     }
 
+    /** Releases a tracked preview reservation after the associated connection closes. */
     private fun releaseReservation() {
         val previous = reservation
         reservation = null

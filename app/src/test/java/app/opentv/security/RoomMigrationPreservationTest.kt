@@ -25,6 +25,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class RoomMigrationPreservationTest {
+    /** Checks: old database upgrades preserve local credentials favorites guide override and resume. */
     @Test
     fun `old database upgrades preserve local credentials favorites guide override and resume`() {
         val context = RuntimeEnvironment.getApplication()
@@ -108,6 +109,7 @@ class RoomMigrationPreservationTest {
         }
     }
 
+    /** Loads the exported version-two Room schema used to seed migration preservation tests. */
     private fun schemaVersionTwo(): JSONObject {
         val relative = "schemas/app.opentv.data.db.OpenTvDatabase/2.json"
         val file = listOf(File(relative), File("app", relative)).firstOrNull { it.isFile }
@@ -115,6 +117,7 @@ class RoomMigrationPreservationTest {
         return JSONObject(file.readText()).getJSONObject("database")
     }
 
+    /** Collects the production migration chain for schema-preservation assertions. */
     private fun existingMigrations(): Array<Migration> = OpenTvDatabase::class.java.declaredFields
         .filter { Migration::class.java.isAssignableFrom(it.type) }
         .map { field -> field.isAccessible = true; field.get(null) as Migration }

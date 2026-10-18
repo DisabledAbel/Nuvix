@@ -30,6 +30,7 @@ package app.opentv.data.parser
  */
 object ChannelNameNormalizer {
 
+    /** Normalized channel identity together with extracted region and quality hints. */
     data class Normalized(
         /** Human-readable name with the junk removed: `BBC One`. */
         val baseName: String,
@@ -129,6 +130,7 @@ object ChannelNameNormalizer {
     /** Whether a single token is a non-resolution stream marker (`RAW`, `HEVC`, `60FPS`, `HDR`…). */
     fun isStreamMarker(token: String): Boolean = token.uppercase() in EXTRA_TOKENS
 
+    /** Separates channel identity from provider decorations, quality labels and region hints. */
     fun normalize(raw: String): Normalized {
         // Fold superscript decorations (ᴴᴰ → HD) so the token pass can see them.
         var working = foldSuperscripts(raw.trim())

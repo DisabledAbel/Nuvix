@@ -36,6 +36,7 @@ class PrivateSettingsVault internal constructor(context: Context, private val ke
         }
     })
 
+    /** Decrypts a setting bound to its key, using [defaultValue] only when the setting is absent. */
     fun getString(key: String, defaultValue: String? = null): String? = synchronized(lock) {
         protect {
             val stored = storage.getString(key, null) ?: return@protect defaultValue
@@ -51,6 +52,7 @@ class PrivateSettingsVault internal constructor(context: Context, private val ke
         }
     }
 
+    /** Encrypts and synchronously commits a setting, throwing if persistence fails. */
     fun putString(key: String, value: String) = synchronized(lock) {
         protect {
             check(storage.edit().putString(key, encrypt(key, value)).commit()) { "Encrypted setting could not be saved" }
@@ -85,6 +87,7 @@ class PrivateSettingsVault internal constructor(context: Context, private val ke
         }
     }
 
+    /** Encrypts a value with key-specific associated data and returns its versioned envelope. */
     private fun encrypt(key: String, value: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, keyProvider())
@@ -94,6 +97,7 @@ class PrivateSettingsVault internal constructor(context: Context, private val ke
         return "v1:${Base64.encodeToString(cipher.iv, Base64.NO_WRAP)}:${Base64.encodeToString(encrypted, Base64.NO_WRAP)}"
     }
 
+    /** Wraps storage and cryptographic failures with a message that existing settings were retained. */
     private fun <T> protect(action: () -> T): T = try { action() } catch (failure: Exception) {
         throw IllegalStateException("Private settings could not be unlocked. Existing settings have been retained.", failure)
     }
@@ -102,6 +106,7 @@ class PrivateSettingsVault internal constructor(context: Context, private val ke
         private const val PREFERENCES = "nuvix_private_settings"
         private const val ALIAS = "nuvix.settings.wrapping-key.v1"
         private val lock = Any()
+        /** Binds encrypted bytes to the setting name and envelope version. */
         private fun associatedData(key: String) = "nuvix-private-setting:v1:$key".toByteArray(Charsets.UTF_8)
     }
 }

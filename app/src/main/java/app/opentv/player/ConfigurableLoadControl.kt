@@ -30,8 +30,10 @@ class ConfigurableLoadControl(
     @Volatile private var policy: BufferPolicy = initial
     private var wasLoading = false
 
+    /** Replaces the buffering policy used for subsequent loading and startup decisions. */
     fun update(policy: BufferPolicy) { this.policy = policy }
 
+    /** Combines configured time thresholds with allocator byte limits and loading hysteresis. */
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
         wasLoading = policy.shouldContinueLoading(
             parameters.bufferedDurationUs, parameters.playbackSpeed,
@@ -40,6 +42,7 @@ class ConfigurableLoadControl(
         return wasLoading
     }
 
+    /** Evaluates playback startup using the current buffer policy and live target. */
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean =
         policy.shouldStartPlayback(
             parameters.bufferedDurationUs, parameters.playbackSpeed, parameters.rebuffering,

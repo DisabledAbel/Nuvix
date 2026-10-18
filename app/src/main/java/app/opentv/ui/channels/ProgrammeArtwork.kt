@@ -22,6 +22,7 @@ internal fun programmeArtworkModel(url: String?): String? = url?.trim()?.takeIf 
     runCatching { URI(value).let { it.scheme in setOf("http", "https") && !it.host.isNullOrBlank() } }.getOrDefault(false)
 }
 
+/** Displays validated program artwork with a local fallback for missing or failed images. */
 @Composable
 internal fun ProgrammeArtwork(artworkUrl: String?, modifier: Modifier = Modifier) {
     val density = LocalDensity.current

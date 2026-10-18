@@ -461,6 +461,7 @@ fun VodPlayerScreen(
     }
 }
 
+/** Displays a focusable action in the VOD player's control bar. */
 @Composable
 private fun VodChip(
     icon: ImageVector,
@@ -491,8 +492,10 @@ private fun VodChip(
     }
 }
 
+/** Identifies the selected VOD playback options panel. */
 private enum class VodPanel { NONE, SUBTITLES, AUDIO }
 
+/** Displays available audio or subtitle choices for VOD playback. */
 @OptIn(UnstableApi::class)
 @Composable
 private fun TrackPanel(
@@ -544,6 +547,7 @@ private fun TrackPanel(
     }
 }
 
+/** Displays a selectable VOD track and its current selection state. */
 @Composable
 private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit, focusRequester: FocusRequester?) {
     var focused by remember { mutableStateOf(false) }
@@ -565,6 +569,7 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit, focu
     }
 }
 
+/** Builds a readable VOD track label from language and available format details. */
 private fun vodTrackLabel(label: String?, language: String?, index: Int): String {
     if (!label.isNullOrBlank()) return label
     if (!language.isNullOrBlank() && language != "und") {
@@ -573,6 +578,7 @@ private fun vodTrackLabel(label: String?, language: String?, index: Int): String
     return "Track ${index + 1}"
 }
 
+/** Formats playback duration for the VOD control timeline. */
 private fun formatDuration(ms: Long): String {
     if (ms <= 0) return "0:00"
     val totalSec = ms / 1000

@@ -36,6 +36,7 @@ class SportsViewModelTest {
     private val store = ViewModelStore()
     private var savedGraph: Any? = null
     private val now = System.currentTimeMillis()
+    /** Creates isolated fixtures before each test. */
     @Before fun setup(): Unit = runBlocking {
         app = RuntimeEnvironment.getApplication()
         listOf("opentv_settings", "nuvix_private_settings", "nuvix_sports").forEach {
@@ -53,6 +54,7 @@ class SportsViewModelTest {
         db.categories().upsertAll(listOf(Category("sports", 1, "Sports", StreamKind.LIVE)))
         db.channels().upsertAll(listOf(sportsChannel()))
     }
+    /** Releases test resources and restores shared state after each test. */
     @After fun close(): Unit = runBlocking {
         store.clear()
         models.forEach { it.viewModelScope.coroutineContext[Job]?.join() }
@@ -60,12 +62,16 @@ class SportsViewModelTest {
         ServiceLocator::class.java.getDeclaredField("instance").apply { isAccessible = true; set(null, savedGraph) }
         Dispatchers.resetMain()
     }
+    /** Creates a Sports Hub view model using the isolated test dependencies and saved state. */
     private fun model(saved: SavedStateHandle = SavedStateHandle()) = SportsViewModel(app, saved).also {
         store.put("sports-${models.size}", it); models += it
     }
+    /** Populates the isolated database with the sports schedule fixtures needed by the test. */
     private suspend fun seed() { db.programmes().upsertAll(listOf(sportsProgramme(start = now + 3_600_000))) }
+    /** Waits until the sports view model publishes a state satisfying the assertion predicate. */
     private suspend fun await(vm: SportsViewModel, test: (SportsHubState) -> Boolean) = withTimeout(10_000) { vm.state.first(test) }
 
+    /** Checks: existing Category Channel Fallback Works Without Any Events. */
     @Test fun existingCategoryChannelFallbackWorksWithoutAnyEvents(): Unit = runBlocking {
         val vm = model()
         val state = await(vm) { it.channels.size == 1 && !it.loading }
@@ -73,6 +79,7 @@ class SportsViewModelTest {
         assertEquals(1L, state.channels.single().id)
         assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
     }
+    /** Checks: game Details And Saved Identity Remain Selected After Explicit Playback Callback. */
     @Test fun gameDetailsAndSavedIdentityRemainSelectedAfterExplicitPlaybackCallback(): Unit = runBlocking {
         seed()
         val saved = SavedStateHandle()
@@ -92,6 +99,7 @@ class SportsViewModelTest {
         vm.select(null)
         await(vm) { it.selectedEvent == null && it.streams.isEmpty() }
     }
+    /** Checks: locked Categories Never Become Playable And Unlock Updates Existing Hub. */
     @Test fun lockedCategoriesNeverBecomePlayableAndUnlockUpdatesExistingHub(): Unit = runBlocking {
         seed()
         settings.setHiddenCategories(setOf("sports"))
@@ -128,6 +136,7 @@ class SportsViewModelTest {
         assertEquals(3, choices.size)
         assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
     }
+    /** Checks: manual Association Candidates Ignore The Current Search But Respect Visibility. */
     @Test fun manualAssociationCandidatesIgnoreTheCurrentSearchButRespectVisibility(): Unit = runBlocking {
         seed()
         db.channels().upsertAll(listOf(sportsChannel(2, 1, "sports-2")))
@@ -141,6 +150,7 @@ class SportsViewModelTest {
         val state = await(vm) { it.relatedEvents.any { event -> event.title.contains("Toronto") } }
         assertEquals(1, state.cards.size)
     }
+    /** Checks: search And Favorite Filters Update Without Creating Playback Or Network Requests. */
     @Test fun searchAndFavoriteFiltersUpdateWithoutCreatingPlaybackOrNetworkRequests(): Unit = runBlocking {
         seed()
         val vm = model()
@@ -156,6 +166,7 @@ class SportsViewModelTest {
         assertNull(vm.selectedId.value)
         assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
     }
+    /** Checks: messages Are Consumed And Cleared When The View Changes. */
     @Test fun messagesAreConsumedAndClearedWhenTheViewChanges(): Unit = runBlocking {
         val vm = model()
         await(vm) { !it.loading }
@@ -175,6 +186,7 @@ class SportsViewModelTest {
         vm.favorite("invalid", "invalid", "", "Invalid").join()
         assertEquals("Sports action could not be completed. Cached schedules remain available.", vm.state.value.message)
     }
+    /** Checks: unlinked Guide Reminder Is Shown And Canceled By Its Channel And Programme Start. */
     @Test fun unlinkedGuideReminderIsShownAndCanceledByItsChannelAndProgrammeStart(): Unit = runBlocking {
         seed()
         val vm = model()

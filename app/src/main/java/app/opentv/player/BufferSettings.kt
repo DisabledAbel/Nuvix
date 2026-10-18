@@ -39,6 +39,7 @@ data class BufferPolicy(
         return if (bufferedUs < minimumUs) true else wasLoading
     }
 
+    /** Checks whether duration, speed and live-target conditions permit playback to start. */
     fun shouldStartPlayback(bufferedUs: Long, speed: Float, rebuffering: Boolean, targetLiveOffsetUs: Long?, budgetReached: Boolean): Boolean {
         val thresholdUs = (if (rebuffering) rebufferMs else playbackMs) * 1_000L
         val effectiveThreshold = targetLiveOffsetUs?.let { minOf(thresholdUs, it / 2) } ?: thresholdUs
@@ -54,14 +55,17 @@ data class BufferPolicy(
     }
 }
 
+/** Named buffering presets, including automatic sizing and a custom configuration. */
 enum class BufferPreset(val label: String) {
     AUTO("Automatic"), SMALL("Small"), MEDIUM("Medium"), LARGE("Large"), CUSTOM("Custom"),
 }
 
+/** Selected buffer preset and the custom timing policy used when applicable. */
 data class BufferConfiguration(
     val preset: BufferPreset = BufferPreset.AUTO,
     val custom: BufferPolicy = BufferPolicy.MEDIUM,
 ) {
+    /** Resolves the selected preset to a concrete policy, accounting for constrained devices. */
     fun resolve(lowMemory: Boolean): BufferPolicy = when (preset) {
         BufferPreset.AUTO -> if (lowMemory) BufferPolicy.LOW_MEMORY_AUTO else BufferPolicy.MEDIUM
         BufferPreset.SMALL -> BufferPolicy.SMALL
@@ -77,6 +81,7 @@ class BufferSettings private constructor(context: Context) {
     private val _configuration = MutableStateFlow(read())
     val configuration: StateFlow<BufferConfiguration> = _configuration.asStateFlow()
 
+    /** Persists and publishes the selected buffer configuration. */
     fun set(configuration: BufferConfiguration) {
         prefs.edit()
             .putString("preset", configuration.preset.name)
@@ -88,6 +93,7 @@ class BufferSettings private constructor(context: Context) {
         _configuration.value = configuration
     }
 
+    /** Restores saved buffering preferences with defaults for invalid values. */
     private fun read(): BufferConfiguration = runCatching {
         BufferConfiguration(
             preset = BufferPreset.valueOf(prefs.getString("preset", "AUTO")!!),
@@ -100,10 +106,12 @@ class BufferSettings private constructor(context: Context) {
 
     companion object {
         @Volatile private var instance: BufferSettings? = null
+        /** Returns the process-wide buffer settings store. */
         fun get(context: Context): BufferSettings = instance ?: synchronized(this) {
             instance ?: BufferSettings(context.applicationContext).also { instance = it }
         }
 
+        /** Checks whether the device should use the constrained-memory automatic buffer policy. */
         fun isLowMemory(context: Context): Boolean {
             val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             return manager?.isLowRamDevice == true || (manager?.memoryClass ?: 256) <= 128

@@ -6,10 +6,12 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Supported default and active browsing filters for the Sports Hub. */
 enum class SportsFilter(val label: String) {
     ALL("All games"), LIVE("Live / Airing"), TODAY("Today"), TOMORROW("Tomorrow"), UPCOMING("Upcoming"),
     FAVORITE_TEAMS("Favorite Teams"), FAVORITE_LEAGUES("Favorite Leagues"), WITH_STREAMS("Games With Available Streams")
 }
+/** Saved sports browsing, ordering, suggestion and reminder presentation choices. */
 data class SportsPreferences(
     val defaultView: SportsFilter = SportsFilter.ALL,
     val streamSort: SportsStreamSort = SportsStreamSort.CONFIDENCE,
@@ -25,17 +27,21 @@ class SportsPreferencesStore(context: Context) {
     val preferences = state.asStateFlow()
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> state.value = read() }
     init { storage.registerOnSharedPreferenceChangeListener(listener) }
+    /** Persists updated sports preferences and publishes the resulting state. */
     fun set(value: SportsPreferences) {
         check(storage.edit().putString("default_view", value.defaultView.name).putString("stream_sort", value.streamSort.name)
             .putBoolean("show_possible", value.showPossible).putBoolean("show_scores", value.showScores)
             .putBoolean("reminders", value.reminders).commit())
         state.value = read()
     }
+    /** Restores sports preferences with defaults for malformed stored values. */
     private fun read() = SportsPreferences(
         runCatching { SportsFilter.valueOf(storage.getString("default_view", "ALL")!!) }.getOrDefault(SportsFilter.ALL),
         runCatching { SportsStreamSort.valueOf(storage.getString("stream_sort", "CONFIDENCE")!!) }.getOrDefault(SportsStreamSort.CONFIDENCE),
         bool("show_possible"), bool("show_scores"), bool("reminders"),
     )
+    /** Reads a saved boolean with a fallback for missing or invalid storage. */
     private fun bool(key: String) = runCatching { storage.getBoolean(key, true) }.getOrDefault(true)
+    /** Unregisters the preference listener when the store is released. */
     fun close() { storage.unregisterOnSharedPreferenceChangeListener(listener) }
 }

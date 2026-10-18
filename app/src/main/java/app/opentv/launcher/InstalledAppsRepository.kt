@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.Settings
 import java.text.Collator
 
+/** Launchable installed package with its display label, icon and launch intent. */
 data class InstalledApp(
     val packageName: String,
     val label: String,
@@ -18,6 +19,7 @@ data class InstalledApp(
     val isTvApp: Boolean,
 )
 
+/** Discovers launchable applications and exposes supported package-management actions. */
 class InstalledAppsRepository(private val context: Context) {
     private val pm get() = context.packageManager
 
@@ -56,6 +58,7 @@ class InstalledAppsRepository(private val context: Context) {
         true
     }.getOrDefault(false)
 
+    /** Opens Android's details page for the selected installed package. */
     fun openAppInfo(packageName: String): Boolean = runCatching {
         pm.getApplicationInfo(packageName, 0) // A removed app must not leave a dead context-menu action.
         context.startActivity(

@@ -12,6 +12,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 
+/** Encodes local pairing and management links into QR bitmaps for display on the TV. */
 object QrCodes {
 
     /**

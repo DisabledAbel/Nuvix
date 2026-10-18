@@ -18,10 +18,13 @@ import okhttp3.Request
 
 /** Discovery finds downloadable feeds, never invents a TVG-id from a channel name. */
 fun interface AutoEpgDiscovery {
+    /** Finds provider-declared and public guide candidates for the enabled local sources. */
     suspend fun discover(channels: List<Channel>): DiscoveryResult
 }
 
+/** Guide URL and display name returned by discovery. */
 data class DiscoveredGuide(val name: String, val url: String)
+/** Discovered guide candidates and the count of failed source lookups. */
 data class DiscoveryResult(val guides: List<DiscoveredGuide>, val sourcesFailed: Int = 0)
 
 /**
@@ -35,9 +38,12 @@ class PublicEpgDiscovery(
     private val channelsUrl: String = "https://raw.githubusercontent.com/iptv-org/api/gh-pages/channels.json",
     private val guidesUrl: String = "https://raw.githubusercontent.com/iptv-org/api/gh-pages/guides.json",
 ) : AutoEpgDiscovery {
+    /** Public channel-directory identity and regional information used to rank guide candidates. */
     internal data class CatalogChannel(val id: String, val names: List<String>, val country: String)
+    /** Public guide-directory entry associated with known channel identities. */
     internal data class CatalogGuide(val channel: String, val name: String, val urls: List<String>)
 
+    /** Finds public guide URLs relevant to the supplied local channels and regions. */
     override suspend fun discover(channels: List<Channel>): DiscoveryResult {
         val countries = channels.mapNotNull { regionOf(it) }.toMutableSet()
         val discovered = ArrayList<DiscoveredGuide>()
@@ -95,6 +101,7 @@ class PublicEpgDiscovery(
         return DiscoveryResult(discovered.distinctBy { it.url }, failures)
     }
 
+    /** Reads a bounded directory response through the configured HTTP client. */
     private suspend fun <T> read(url: String, limit: Long, parse: (InputStream) -> T): T {
         currentCoroutineContext().ensureActive()
         return http.newCall(Request.Builder().url(url).build()).execute().use { response ->
@@ -110,8 +117,10 @@ class PublicEpgDiscovery(
         private const val MAX_DIRECTORY_BYTES = 4L * 1024 * 1024
         private val COUNTRY_CODES = Locale.getISOCountries().toSet()
 
+        /** Extracts a supported country hint from catalog metadata. */
         internal fun countryCode(region: String): String? = canonicalRegion(region).takeIf { it in COUNTRY_CODES }
 
+        /** Normalizes a regional hint to the directory's comparison representation. */
         internal fun canonicalRegion(region: String): String = when (val code = region.uppercase(Locale.ROOT)) {
             "UK" -> "GB"
             "USA" -> "US"
@@ -119,11 +128,13 @@ class PublicEpgDiscovery(
             else -> code
         }
 
+        /** Infers a region hint from channel metadata for public-guide relevance checks. */
         internal fun regionOf(channel: Channel): String? =
             ChannelNameNormalizer.normalize(channel.name).region?.let(::countryCode)
                 ?: channel.epgChannelId?.substringBefore('@')?.substringAfterLast('.', "")
                     ?.let(::countryCode)
 
+        /** Decodes public-directory JSON into the entries used by discovery. */
         internal fun parseDirectory(baseUrl: String, html: String): List<DiscoveredGuide> {
             val base = baseUrl.toHttpUrlOrNull() ?: return emptyList()
             val anchors = Regex("""<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
@@ -136,6 +147,7 @@ class PublicEpgDiscovery(
             }.distinctBy { it.url }.toList()
         }
 
+        /** Checks whether a public directory entry is relevant to the local channel hints. */
         internal fun relevantTo(guide: DiscoveredGuide, countries: Set<String>): Boolean {
             val text = "${guide.name} ${guide.url.substringBefore('?')}".lowercase(Locale.ROOT)
             val tokens = text.split(Regex("[^a-z]+"))
@@ -146,6 +158,7 @@ class PublicEpgDiscovery(
             } || tokens.any { it == "all" || it == "world" || it == "international" }
         }
 
+        /** Decodes public channel identities and regional hints from directory JSON. */
         internal fun readChannels(input: InputStream): List<CatalogChannel> = JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             val result = ArrayList<CatalogChannel>()
             reader.beginArray()
@@ -167,6 +180,7 @@ class PublicEpgDiscovery(
             result
         }
 
+        /** Decodes public guide entries and their channel associations. */
         internal fun readGuides(input: InputStream): List<CatalogGuide> = JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             val result = ArrayList<CatalogGuide>()
             reader.beginArray()
@@ -202,13 +216,18 @@ class PublicEpgDiscovery(
             result
         }
 
+        /** Reads a primitive JSON string, using an empty value when unavailable. */
         private fun JsonReader.stringOrEmpty(): String = if (peek() == JsonToken.NULL) { nextNull(); "" } else nextString()
     }
 }
 
+/** Input stream wrapper that rejects reads exceeding the configured response-size bound. */
 private class LimitedInputStream(input: InputStream, private val limit: Long) : FilterInputStream(input) {
     private var count = 0L
+    /** Reads bytes from the wrapped stream and enforces the cumulative byte limit. */
     override fun read(): Int = super.read().also { if (it >= 0) record(1) }
+    /** Reads bytes from the wrapped stream and enforces the cumulative byte limit. */
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = `in`.read(buffer, offset, length).also { if (it > 0) record(it) }
+    /** Updates the consumed-byte count and fails if the configured limit is exceeded. */
     private fun record(bytes: Int) { count += bytes; check(count <= limit) { "Public guide catalog too large." } }
 }

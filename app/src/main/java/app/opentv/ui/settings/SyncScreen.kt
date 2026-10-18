@@ -90,8 +90,10 @@ fun SyncScreen(
     }
 }
 
+/** Selected LAN synchronization direction: sharing or receiving. */
 private enum class Mode { SHARE, RECEIVE, NAS }
 
+/** Displays the active LAN sharing session address, code and stop action. */
 @Composable
 private fun SharePane(viewModel: SyncViewModel) {
     val state by viewModel.serverState.collectAsState()
@@ -130,6 +132,7 @@ private fun SharePane(viewModel: SyncViewModel) {
     }
 }
 
+/** Displays LAN address and pairing-code entry with receive progress and results. */
 @Composable
 private fun ReceivePane(viewModel: SyncViewModel) {
     val state by viewModel.receiveState.collectAsState()
@@ -243,6 +246,7 @@ private fun NasPane(viewModel: SyncViewModel) {
     }
 }
 
+/** Displays a labeled LAN synchronization input field. */
 @Composable
 private fun Field(label: String, value: String) {
     Row {
@@ -251,6 +255,7 @@ private fun Field(label: String, value: String) {
     }
 }
 
+/** Displays a focusable sharing or receiving mode choice. */
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -272,6 +277,7 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
+/** Displays remote-friendly numeric entry controls for the pairing code. */
 @Composable
 private fun NumPad(onKey: (String) -> Unit, onBackspace: () -> Unit) {
     val rows = listOf("123", "456", "789", ".0:", "#⌫")
@@ -288,6 +294,7 @@ private fun NumPad(onKey: (String) -> Unit, onBackspace: () -> Unit) {
     }
 }
 
+/** Displays one focusable numeric pairing-code key. */
 @Composable
 private fun NumKey(label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

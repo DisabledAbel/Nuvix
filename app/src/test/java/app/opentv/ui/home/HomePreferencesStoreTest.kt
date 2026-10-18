@@ -11,20 +11,24 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for home preferences store. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class HomePreferencesStoreTest {
+    /** Creates isolated fixtures before each test. */
     @Before fun clearPreferences() {
         RuntimeEnvironment.getApplication().getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE)
             .edit().clear().commit()
     }
 
+    /** Checks: default home preserves every existing shelf. */
     @Test fun `default home preserves every existing shelf`() {
         val store = HomePreferencesStore(RuntimeEnvironment.getApplication())
         assertThat(store.preferences.value.visibleSections).containsExactlyElementsIn(HomeSection.entries)
         store.close()
     }
 
+    /** Checks: visibility choices persist and independent stores observe remote changes. */
     @Test fun `visibility choices persist and independent stores observe remote changes`() {
         val context = RuntimeEnvironment.getApplication()
         val first = HomePreferencesStore(context)
@@ -42,6 +46,7 @@ class HomePreferencesStoreTest {
         first.close(); second.close(); restored.close()
     }
 
+    /** Checks: unknown preference keys are rejected without writing them. */
     @Test fun `unknown preference keys are rejected without writing them`() {
         val context = RuntimeEnvironment.getApplication()
         val store = HomePreferencesStore(context)
@@ -51,6 +56,7 @@ class HomePreferencesStoreTest {
         store.close()
     }
 
+    /** Checks: malformed local shelf value safely uses the existing visible default. */
     @Test fun `malformed local shelf value safely uses the existing visible default`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE).edit()
@@ -60,6 +66,7 @@ class HomePreferencesStoreTest {
         store.close()
     }
 
+    /** Checks: defaults ordering and moving both directions are stable. */
     @Test fun `defaults ordering and moving both directions are stable`() {
         val store = HomePreferencesStore(RuntimeEnvironment.getApplication())
         assertThat(store.currentPreferences.shelfOrder).containsExactlyElementsIn(HomeSection.entries.map { it.key }).inOrder()
@@ -72,6 +79,7 @@ class HomePreferencesStoreTest {
         store.close()
     }
 
+    /** Checks: hidden shelves retain positions and restore after store recreation. */
     @Test fun `hidden shelves retain positions and restore after store recreation`() {
         val context = RuntimeEnvironment.getApplication()
         val store = HomePreferencesStore(context)
@@ -87,6 +95,7 @@ class HomePreferencesStoreTest {
         restored.close()
     }
 
+    /** Checks: visibility only migration and corrupted presentation recover independently. */
     @Test fun `visibility only migration and corrupted presentation recover independently`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE).edit()
@@ -99,6 +108,7 @@ class HomePreferencesStoreTest {
         store.close()
     }
 
+    /** Checks: normalization deduplicates retains safe future keys and inserts missing shelves. */
     @Test fun `normalization deduplicates retains safe future keys and inserts missing shelves`() {
         val order = HomeShelfOrder.normalize(listOf("movies", "movies", "future_shelf", "https://secret", "apps"))
         assertThat(order).containsNoDuplicates()
@@ -111,6 +121,7 @@ class HomePreferencesStoreTest {
         assertThat(HomeShelfOrder.normalize(listOf("continue", "recent", "favourites", "on_now", "movies", "series"))).contains("apps")
     }
 
+    /** Checks: UUID groups can be positioned hidden restored and reset without modifying group data. */
     @Test fun `UUID groups can be positioned hidden restored and reset without modifying group data`() {
         val context = RuntimeEnvironment.getApplication()
         val group = "group:00000000-0000-0000-0000-000000000001"
@@ -131,6 +142,7 @@ class HomePreferencesStoreTest {
         restored.close()
     }
 
+    /** Checks: all layouts persist and reset order leaves visibility and presentation unchanged. */
     @Test fun `all layouts persist and reset order leaves visibility and presentation unchanged`() {
         val store = HomePreferencesStore(RuntimeEnvironment.getApplication())
         HomeLayout.entries.forEach { layout ->
@@ -145,6 +157,7 @@ class HomePreferencesStoreTest {
         store.close()
     }
 
+    /** Checks: rapid independent edits use current storage rather than an older displayed snapshot. */
     @Test fun `rapid independent edits use current storage rather than an older displayed snapshot`() {
         val context = RuntimeEnvironment.getApplication()
         val first = HomePreferencesStore(context)

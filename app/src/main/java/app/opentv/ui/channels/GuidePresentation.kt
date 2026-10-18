@@ -13,6 +13,7 @@ internal const val GUIDE_WINDOW_MILLIS = 24 * GUIDE_HOUR_MILLIS
 /** Values stay independent of Compose so layout changes and timeline geometry are testable. */
 internal data class GuideLayoutMetrics(val rowHeightDp: Float, val minuteWidthDp: Float, val titleLines: Int)
 
+/** Resolves guide row and timeline dimensions from layout and density preferences. */
 internal fun guideLayoutMetrics(layout: GuideLayout, density: GuideTimelineDensity): GuideLayoutMetrics =
     GuideLayoutMetrics(
         rowHeightDp = when (layout) {
@@ -32,17 +33,21 @@ internal fun guideLayoutMetrics(layout: GuideLayout, density: GuideTimelineDensi
 internal fun guideDayAt(timeMillis: Long, dayDelta: Int, zone: ZoneId = ZoneId.systemDefault()): Long =
     Instant.ofEpochMilli(timeMillis).atZone(zone).plusDays(dayDelta.toLong()).toInstant().toEpochMilli()
 
+/** Shifts an epoch timestamp by the requested whole-hour offset, checking arithmetic overflow. */
 internal fun guideHourAt(timeMillis: Long, hourDelta: Int): Long =
     Math.addExact(timeMillis, Math.multiplyExact(hourDelta.toLong(), GUIDE_HOUR_MILLIS))
 
+/** Converts a horizontal guide offset to an epoch time using timeline scale. */
 internal fun guideTimeAtOffset(windowStartMillis: Long, offsetDp: Float, minuteWidthDp: Float): Long {
     require(minuteWidthDp > 0f)
     return windowStartMillis + (offsetDp.coerceAtLeast(0f) / minuteWidthDp * 60_000.0).toLong()
 }
 
+/** Converts an epoch time to its horizontal offset within the guide timeline. */
 internal fun guideOffsetDp(windowStartMillis: Long, timeMillis: Long, minuteWidthDp: Float): Float =
     (((timeMillis - windowStartMillis).coerceIn(0L, GUIDE_WINDOW_MILLIS) / 60_000.0) * minuteWidthDp).toFloat()
 
+/** Program interval clipped to the visible timeline for guide cell layout. */
 internal data class GuideProgrammeSlice(val programme: Programme, val startMillis: Long, val endMillis: Long)
 
 /** Clip invalid/overlapping provider data without borrowing width from the next programme. */

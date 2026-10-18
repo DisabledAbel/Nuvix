@@ -15,15 +15,18 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for launcher settings store. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class LauncherSettingsStoreTest {
+    /** Creates isolated fixtures before each test. */
     @Before
     fun clearPreferences() {
         RuntimeEnvironment.getApplication().getSharedPreferences("nuvix_launcher", Context.MODE_PRIVATE)
             .edit().clear().commit()
     }
 
+    /** Checks: first launch defaults to Nuvix Home with no pinned apps. */
     @Test
     fun `first launch defaults to Nuvix Home with no pinned apps`() {
         val store = LauncherSettingsStore(RuntimeEnvironment.getApplication())
@@ -32,6 +35,7 @@ class LauncherSettingsStoreTest {
         assertThat(store.preferences.value.favoritePackages).isEmpty()
     }
 
+    /** Checks: startup and ordered favorites survive recreating the settings store. */
     @Test
     fun `startup and ordered favorites survive recreating the settings store`() {
         val context = RuntimeEnvironment.getApplication()
@@ -49,6 +53,7 @@ class LauncherSettingsStoreTest {
         assertThat(restored.favoritePackages).containsExactly("tv.gamma", "tv.beta").inOrder()
     }
 
+    /** Checks: missing installed apps remain in the desired order after availability filtering. */
     @Test
     fun `missing installed apps remain in the desired order after availability filtering`() {
         val context = RuntimeEnvironment.getApplication()
@@ -68,6 +73,7 @@ class LauncherSettingsStoreTest {
             .containsExactly("tv.alpha", "tv.removed", "tv.beta").inOrder()
     }
 
+    /** Checks: remote app order preserves missing apps and propagates an explicit unpin. */
     @Test
     fun `remote app order preserves missing apps and propagates an explicit unpin`() {
         val context = RuntimeEnvironment.getApplication()
@@ -82,6 +88,7 @@ class LauncherSettingsStoreTest {
             .containsExactly("tv.missing", "tv.alpha").inOrder()
     }
 
+    /** Checks: invalid remote app orders leave desired pins intact. */
     @Test
     fun `invalid remote app orders leave desired pins intact`() {
         val store = LauncherSettingsStore(RuntimeEnvironment.getApplication())
@@ -93,6 +100,7 @@ class LauncherSettingsStoreTest {
         assertThat(store.preferences.value.favoritePackages).containsExactly("tv.alpha")
     }
 
+    /** Checks: existing local pin lists above the cloud bound are never silently truncated. */
     @Test
     fun `existing local pin lists above the cloud bound are never silently truncated`() {
         val context = RuntimeEnvironment.getApplication()
@@ -107,6 +115,7 @@ class LauncherSettingsStoreTest {
         store.close()
     }
 
+    /** Checks: corrupted stored preferences fall back to a usable home screen. */
     @Test
     fun `corrupted stored preferences fall back to a usable home screen`() {
         val context = RuntimeEnvironment.getApplication()

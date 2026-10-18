@@ -10,29 +10,38 @@ import app.opentv.data.model.Channel
 import app.opentv.data.model.CustomChannelGroup
 import kotlinx.coroutines.flow.Flow
 
+/** Room access to custom channel groups, their ordering, membership and deletion tombstones. */
 @Dao
 abstract class CustomGroupDao {
+    /** Observes nondeleted groups ordered by rank and stable cloud ID. */
     @Query("SELECT * FROM custom_channel_groups WHERE deleted = 0 ORDER BY rank, cloudId")
     abstract fun observeActive(): Flow<List<CustomChannelGroup>>
 
+    /** Returns all groups, including deletion tombstones, ordered by rank and cloud ID. */
     @Query("SELECT * FROM custom_channel_groups ORDER BY rank, cloudId")
     abstract suspend fun all(): List<CustomChannelGroup>
 
+    /** Looks up a group by its portable cloud ID, including deleted groups. */
     @Query("SELECT * FROM custom_channel_groups WHERE cloudId = :cloudId")
     abstract suspend fun byCloudId(cloudId: String): CustomChannelGroup?
 
+    /** Inserts a group if its identity is new, returning the row ID or the Room conflict sentinel. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insert(group: CustomChannelGroup): Long
 
+    /** Renames an existing nondeleted group. */
     @Query("UPDATE custom_channel_groups SET name = :name WHERE cloudId = :cloudId AND deleted = 0")
     abstract suspend fun setName(cloudId: String, name: String)
 
+    /** Updates the rank of an existing nondeleted group. */
     @Query("UPDATE custom_channel_groups SET rank = :rank WHERE cloudId = :cloudId AND deleted = 0")
     abstract suspend fun setRank(cloudId: String, rank: Int)
 
+    /** Replaces the ordered membership of an existing nondeleted group. */
     @Query("UPDATE custom_channel_groups SET members = :members WHERE cloudId = :cloudId AND deleted = 0")
     abstract suspend fun setMembers(cloudId: String, members: List<String>)
 
+    /** Marks the group deleted while retaining its identity for synchronization. */
     @Query("UPDATE custom_channel_groups SET deleted = 1 WHERE cloudId = :cloudId")
     abstract suspend fun markDeleted(cloudId: String)
 

@@ -142,6 +142,7 @@ fun SupabaseCloudScreen(onBack: () -> Unit) {
     }
 }
 
+/** Displays an individual cloud category opt-in with its label and availability. */
 @Composable
 private fun CloudCategorySwitch(category: AdvancedSyncCategory, selected: Boolean, enabled: Boolean, onSelected: (Boolean) -> Unit) {
     val (title, description) = when (category) {

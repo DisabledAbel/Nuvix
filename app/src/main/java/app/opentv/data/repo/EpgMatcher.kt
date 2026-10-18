@@ -32,6 +32,7 @@ object EpgMatcher {
         val key: String,
     )
 
+    /** Lookup indexes for resolving provider channels against guide aliases and normalized names. */
     class Index internal constructor(
         private val exact: Map<String, String>,
         private val sortedKeys: List<Alias>,
@@ -67,6 +68,7 @@ object EpgMatcher {
             return found
         }
 
+        /** Finds the first sorted entry at or after the requested lookup key. */
         private fun lowerBound(key: String): Int {
             var low = 0
             var high = sortedKeys.size

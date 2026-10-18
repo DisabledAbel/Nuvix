@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+/** Sports shelf results, selected-event details, preferences and transient UI feedback. */
 data class SportsHubState(
     val cards: List<SportsEventCard> = emptyList(), val favorites: List<SportsFavorite> = emptyList(),
     val channels: List<Channel> = emptyList(), val now: Long = System.currentTimeMillis(),
@@ -33,6 +34,7 @@ fun sportsDayWindow(now: Long, zone: ZoneId, tomorrow: Boolean = false): LongRan
     return date.atStartOfDay(zone).toInstant().toEpochMilli() until date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 }
 
+/** Filters sports event cards using the active view, favorite identities and current time. */
 fun filterSportsCards(cards: List<SportsEventCard>, filter: SportsFilter, favorites: List<SportsFavorite>, now: Long,
     zone: ZoneId = ZoneId.systemDefault(), league: String? = null, team: String? = null, sport: String? = null): List<SportsEventCard> {
     val teams = favorites.filter { it.kind == "team" }.map { it.id }.toSet()
@@ -54,6 +56,7 @@ fun filterSportsCards(cards: List<SportsEventCard>, filter: SportsFilter, favori
     }
 }
 
+/** Combines sports caches and preferences and dispatches explicit Sports Hub actions. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SportsViewModel(application: Application, private val saved: SavedStateHandle) : AndroidViewModel(application) {
     private val graph = ServiceLocator.get(application)
@@ -64,7 +67,9 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
     val filter = saved.getStateFlow("sports_filter", store.preferences.value.defaultView)
     private val limit = MutableStateFlow(200)
     private val streamPage = MutableStateFlow(0)
+    /** Optional league, team and sport restrictions for the current sports browser. */
     private data class Browse(val league: String?, val team: String?, val sport: String?)
+    /** Search, result limit, filter and browse restrictions used to load sports cards. */
     private data class CardQuery(val query: String, val limit: Int, val filter: SportsFilter, val browse: Browse)
     private val browse = MutableStateFlow(Browse(null, null, null))
     private val clock = MutableStateFlow(System.currentTimeMillis())
@@ -136,32 +141,45 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
         }
     }
 
+    /** Selects optional league, team and sport restrictions for sports browsing. */
     fun browse(league: String?, team: String?, sport: String?) { consumeMessage(); browse.value = Browse(league, team, sport) }
+    /** Updates the sports event text search. */
     fun search(value: String) { consumeMessage(); saved["sports_query"] = value.take(120) }
+    /** Selects an event for details without starting playback. */
     fun select(id: String?) {
         consumeMessage()
         if (id != selectedId.value) mutableState.update { it.copy(selectedEvent = null, streams = emptyList(), preferred = null) }
         streamPage.value = 0; saved["sports_event"] = id
     }
+    /** Loads another bounded page of provider streams for the selected event. */
     fun streamsPage(delta: Int) { streamPage.value = (streamPage.value + delta.coerceIn(-1, 1)).coerceAtLeast(0) }
+    /** Changes the active Sports Hub browsing filter. */
     fun filter(value: SportsFilter) { consumeMessage(); saved["sports_filter"] = value }
+    /** Increases the bounded event result limit for the current browse query. */
     fun more() { limit.value = (limit.value + 200).coerceAtMost(2000) }
+    /** Persists changed Sports Hub preferences. */
     fun settings(value: SportsPreferences) = viewModelScope.launch(Dispatchers.IO) { action { store.set(value) } }
+    /** Refreshes the sports cache from available schedule evidence. */
     fun refresh() = viewModelScope.launch(Dispatchers.IO) { action {
         mutableState.update { it.copy(loading = true) }
         val partial = repository.reconcile(clock.value)
         mutableState.update { it.copy(loading = false, partial = partial, message = "Local sports schedules refreshed") }
     } }
+    /** Clears inferred sports cache data and refreshes the visible state. */
     fun clearCache() = viewModelScope.launch(Dispatchers.IO) { action { repository.clearCache(); repository.reconcile(clock.value) } }
+    /** Toggles a league or team favorite through the repository. */
     fun favorite(kind: String, id: String, leagueId: String, name: String) = viewModelScope.launch(Dispatchers.IO) {
         action { repository.toggleFavorite(kind, id, leagueId, name) }
     }
+    /** Moves a saved sports favorite within its user order. */
     fun move(favorite: SportsFavorite, delta: Int) = viewModelScope.launch(Dispatchers.IO) {
         action { repository.moveFavorite(favorite.kind, favorite.id, delta) }
     }
+    /** Changes a provider channel's favorite state from the Sports Hub. */
     fun favoriteChannel(channel: Channel) = viewModelScope.launch(Dispatchers.IO) {
         action { graph.database.channels().setFavourite(channel.id, !channel.favourite) }
     }
+    /** Publishes an explicit channel playback request for a selected sports stream. */
     fun play(stream: SportsStream, onPlay: (Channel) -> Unit) =
         chooseBroadcast(stream, SportsPlaybackAction.WATCH_FULLSCREEN) { _, channel -> onPlay(channel) }
 
@@ -174,13 +192,17 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
             (channel.sourceId to channel.categoryId) !in hiddenCategories.first()) onChoose(requestedAction, channel)
         else notify("This viewing choice is no longer available. Choose another stream or refresh the local schedule.")
     } }
+    /** Saves an explicit program-to-event matching decision. */
     fun decide(eventId: String, stream: SportsStream, accepted: Boolean) = viewModelScope.launch(Dispatchers.IO) {
         action { repository.decide(eventId, stream.programme.key, stream.channel.id, accepted) }
     }
+    /** Removes a saved manual sports association decision. */
     fun undo(stream: SportsStream) = viewModelScope.launch(Dispatchers.IO) { action {
         selectedId.value?.let { repository.dao.undoEventDecision(it, stream.channel.sourceId, stream.channel.streamId) }
     } }
+    /** Saves the preferred provider-channel choice for an event. */
     fun prefer(eventId: String, stream: SportsStream) = viewModelScope.launch(Dispatchers.IO) { action { repository.prefer(eventId, stream) } }
+    /** Creates or reuses the program reminder associated with a sports event. */
     fun remind(eventId: String) = viewModelScope.launch(Dispatchers.IO) { action {
         require(state.value.preferences.reminders)
         val reminder = repository.remind(eventId,
@@ -188,19 +210,25 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
         ReminderScheduler.set(getApplication(), reminder.id, reminder.startUtcMillis)
         mutableState.update { it.copy(message = "Game reminder set") }
     } }
+    /** Removes a sports reminder and cancels its scheduled alarm. */
     fun cancelReminder(eventId: String) = viewModelScope.launch(Dispatchers.IO) { action {
         sportsReminderForEvent(graph.database.reminders().observeAll().first(), eventId, state.value.streams)?.let {
             ReminderScheduler.cancel(getApplication(), it.id); graph.reminderRepository.delete(it.id)
         }
     } }
+    /** Clears transient feedback after the UI has displayed it. */
     fun consumeMessage() { mutableState.update { it.copy(message = null) } }
+    /** Publishes a transient Sports Hub feedback message. */
     fun notify(message: String) { mutableState.update { it.copy(message = message) } }
+    /** Runs a repository action and reports failures through transient UI feedback. */
     private suspend fun action(block: suspend () -> Unit) {
         try { block() } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel
         } catch (_: Exception) { mutableState.update { it.copy(loading = false, message = "Sports action could not be completed. Cached schedules remain available.") } }
     }
+    /** Releases view-model-owned listeners and stores. */
     override fun onCleared() { store.close(); super.onCleared() }
     companion object {
+        /** Escapes user search text for the bounded sports SQL LIKE query. */
         fun pattern(value: String): String {
             val trimmed = value.trim().take(120)
             val league = SportsLeagues.all.firstOrNull { l -> l.aliases.any { it == SportsNames.normalize(trimmed) } }

@@ -19,11 +19,13 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for guide preview connection. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
 class GuidePreviewConnectionTest {
     private lateinit var connections: AccountConnectionManager
 
+    /** Creates isolated fixtures before each test. */
     @Before fun prepare() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("nuvix_connection_settings", Context.MODE_PRIVATE).edit().clear().commit()
@@ -33,10 +35,12 @@ class GuidePreviewConnectionTest {
         connections.setMaximumConnections(2, 1)
     }
 
+    /** Reserves fixture connection capacity and returns the successfully admitted ownership token. */
     private fun reserve(owner: GuidePreviewConnection, generation: Long): ReservationToken =
         (connections.reserve(ConnectionRequest(owner.sessionId, generation, 2, ConnectionPurpose.PREVIEW))
             as ReservationResult.Reserved).token
 
+    /** Checks: replacement keeps old reservation counted until playback has stopped. */
     @Test fun `replacement keeps old reservation counted until playback has stopped`() {
         var firstToken: ReservationToken? = null
         var observedStateDuringStop: ReservationState? = null
@@ -60,6 +64,7 @@ class GuidePreviewConnectionTest {
         owner.stop()
     }
 
+    /** Checks: canceled old resolve cannot stop or release a replacement. */
     @Test fun `canceled old resolve cannot stop or release a replacement`() {
         var stops = 0
         val owner = GuidePreviewConnection(connections) { stops++ }
@@ -81,6 +86,7 @@ class GuidePreviewConnectionTest {
         owner.stop()
     }
 
+    /** Checks: external player release invalidates in-flight resolve and releases once. */
     @Test fun `external player release invalidates in-flight resolve and releases once`() {
         val owner = GuidePreviewConnection(connections) { fail("Player was already released by its owner") }
         // beginTune calls stopPlayback; there is no player to stop in this externally-owned case.

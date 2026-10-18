@@ -43,6 +43,7 @@ class SmbWriteHandle(
     /** The `smb://host/share/path` locator stored on the recording row. */
     val locator: String,
 ) : Closeable {
+    /** Closes the remote write handle and its associated SMB session resources. */
     override fun close() {
         // A failed flush must reach capture finalization instead of reporting false success.
         try {
@@ -73,6 +74,7 @@ class SmbReadHandle(
     fun readAt(buffer: ByteArray, fileOffset: Long, bufferOffset: Int, length: Int): Int =
         file.read(buffer, fileOffset, bufferOffset, length)
 
+    /** Closes the remote read handle and its associated SMB session resources. */
     override fun close() {
         runCatching { file.close() }
         runCatching { share.close() }
@@ -101,6 +103,7 @@ object SmbClient {
             .build()
     }
 
+    /** Connects and authenticates to the configured SMB share for a storage operation. */
     private fun connect(config: SmbConfig): Quad {
         val client = SMBClient(smbjConfig)
         var connection: Connection? = null
@@ -119,6 +122,7 @@ object SmbClient {
         }
     }
 
+    /** Owns the SMB client, connection, authenticated session and opened share. */
     private class Quad(
         val client: SMBClient,
         val connection: Connection,
@@ -276,6 +280,7 @@ object SmbClient {
         }
     }
 
+    /** Parsed SMB location identifying host, share and relative path. */
     data class Parsed(val host: String, val share: String, val path: String)
 
     /** smb://host/share/a/b/c.ts → (host, share, "a/b/c.ts"). */
@@ -288,5 +293,6 @@ object SmbClient {
         return Parsed(host, share, path)
     }
 
+    /** Recognizes paths using the SMB URI scheme. */
     fun isSmb(locator: String): Boolean = locator.startsWith("smb://")
 }

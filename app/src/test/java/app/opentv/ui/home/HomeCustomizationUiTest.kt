@@ -21,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for home customization ui. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], qualifiers = "w960dp-h540dp-land")
 @OptIn(ExperimentalTestApi::class)
@@ -29,6 +30,7 @@ class HomeCustomizationUiTest {
     private lateinit var store: HomePreferencesStore
     private var plays = 0
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
@@ -45,16 +47,20 @@ class HomeCustomizationUiTest {
             }
         }
     }
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { store.close() }
 
+    /** Sends a remote Select key to the focused Compose control matching the label. */
     private fun select(label: String) {
         val node = compose.onNodeWithText(label)
         if (label !in setOf("Customize home", "Move up", "Move down", "Hide section", "Restore section", "Back to customization", "Done")) node.performScrollTo()
         node.performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithText(label).performKeyInput { pressKey(Key.DirectionCenter) }
     }
+    /** Opens the settings or customization UI required by the test. */
     private fun open() = select("Customize home")
 
+    /** Checks: remote Moves Shelf Without Losing Control Focus And Back Restores Entry Focus. */
     @Test fun remoteMovesShelfWithoutLosingControlFocusAndBackRestoresEntryFocus() {
         open()
         select("Rearrange Sections")
@@ -73,6 +79,7 @@ class HomeCustomizationUiTest {
         compose.onNodeWithText("Customize home").assertIsFocused()
     }
 
+    /** Checks: directional Navigation Reaches Layout Options And Back Without Touch. */
     @Test fun directionalNavigationReachesLayoutOptionsAndBackWithoutTouch() {
         open()
         compose.onNodeWithText("Done").assertIsFocused()
@@ -88,6 +95,7 @@ class HomeCustomizationUiTest {
         compose.onNodeWithText("Customize home").assertIsFocused()
     }
 
+    /** Checks: layouts And Metadata Apply While Content Remains Without Invoking Playback. */
     @Test fun layoutsAndMetadataApplyWhileContentRemainsWithoutInvokingPlayback() {
         open()
         select("Home Layout")

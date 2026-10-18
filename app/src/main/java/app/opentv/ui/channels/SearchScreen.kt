@@ -209,6 +209,7 @@ fun SearchScreen(
     }
 }
 
+/** Displays search guidance and remote-control help. */
 @Composable
 private fun Hint(text: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -216,6 +217,7 @@ private fun Hint(text: String) {
     }
 }
 
+/** Displays a focusable search filter choice with its selected state. */
 @Composable
 private fun SearchChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -228,6 +230,7 @@ private fun SearchChoiceChip(label: String, selected: Boolean, onClick: () -> Un
     )
 }
 
+/** Displays a search result group heading. */
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -238,6 +241,7 @@ private fun SectionHeader(title: String) {
     )
 }
 
+/** Returns the localized label for a program-search filter. */
 private fun epgFilterLabel(filter: EpgSearchFilter): Int = when (filter) {
     EpgSearchFilter.ALL -> R.string.epg_search_all
     EpgSearchFilter.CURRENTLY_AIRING -> R.string.epg_search_airing
@@ -247,6 +251,7 @@ private fun epgFilterLabel(filter: EpgSearchFilter): Int = when (filter) {
     EpgSearchFilter.SERIES -> R.string.epg_search_series
 }
 
+/** Displays a program search result and its explicit details action. */
 @Composable
 private fun ProgrammeResultRow(result: ProgrammeSearchResult, onClick: () -> Unit) {
     val programme = result.programme
@@ -260,6 +265,7 @@ private fun ProgrammeResultRow(result: ProgrammeSearchResult, onClick: () -> Uni
     VodResultRow(programme.title, result.channel.logoUrl, subtitle, onClick)
 }
 
+/** Displays a movie or series search result and its explicit selection action. */
 @Composable
 private fun VodResultRow(name: String, posterUrl: String?, subtitle: String?, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -292,6 +298,7 @@ private fun VodResultRow(name: String, posterUrl: String?, subtitle: String?, on
     }
 }
 
+/** Displays a channel search result and its explicit selection action. */
 @Composable
 private fun SearchResultRow(row: ChannelsViewModel.Row, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -335,4 +342,5 @@ private fun SearchResultRow(row: ChannelsViewModel.Row, onClick: () -> Unit) {
 
 private val searchTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 private val programmeSearchDate = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault())
+/** Formats a program timestamp for the search result list. */
 private fun searchTime(utcMillis: Long): String = searchTimeFormat.format(Date(utcMillis))

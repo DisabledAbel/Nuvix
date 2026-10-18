@@ -311,6 +311,7 @@ class RecordingEngine(
         else streamUrl
     }
 
+    /** Requests foreground capture and records failure when Android rejects the service start. */
     private suspend fun startServiceOrFail(id: Long) {
         try { RecordingService.start(appContext, id) }
         catch (_: IllegalStateException) {
@@ -321,6 +322,7 @@ class RecordingEngine(
         }
     }
 
+    /** Prepares a retry without discarding the recording's saved booking preferences. */
     private suspend fun prepareRetry(recording: Recording): Boolean {
         // Preserve the original partial as a separate library entry instead of overwriting it.
         val archive = if (recording.sizeBytes > 0 || RecordingStorage.sizeOf(recording.filePath) > 0)
@@ -331,6 +333,7 @@ class RecordingEngine(
         return true
     }
 
+    /** Updates recording protection and padding choices subject to the current lifecycle state. */
     suspend fun updatePreferences(recordingId: Long, padStartMinutes: Int, padEndMinutes: Int,
         protectedRecording: Boolean, lockPadding: Boolean) = bookingLock.withLock { dueLock.withLock {
         val recording = repo.byId(recordingId) ?: return@withLock
@@ -344,6 +347,7 @@ class RecordingEngine(
         if (recording.status == RecordingStatus.SCHEDULED) rearmScheduled()
     } }
 
+    /** Builds an account-aware conflict preview for scheduled recordings. */
     suspend fun previewConflicts(): DvrConflictPlan {
         val manager = AccountConnectionManager.get(appContext)
         val candidates = repo.scheduled() + repo.active()
@@ -353,8 +357,10 @@ class RecordingEngine(
             capacityForAccount = { account -> manager.snapshots.value.firstOrNull { it.accountKey == account }?.effectiveMaximum })
     }
 
+    /** Applies the selected conflict-resolution action to eligible bookings. */
     suspend fun applyConflictFallback() = dueLock.withLock { applyAdjustments(previewConflicts(), "User confirmed conflict fallback") }
 
+    /** Persists accepted padding adjustments and updates affected recording alarms. */
     private suspend fun applyAdjustments(plan: DvrConflictPlan, reason: String) {
         for (adjustment in plan.adjustments) {
             if (repo.setScheduledWindow(adjustment.recordingId, adjustment.after.startMillis, adjustment.after.endMillis) == 1) {

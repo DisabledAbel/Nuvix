@@ -145,6 +145,7 @@ internal fun HomeCustomizationDialog(
     }
 }
 
+/** Returns the display label for a home presentation choice. */
 internal fun Enum<*>.label(): String = when (this) {
     HomeFeatured.AUTOMATIC -> "Automatic Featured Content"
     HomeFeatured.CONTINUE -> "Continue Watching"
@@ -153,8 +154,10 @@ internal fun Enum<*>.label(): String = when (this) {
     HomeFeatured.DISABLED -> "Featured Content Disabled"
     else -> name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
 }
+/** Cycles to the next supported enum choice for a home customization control. */
 private inline fun <reified T : Enum<T>> T.next(): T = enumValues<T>().let { it[(ordinal + 1) % it.size] }
 
+/** Displays a focusable home customization choice and its activation callback. */
 @Composable
 internal fun HomeOptionButton(label: String, modifier: Modifier = Modifier, selected: Boolean = false, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

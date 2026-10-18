@@ -29,11 +29,13 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         // Never forward API keys or bearer tokens to a redirect target.
         .followRedirects(false).followSslRedirects(false).build()
 
+    /** Requests a one-time email code from the configured authentication endpoint. */
     suspend fun sendEmailCode(email: String) {
         require(email.length <= 254 && email.contains('@')) { "Enter a valid email address." }
         request("/auth/v1/otp", body = buildJsonObject { put("email", email); put("create_user", true) }.toString())
     }
 
+    /** Verifies an email code and parses the authenticated session response. */
     suspend fun verifyEmailCode(email: String, code: String): CloudSession {
         require(code.matches(Regex("[0-9]{6,10}"))) { "Enter the numeric code from your email." }
         val response = request("/auth/v1/verify", body = buildJsonObject {
@@ -42,11 +44,14 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         return session(response)
     }
 
+    /** Exchanges a refresh token for a renewed authenticated session. */
     suspend fun refresh(refreshToken: String): CloudSession = session(request("/auth/v1/token?grant_type=refresh_token",
         body = buildJsonObject { put("refresh_token", refreshToken) }.toString()))
 
+    /** Requests sign-out for the supplied access token. */
     suspend fun signOut(token: String) { request("/auth/v1/logout?scope=local", token, "{}") }
 
+    /** Uploads safe legacy records through the merge RPC in bounded batches. */
     suspend fun push(token: String, records: List<CloudRecord>) {
         for (batch in records.chunked(200)) {
             val body = buildJsonObject {
@@ -56,6 +61,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         }
     }
 
+    /** Fetches legacy records for the authenticated owner. */
     suspend fun pull(token: String, userId: String): List<CloudRecord> {
         require(UUID.fromString(userId).toString() == userId) { "Invalid cloud account." }
         // Stable keyset pagination also works when PostgREST's project row limit is under 1000.
@@ -76,6 +82,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         return result
     }
 
+    /** Uploads validated advanced records through the advanced merge RPC. */
     suspend fun pushAdvanced(token: String, records: List<AdvancedCloudRecord>) {
         for (batch in records.chunked(100)) {
             require(batch.all { it.isSafe(System.currentTimeMillis()) }) { "Invalid advanced cloud record." }
@@ -86,6 +93,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         }
     }
 
+    /** Fetches the owner's records for the explicitly enabled advanced categories. */
     suspend fun pullAdvanced(token: String, userId: String, categories: Set<AdvancedSyncCategory>): List<AdvancedCloudRecord> {
         require(UUID.fromString(userId).toString() == userId) { "Invalid cloud account." }
         val kinds = AdvancedCloudRecord.KINDS.filter { kind ->
@@ -121,6 +129,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
         return result
     }
 
+    /** Parses authentication JSON into the local session and expiry representation. */
     private fun session(body: String): CloudSession {
         val parsed = json.parseToJsonElement(body).jsonObject
         val user = parsed["user"]?.jsonObject ?: throw IOException("Sign-in did not return a user.")
@@ -132,6 +141,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
             field("refresh_token"), System.currentTimeMillis() + lifetime.coerceIn(1, 86400) * 1000)
     }
 
+    /** Performs a cloud HTTP request with the public project key and optional access token. */
     private suspend fun request(path: String, token: String? = null, body: String? = null): String = withContext(Dispatchers.IO) {
         val builder = Request.Builder().url(config.url + path).header("apikey", config.publishableKey)
             .header("Accept", "application/json")
@@ -150,6 +160,7 @@ internal class SupabaseCloudApi(private val config: CloudConfig) {
     }
 }
 
+/** Cloud HTTP failure with a status code and a message safe for display. */
 internal class CloudHttpException(val status: Int) : IOException(when (status) {
     401, 403 -> "Cloud authentication or access was denied. Check sign-in and row security setup."
     404 -> "Cloud sync schema was not found. Install the supplied migration."

@@ -4,6 +4,7 @@ package app.opentv.data.repo
 /** Search filters describe supplied guide metadata; titles never imply verified sporting events. */
 enum class EpgSearchFilter { ALL, CURRENTLY_AIRING, UPCOMING, MOVIES, SPORTS, SERIES }
 
+/** Escapes SQL LIKE wildcards in user text and builds a bounded substring-search pattern. */
 internal fun epgSearchPattern(query: String): String =
     "%" + query.trim().take(120).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 

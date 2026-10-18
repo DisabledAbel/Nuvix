@@ -11,6 +11,7 @@ class RecentChannels private constructor(context: Context) {
     private val mutableIds = MutableStateFlow(parseIds(prefs.getString("ids", "").orEmpty()))
     val ids = mutableIds.asStateFlow()
 
+    /** Moves a valid channel ID to the front of the bounded recent-history list. */
     @Synchronized fun record(id: Long) {
         if (id <= 0) return
         val updated = (listOf(id) + mutableIds.value.filter { it != id }).take(40)
@@ -20,9 +21,11 @@ class RecentChannels private constructor(context: Context) {
 
     companion object {
         @Volatile private var instance: RecentChannels? = null
+        /** Returns the process-wide recent-channel store. */
         fun get(context: Context): RecentChannels = instance ?: synchronized(this) {
             instance ?: RecentChannels(context).also { instance = it }
         }
+        /** Decodes valid positive channel IDs from saved recent history. */
         internal fun parseIds(value: String): List<Long> = value.split(',').mapNotNull { it.toLongOrNull() }
             .filter { it > 0 }.distinct().take(40)
     }

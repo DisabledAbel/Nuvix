@@ -631,6 +631,7 @@ fun PlayerScreen(
     }
 }
 
+/** Displays a focusable channel choice within the live player's channel panel. */
 @Composable
 private fun ChannelListRow(
     item: PlaybackQueue.Item,
@@ -675,8 +676,10 @@ private fun ChannelListRow(
     }
 }
 
+/** Identifies the live-player overlay panel currently selected by the user. */
 private enum class Panel { NONE, SUBTITLES, AUDIO, QUALITY, ASPECT }
 
+/** Displays a titled list of selectable player options. */
 @OptIn(UnstableApi::class)
 @Composable
 private fun OptionPanel(
@@ -753,8 +756,10 @@ private fun OptionPanel(
     }
 }
 
+/** Player option label, selection state and explicit activation callback. */
 private data class Option(val label: String, val selected: Boolean, val onClick: () -> Unit)
 
+/** Builds subtitle choices from supported tracks and the current selection. */
 @OptIn(UnstableApi::class)
 private fun buildSubtitleOptions(
     controller: PlayerController,
@@ -785,6 +790,7 @@ private fun buildSubtitleOptions(
     return list
 }
 
+/** Builds audio choices from supported tracks and the current selection. */
 @OptIn(UnstableApi::class)
 private fun buildAudioOptions(
     controller: PlayerController,
@@ -806,6 +812,7 @@ private fun buildAudioOptions(
     return list
 }
 
+/** Builds a readable track label from language and available format metadata. */
 private fun trackLabel(label: String?, language: String?, index: Int): String {
     if (!label.isNullOrBlank()) return label
     if (!language.isNullOrBlank() && language != "und") {
@@ -814,6 +821,7 @@ private fun trackLabel(label: String?, language: String?, index: Int): String {
     return "Track ${index + 1}"
 }
 
+/** Displays a focusable player option and its selected state. */
 @Composable
 private fun OptionRow(
     label: String,
@@ -842,6 +850,7 @@ private fun OptionRow(
     }
 }
 
+/** Displays a focusable action in the player control bar. */
 @Composable
 private fun BarChip(
     icon: ImageVector,

@@ -23,11 +23,13 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
+/** Regression tests for installed apps repository. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class InstalledAppsRepositoryTest {
     private val context: Application get() = RuntimeEnvironment.getApplication()
 
+    /** Checks: discovery prefers TV activities and omits unsafe and own activities. */
     @Test
     fun `discovery prefers TV activities and omits unsafe and own activities`() {
         val tv = activity("tv.alpha", "Alpha", "TvActivity")
@@ -52,6 +54,7 @@ class InstalledAppsRepositoryTest {
         assertThat(discovered.last().isTvApp).isFalse()
     }
 
+    /** Checks: launch opens the verified TV component in a new task. */
     @Test
     fun `launch opens the verified TV component in a new task`() {
         val info = activity("tv.alpha", "Alpha")
@@ -66,6 +69,7 @@ class InstalledAppsRepositoryTest {
         assertThat(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK).isNotEqualTo(0)
     }
 
+    /** Checks: launch of an uninstalled app fails without opening an activity. */
     @Test
     fun `launch of an uninstalled app fails without opening an activity`() {
         val unavailable = activity("tv.removed", "Removed").app()
@@ -74,6 +78,7 @@ class InstalledAppsRepositoryTest {
         assertThat(shadowOf(context).nextStartedActivity).isNull()
     }
 
+    /** Checks: launch rejects private and disabled app activities. */
     @Test
     fun `launch rejects private and disabled app activities`() {
         val privateApp = activity("tv.private", "Private").apply { exported = false }
@@ -86,6 +91,7 @@ class InstalledAppsRepositoryTest {
         assertThat(shadowOf(context).nextStartedActivity).isNull()
     }
 
+    /** Checks: platform failure between availability check and launch is handled. */
     @Test
     fun `platform failure between availability check and launch is handled`() {
         val info = activity("tv.alpha", "Alpha")
@@ -100,6 +106,7 @@ class InstalledAppsRepositoryTest {
         assertThat(shadowOf(context).nextStartedActivity).isNull()
     }
 
+    /** Builds synthetic Android activity metadata for installed-app discovery. */
     private fun activity(packageName: String, label: String, name: String = "LaunchActivity") = ActivityInfo().apply {
         this.packageName = packageName
         this.name = name
@@ -113,6 +120,7 @@ class InstalledAppsRepositoryTest {
         }
     }
 
+    /** Registers synthetic application activities with the Robolectric package manager. */
     private fun install(vararg activities: ActivityInfo) {
         for ((packageName, entries) in activities.groupBy { it.packageName }) {
             shadowOf(context.packageManager).installPackage(PackageInfo().apply {
@@ -123,6 +131,7 @@ class InstalledAppsRepositoryTest {
         }
     }
 
+    /** Resolves the test fixture through the behavior under test. */
     private fun resolve(activity: ActivityInfo, category: String) {
         val info = ResolveInfo().apply {
             activityInfo = activity
@@ -131,6 +140,7 @@ class InstalledAppsRepositoryTest {
         shadowOf(context.packageManager).addResolveInfoForIntent(Intent(Intent.ACTION_MAIN).addCategory(category), info)
     }
 
+    /** Builds installed-app discovery metadata for the synthetic activity. */
     private fun ActivityInfo.app(isTvApp: Boolean = false) = InstalledApp(
         packageName = packageName,
         label = nonLocalizedLabel.toString(),

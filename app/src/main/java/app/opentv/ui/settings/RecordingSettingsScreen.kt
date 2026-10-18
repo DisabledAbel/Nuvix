@@ -353,6 +353,7 @@ private fun StorageInfo() {
     }
 }
 
+/** Formats a storage byte count for recording destination settings. */
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 MB"
     val mb = bytes / (1024.0 * 1024.0)
@@ -406,6 +407,7 @@ private fun StepperRow(
     }
 }
 
+/** Displays a focusable increment or decrement control for a recording setting. */
 @Composable
 private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -512,6 +514,7 @@ private fun BackgroundStatus() {
     }
 }
 
+/** Displays recording capability and permission checks with available corrective actions. */
 @Composable
 private fun DvrReadinessStatus() {
     val context = LocalContext.current
@@ -543,6 +546,7 @@ private fun DvrReadinessStatus() {
     }
 }
 
+/** Groups related recording settings in a shared card layout. */
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {
     Column(Modifier.widthIn(max = 720.dp)) {
@@ -563,6 +567,7 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
+/** Displays a selectable recording storage destination. */
 @Composable
 private fun TargetRow(label: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
     Row(
@@ -587,6 +592,7 @@ private fun TargetRow(label: String, subtitle: String, selected: Boolean, onClic
     }
 }
 
+/** Displays a labeled recording configuration text field. */
 @Composable
 private fun Field(
     label: String,

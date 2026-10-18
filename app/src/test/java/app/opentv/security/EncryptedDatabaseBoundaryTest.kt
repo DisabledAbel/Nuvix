@@ -12,9 +12,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+/** Regression tests for encrypted database boundary. */
 class EncryptedDatabaseBoundaryTest {
     @get:Rule val files = TemporaryFolder()
 
+    /** Checks: missing database is not treated as a plaintext migration. */
     @Test
     fun `missing database is not treated as a plaintext migration`() {
         val absent = File(files.root, "not-created.db")
@@ -24,6 +26,7 @@ class EncryptedDatabaseBoundaryTest {
         assertThat(absent.exists()).isFalse()
     }
 
+    /** Checks: empty and truncated headers are not classified as plaintext databases. */
     @Test
     fun `empty and truncated headers are not classified as plaintext databases`() {
         val empty = files.newFile("empty.db")
@@ -35,6 +38,7 @@ class EncryptedDatabaseBoundaryTest {
         assertThat(EncryptedDatabaseMigration.isPlaintext(truncated)).isFalse()
     }
 
+    /** Checks: legacy SQ Lite header is recognized at the beginning of the file. */
     @Test
     fun `legacy SQLite header is recognized at the beginning of the file`() {
         val plaintext = files.newFile("legacy.db").apply {
@@ -44,6 +48,7 @@ class EncryptedDatabaseBoundaryTest {
         assertThat(EncryptedDatabaseMigration.isPlaintext(plaintext)).isTrue()
     }
 
+    /** Checks: similar headers and embedded SQ Lite strings do not trigger conversion. */
     @Test
     fun `similar headers and embedded SQLite strings do not trigger conversion`() {
         val incorrect = files.newFile("incorrect.db").apply {
@@ -57,6 +62,7 @@ class EncryptedDatabaseBoundaryTest {
         assertThat(EncryptedDatabaseMigration.isPlaintext(embedded)).isFalse()
     }
 
+    /** Checks: opaque database bytes are retained without attempting plaintext conversion. */
     @Test
     fun `opaque database bytes are retained without attempting plaintext conversion`() {
         val bytes = ByteArray(64) { 0x5A.toByte() }

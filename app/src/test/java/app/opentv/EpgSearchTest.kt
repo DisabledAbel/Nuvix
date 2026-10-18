@@ -25,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for epg search. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class EpgSearchTest {
@@ -33,6 +34,7 @@ class EpgSearchTest {
     private val now = 1_900_000_000_000L
     private val hour = TimeUnit.HOURS.toMillis(1)
 
+    /** Creates isolated fixtures before each test. */
     @Before fun prepare(): Unit = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, OpenTvDatabase::class.java).build()
@@ -46,21 +48,26 @@ class EpgSearchTest {
             XtreamApi(http), http, db, context.cacheDir)
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { db.close() }
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(id: Long, epg: String = "one", source: Long = 1, category: String = "general") = Channel(
         id = id, sourceId = source, streamId = "fixture-$id", name = "Provider One", displayName = "Channel One",
         categoryId = category, logoUrl = null, epgChannelId = epg, number = id.toInt(), streamUrl = "https://example.invalid/$id",
     )
 
+    /** Builds a synthetic program with configurable timing and guide metadata. */
     private fun programme(id: Long, title: String = "Fixture", epg: String = "one", start: Long = now,
         end: Long = start + hour, category: String? = null) = Programme(
         id = id, feedId = 1, epgChannelId = epg, startUtcMillis = start, endUtcMillis = end, title = title, category = category,
     )
 
+    /** Runs a bounded guide search against the isolated database with the requested temporal filter. */
     private suspend fun search(query: String, filter: EpgSearchFilter = EpgSearchFilter.ALL) =
         repository.programmeSearch(query, filter, now).first()
 
+    /** Checks: search matches titles channel names genres and descriptions. */
     @Test fun `search matches titles channel names genres and descriptions`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1).copy(customName = "Living Room")))
         db.programmes().upsertAll(listOf(programme(1, title = "Ocean Journey", category = "Nature").copy(description = "Following penguins")))
@@ -73,6 +80,7 @@ class EpgSearchTest {
         assertThat(search("o")).isEmpty()
     }
 
+    /** Checks: LIKE wildcards are literal user input. */
     @Test fun `LIKE wildcards are literal user input`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1)))
         db.programmes().upsertAll(listOf(programme(1, "Report 100%_complete"), programme(2, "Other report", start = now + hour)))
@@ -80,6 +88,7 @@ class EpgSearchTest {
         assertThat(search("' OR 1=1 --")).isEmpty()
     }
 
+    /** Checks: airing upcoming and horizon respect exact programme boundaries. */
     @Test fun `airing upcoming and horizon respect exact programme boundaries`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1)))
         db.programmes().upsertAll(listOf(
@@ -93,6 +102,7 @@ class EpgSearchTest {
         assertThat(search("Fixture").map { it.programme.id }).containsExactly(2L, 3L).inOrder()
     }
 
+    /** Checks: sports film and series filters use supplied metadata only. */
     @Test fun `sports film and series filters use supplied metadata only`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1)))
         db.programmes().upsertAll(listOf(
@@ -107,6 +117,7 @@ class EpgSearchTest {
         assertThat(search("Fixture", EpgSearchFilter.SERIES).map { it.programme.id }).containsExactly(4L, 5L)
     }
 
+    /** Checks: hidden channels disabled feeds disabled sources and orphan programmes stay out. */
     @Test fun `hidden channels disabled feeds disabled sources and orphan programmes stay out`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1), channel(2, "hidden").copy(hidden = true),
             channel(3, "disabled-feed"), channel(4, "disabled-source", source = 3)))
@@ -116,6 +127,7 @@ class EpgSearchTest {
         assertThat(search("Fixture").map { it.programme.id }).containsExactly(1L)
     }
 
+    /** Checks: manual override precedes provider and matching guide with fallback for missing data. */
     @Test fun `manual override precedes provider and matching guide with fallback for missing data`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1, "provider").copy(epgOverrideId = "override", matchedEpgId = "matched")))
         db.programmes().upsertAll(listOf(programme(1, epg = "override"), programme(2, epg = "provider"), programme(3, epg = "matched")))
@@ -125,6 +137,7 @@ class EpgSearchTest {
         assertThat(search("Fixture").map { it.programme.id }).containsExactly(2L)
     }
 
+    /** Checks: quality variants collapse without mixing providers. */
     @Test fun `quality variants collapse without mixing providers`(): Unit = runBlocking {
         db.channels().upsertAll(listOf(channel(1).copy(groupKey = "one"), channel(2).copy(groupKey = "one"),
             channel(3, source = 2).copy(groupKey = "one")))
@@ -132,6 +145,7 @@ class EpgSearchTest {
         assertThat(search("Fixture").map { it.channel.sourceId }).containsExactly(1L, 2L)
     }
 
+    /** Checks: parental categories exclude before the result limit and remain source scoped. */
     @Test fun `parental categories exclude before the result limit and remain source scoped`(): Unit = runBlocking {
         val lockedCategory = "locked|category:é"
         db.channels().upsertAll(listOf(channel(1, "locked", category = lockedCategory), channel(2, "safe", category = "safe"),
@@ -144,6 +158,7 @@ class EpgSearchTest {
         assertThat(repository.programmeSearch("Fixture", EpgSearchFilter.ALL, now, limit = 9999).first()).hasSize(200)
     }
 
+    /** Checks: viewport queries materialise only requested programme rows from a large guide. */
     @Test fun `viewport queries materialise only requested programme rows from a large guide`(): Unit = runBlocking {
         db.programmes().upsertAll((1L..2000L).map { programme(it, epg = "epg-$it") })
         val visibleIds = (1..60).map { "epg-$it" }
@@ -154,6 +169,7 @@ class EpgSearchTest {
         assertThat(repository.observeWindowForChannels(visibleIds, now + hour, now).first()).isEmpty()
     }
 
+    /** Checks: channel batches beyond the SQ Lite legacy bind limit retain every programme. */
     @Test fun `channel batches beyond the SQLite legacy bind limit retain every programme`(): Unit = runBlocking {
         db.programmes().upsertAll((1L..1201L).map { programme(it, epg = "epg-$it") })
         val ids = (1..1201).map { "epg-$it" }

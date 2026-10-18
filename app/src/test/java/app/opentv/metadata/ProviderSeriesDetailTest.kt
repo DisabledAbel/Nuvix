@@ -26,6 +26,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for provider series detail. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class ProviderSeriesDetailTest {
@@ -34,6 +35,7 @@ class ProviderSeriesDetailTest {
     private lateinit var provider: MockWebServer
     private lateinit var repository: CatalogRepository
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         val context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, OpenTvDatabase::class.java).build()
@@ -43,13 +45,17 @@ class ProviderSeriesDetailTest {
             db.series(), db.episodes(), db.positions(), XtreamApi(http), StalkerApi(http),
             http, AppSettings.get(context))
     }
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { db.close(); provider.shutdown() }
+    /** Provides a synthetic provider series for metadata or synchronization tests. */
     private fun series(sourceId: Long) = Series(id=42, sourceId=sourceId, seriesId="7", name="Synthetic Show",
         categoryId=null, posterUrl=null, rating=6.0, year=2024, plot=null, favourite=true)
+    /** Provides a synthetic provider configuration for the test's requested source identity. */
     private suspend fun source(kind: SourceKind = SourceKind.XTREAM) = db.sources().insert(
         Source(name="Synthetic provider", kind=kind, url=provider.url("/").toString(),
             username="fixture", password="fixture"))
 
+    /** Checks: one provider response supplies both backfill and IM Db matching without changing fallbacks. */
     @Test fun `one provider response supplies both backfill and IMDb matching without changing fallbacks`(): Unit = runBlocking {
         val original = series(source())
         db.series().upsertAll(listOf(original))
@@ -82,6 +88,7 @@ class ProviderSeriesDetailTest {
         } }
         assertThat(provider.requestCount).isEqualTo(1)
     }
+    /** Checks: already enriched series still returns the IM Db ID with a single request. */
     @Test fun `already enriched series still returns the IMDb ID with a single request`(): Unit = runBlocking {
         val original = series(source()).copy(cast="Existing actor",plot="Existing plot")
         db.series().upsertAll(listOf(original))
@@ -91,6 +98,7 @@ class ProviderSeriesDetailTest {
         assertThat(detail.series).isEqualTo(original)
         assertThat(provider.requestCount).isEqualTo(1)
     }
+    /** Checks: failed provider response retains series with no IM Db ID. */
     @Test fun `failed provider response retains series with no IMDb ID`(): Unit = runBlocking {
         val original = series(source())
         db.series().upsertAll(listOf(original))
@@ -100,6 +108,7 @@ class ProviderSeriesDetailTest {
         assertThat(detail.series).isEqualTo(original)
         assertThat(provider.requestCount).isEqualTo(1)
     }
+    /** Checks: non Xtream sources need no series info request. */
     @Test fun `non Xtream sources need no series info request`(): Unit = runBlocking {
         val original = series(source(SourceKind.M3U))
         db.series().upsertAll(listOf(original))

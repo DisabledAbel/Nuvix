@@ -4,10 +4,13 @@ package app.opentv.recording
 import app.opentv.data.model.Recording
 import app.opentv.data.model.RecordingStatus
 
+/** Recording capture interval expressed as UTC epoch milliseconds. */
 data class DvrWindow(val startMillis: Long, val endMillis: Long)
 
+/** Proposed change from a recording's original capture window to its trimmed window. */
 data class DvrPaddingAdjustment(val recordingId: Long, val before: DvrWindow, val after: DvrWindow)
 
+/** Resolved recording windows, rejected bookings and proposed padding adjustments. */
 data class DvrConflictPlan(
     val windows: Map<Long, DvrWindow>,
     val rejectedIds: Set<Long>,
@@ -30,6 +33,7 @@ object DvrConflictPolicy {
             .thenBy { it.scheduledStartMillis }
             .thenBy { it.id }
 
+    /** Plans account-capacity conflicts using recording priority and permitted padding trims. */
     fun resolve(
         recordings: List<Recording>,
         nowMillis: Long,
@@ -84,11 +88,13 @@ object DvrConflictPolicy {
         return DvrConflictPlan(windows, rejected, unknown, adjustments)
     }
 
+    /** Returns the recording's requested capture interval including selected padding. */
     fun requestedWindow(recording: Recording, nowMillis: Long): DvrWindow = DvrWindow(
         recording.scheduledStartMillis.takeIf { it > 0 } ?: recording.startedAtMillis.takeIf { it > 0 } ?: nowMillis,
         recording.scheduledEndMillis.takeIf { it > 0 } ?: Long.MAX_VALUE,
     )
 
+    /** Returns the capture interval that conflict resolution must preserve. */
     private fun requiredWindow(recording: Recording, nowMillis: Long): DvrWindow {
         val requested = requestedWindow(recording, nowMillis)
         // A running sink owns an already committed end time. Only scheduled windows can be
@@ -101,6 +107,7 @@ object DvrConflictPolicy {
         )
     }
 
+    /** Checks whether two recording capture intervals overlap. */
     private fun overlaps(a: DvrWindow, b: DvrWindow, nowMillis: Long): Boolean =
         maxOf(a.startMillis, b.startMillis, nowMillis) < minOf(a.endMillis, b.endMillis)
 

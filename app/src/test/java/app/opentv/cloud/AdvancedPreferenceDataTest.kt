@@ -17,6 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for advanced preference data. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class AdvancedPreferenceDataTest {
@@ -24,6 +25,7 @@ class AdvancedPreferenceDataTest {
     private lateinit var data: AdvancedPreferenceData
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         listOf("nuvix_launcher", HomePreferencesStore.PREFERENCES, "opentv_settings").forEach {
             context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
@@ -31,12 +33,15 @@ class AdvancedPreferenceDataTest {
         data = AdvancedPreferenceData(context)
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { data.close() }
 
+    /** Builds a portable setting record with the requested text or boolean value. */
     private fun setting(key: String, text: String? = null, flag: Boolean? = null) = AdvancedCloudRecord(
         key, "setting", updatedAtMillis = 1_000, deviceId = device, textValue = text, boolValue = flag,
     )
 
+    /** Checks: snapshot exports only portable implemented keys and ignores secrets and hardware tuning. */
     @Test fun `snapshot exports only portable implemented keys and ignores secrets and hardware tuning`() {
         context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE).edit()
             .putString("provider_url", "https://provider/password")
@@ -56,6 +61,7 @@ class AdvancedPreferenceDataTest {
         assertThat(records.all { it.isSafe(1_000) }).isTrue()
     }
 
+    /** Checks: remote portable settings update actual application state and navigation preference. */
     @Test fun `remote portable settings update actual application state and navigation preference`() {
         assertThat(data.apply(setting("theme_mode", text = "DARK"))).isTrue()
         assertThat(data.apply(setting("channel_layout", text = "LIST"))).isTrue()
@@ -71,6 +77,7 @@ class AdvancedPreferenceDataTest {
         launcher.close()
     }
 
+    /** Checks: remote app order is complete while the installed display subset is local. */
     @Test fun `remote app order is complete while the installed display subset is local`() {
         val record = AdvancedCloudRecord("apps", "app_order", updatedAtMillis = 1_000, deviceId = device,
             entries = listOf("tv.notinstalled", "tv.beta", "tv.alpha"))
@@ -85,6 +92,7 @@ class AdvancedPreferenceDataTest {
         launcher.close()
     }
 
+    /** Checks: remote home shelf visibility has a persisted user-facing value. */
     @Test fun `remote home shelf visibility has a persisted user-facing value`() {
         val record = AdvancedCloudRecord("recent", "home_shelf", updatedAtMillis = 1_000, deviceId = device, boolValue = false)
         assertThat(data.apply(record)).isTrue()
@@ -95,6 +103,7 @@ class AdvancedPreferenceDataTest {
         home.close()
     }
 
+    /** Checks: unknown malformed credential and hardware keys cannot be applied. */
     @Test fun `unknown malformed credential and hardware keys cannot be applied`() {
         listOf(
             setting("provider_url", text = "https://provider/password"),

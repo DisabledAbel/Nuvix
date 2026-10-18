@@ -11,7 +11,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
+/** Regression tests for encrypted guide spool. */
 class EncryptedGuideSpoolTest {
+    /** Checks: short reads round trip across frame boundaries without exposing plaintext. */
     @Test fun `short reads round trip across frame boundaries without exposing plaintext`() = runBlocking<Unit> {
         val file = Files.createTempFile("guide-spool-test", ".encrypted").toFile()
         try {
@@ -26,6 +28,7 @@ class EncryptedGuideSpoolTest {
         } finally { file.delete() }
     }
 
+    /** Checks: authentication catches modified data and missing completion frames. */
     @Test fun `authentication catches modified data and missing completion frames`() = runBlocking<Unit> {
         val file = Files.createTempFile("guide-spool-test", ".encrypted").toFile()
         try {
@@ -39,6 +42,7 @@ class EncryptedGuideSpoolTest {
         } finally { file.delete() }
     }
 
+    /** Checks: download size guard prevents an unbounded cache file. */
     @Test fun `download size guard prevents an unbounded cache file`() = runBlocking<Unit> {
         val file = Files.createTempFile("guide-spool-test", ".encrypted").toFile()
         try {

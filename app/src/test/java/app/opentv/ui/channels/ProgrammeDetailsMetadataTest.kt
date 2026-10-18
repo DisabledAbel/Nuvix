@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for programme details metadata. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], qualifiers = "w960dp-h540dp-land")
 class ProgrammeDetailsMetadataTest {
@@ -23,6 +24,7 @@ class ProgrammeDetailsMetadataTest {
         categoryId = null, logoUrl = null, epgChannelId = "channel", number = 1,
         streamUrl = "https://provider.invalid/private-stream")
 
+    /** Checks: sparse Malformed Metadata Shows Readable Fallback And Artwork Placeholder. */
     @Test fun sparseMalformedMetadataShowsReadableFallbackAndArtworkPlaceholder() {
         val programme = Programme(feedId = 1, epgChannelId = "channel", startUtcMillis = 10, endUtcMillis = 5,
             title = "", season = -1, episode = -1, iconUrl = "file:///private/artwork")
@@ -39,6 +41,7 @@ class ProgrammeDetailsMetadataTest {
         compose.onNodeWithText("private-stream", substring = true).assertDoesNotExist()
     }
 
+    /** Checks: supplied Description Genre Episode And Duration Render Without Requiring Artwork. */
     @Test fun suppliedDescriptionGenreEpisodeAndDurationRenderWithoutRequiringArtwork() {
         val programme = Programme(feedId = 1, epgChannelId = "channel", startUtcMillis = 1_800_000_000_000,
             endUtcMillis = 1_800_003_600_000, title = "Match night", description = "Provider description",

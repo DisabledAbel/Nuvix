@@ -117,6 +117,7 @@ fun AboutScreen(onBack: () -> Unit) {
     }
 }
 
+/** Displays an About-page section heading. */
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)

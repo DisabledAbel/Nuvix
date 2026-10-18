@@ -85,6 +85,7 @@ class EpgRepository(
     private val afterGuideSync: suspend (Long) -> Unit = {},
 ) {
 
+    /** Counts and diagnostics from a guide refresh for display and logging. */
     data class SyncSummary(
         val feedsSucceeded: Int,
         val feedsFailed: Int,
@@ -101,11 +102,14 @@ class EpgRepository(
 
     // ---- Reads -----------------------------------------------------------------------------
 
+    /** Observes configured guide feeds and their latest refresh results. */
     fun observeFeeds(): Flow<List<EpgFeed>> = feedDao.observeAll()
 
+    /** Observes programs intersecting the requested guide time window. */
     fun observeWindow(fromUtcMillis: Long, toUtcMillis: Long): Flow<List<Programme>> =
         programmeDao.observeWindow(fromUtcMillis, toUtcMillis)
 
+    /** Observes the program airing on a guide channel at the supplied time. */
     fun observeNow(nowUtcMillis: Long): Flow<List<Programme>> =
         programmeDao.observeNow(nowUtcMillis)
 
@@ -122,9 +126,11 @@ class EpgRepository(
         return if (queries.size == 1) queries.first() else combine(queries) { results -> results.flatMap { it } }
     }
 
+    /** Observes guide channel identities available from enabled feeds. */
     fun observeEpgChannelIds(fromUtcMillis: Long, toUtcMillis: Long): Flow<Set<String>> =
         programmeDao.observeEpgChannelIds(fromUtcMillis, toUtcMillis).map { it.toSet() }
 
+    /** Observes guide channel identities with programs airing at the supplied time. */
     fun observeAiringChannelIds(nowUtcMillis: Long): Flow<Set<String>> =
         programmeDao.observeAiringChannelIds(nowUtcMillis).map { it.toSet() }
 
@@ -143,11 +149,13 @@ class EpgRepository(
         )
     }
 
+    /** Observes a bounded list of current and upcoming programs for a guide channel. */
     suspend fun upcoming(epgChannelId: String, nowUtcMillis: Long, limit: Int = 12): List<Programme> =
         programmeDao.upcoming(epgChannelId, nowUtcMillis, limit)
 
     // ---- Feed management -------------------------------------------------------------------
 
+    /** Validates and saves a user-supplied guide URL. */
     suspend fun addCustomFeed(name: String, url: String) {
         val trimmed = url.trim()
         if (trimmed.isEmpty() || feedDao.byUrl(trimmed) != null) return
@@ -156,12 +164,14 @@ class EpgRepository(
         )
     }
 
+    /** Changes a feed's enabled state for refresh and guide queries. */
     suspend fun setFeedEnabled(id: Long, enabled: Boolean) = withContext(Dispatchers.IO) { refreshMutex.withLock {
         feedDao.all().firstOrNull { it.id == id }?.url?.let { suppressFeed(it, !enabled) }
         feedDao.setEnabled(id, enabled)
         matchCached(System.currentTimeMillis())
     } }
 
+    /** Removes a guide feed and its associated cached data. */
     suspend fun removeFeed(feed: EpgFeed) = withContext(Dispatchers.IO) { refreshMutex.withLock {
         // Serialize deletion with in-flight downloads so a removed feed cannot reappear.
         database.withTransaction {
@@ -179,6 +189,7 @@ class EpgRepository(
      */
     suspend fun ensureFeeds() = refreshMutex.withLock { ensureFeedsLocked() }
 
+    /** Reconciles provider and automatic guide feeds while the caller holds the refresh lock. */
     private suspend fun ensureFeedsLocked() {
         for (source in sourceDao.enabled()) {
             if (feedDao.forProvider(source.id) == null) {
@@ -295,13 +306,18 @@ class EpgRepository(
             SyncSummary(succeeded, failed, written, matched, total, discoveryFailures)
         } }
 
+    /** Guide-download HTTP failure retaining its response status for diagnostics. */
     private class GuideHttpException(val status: Int) : Exception()
 
+    /** Per-feed refresh outcome used when combining guide synchronization results. */
     private sealed interface FeedResult {
+        /** Counts of programs and channels loaded from a successfully parsed feed. */
         data class Success(val programmes: Int, val channels: Int) : FeedResult
+        /** Feed refresh failure with a user-facing reason. */
         data class Failed(val reason: String) : FeedResult
     }
 
+    /** Downloads and parses one guide feed, retaining prior data when the replacement fails. */
     private suspend fun syncFeed(feed: EpgFeed, nowUtcMillis: Long): FeedResult {
         var downloaded: File? = null
         return try {
@@ -427,6 +443,7 @@ class EpgRepository(
     suspend fun runMatcher(nowUtcMillis: Long = System.currentTimeMillis()): Pair<Int, Int> =
         withContext(Dispatchers.IO) { refreshMutex.withLock { matchCached(nowUtcMillis) } }
 
+    /** Returns provider channels without an effective guide mapping. */
     private suspend fun unresolvedChannels(nowUtcMillis: Long): List<Channel> {
         val populated = programmeDao.activeChannelIds(nowUtcMillis).toHashSet()
         return channelDao.allForMatching().filter { channel ->
@@ -434,6 +451,7 @@ class EpgRepository(
         }
     }
 
+    /** Matches provider channels against the currently cached guide aliases. */
     private suspend fun matchCached(nowUtcMillis: Long): Pair<Int, Int> {
         val populated = programmeDao.activeChannelIds(nowUtcMillis).toHashSet()
         val enabledFeeds = feedDao.enabled().map { it.id }.toHashSet()
@@ -473,6 +491,7 @@ class EpgRepository(
         return matched to channels.size
     }
 
+    /** Sets or clears a user's explicit guide-channel mapping. */
     suspend fun setManualOverride(channelId: Long, epgId: String?) =
         channelDao.setEpgOverride(channelId, epgId)
 

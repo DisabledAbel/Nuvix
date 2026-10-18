@@ -250,6 +250,7 @@ internal fun GuidePreferencesPanel(settings: AppSettings) {
     }
 }
 
+/** Displays a remote-focusable guide preference with selectable supported values. */
 @Composable
 private fun <T> GuidePreferenceChoice(
     title: String,
@@ -318,6 +319,7 @@ private fun <T> GuidePreferenceChoice(
     }
 }
 
+/** Displays a remote-focusable boolean guide preference. */
 @Composable
 private fun GuidePreferenceToggle(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
@@ -331,6 +333,7 @@ private fun GuidePreferenceToggle(title: String, checked: Boolean, onChange: (Bo
     }
 }
 
+/** Adds a visible focus indicator to guide preference controls. */
 @Composable
 private fun Modifier.guideFocusIndicator(): Modifier {
     var focused by remember { mutableStateOf(false) }
@@ -338,6 +341,7 @@ private fun Modifier.guideFocusIndicator(): Modifier {
         .border(2.dp, if (focused) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(8.dp))
 }
 
+/** Displays a configured guide feed with refresh status and management actions. */
 @Composable
 private fun FeedRow(
     feed: EpgFeed,

@@ -11,8 +11,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+/** Regression tests for imdb api client. */
 class ImdbApiClientTest {
     @get:Rule val temp = TemporaryFolder()
+    /** Checks: secondary matches TV type title year and reads IM Db rating. */
     @Test fun `secondary matches TV type title year and reads IMDb rating`() = runBlocking {
         MockWebServer().use { server ->
             server.start()
@@ -26,6 +28,7 @@ class ImdbApiClientTest {
             assertThat(server.takeRequest().path).isEqualTo("/titles/tt1234567")
         }
     }
+    /** Checks: secondary failure is optional and rate limited across calls. */
     @Test fun `secondary failure is optional and rate limited across calls`() = runBlocking {
         MockWebServer().use { server ->
             server.start()

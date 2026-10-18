@@ -8,25 +8,30 @@ package app.opentv.launcher
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
+/** Regression tests for app order. */
 class AppOrderTest {
+    /** Checks: pin appends a new app without changing existing order. */
     @Test
     fun `pin appends a new app without changing existing order`() {
         assertThat(AppOrder.pin(listOf("tv.alpha", "tv.beta"), "tv.gamma"))
             .containsExactly("tv.alpha", "tv.beta", "tv.gamma").inOrder()
     }
 
+    /** Checks: pinning an already pinned app does not duplicate or move it. */
     @Test
     fun `pinning an already pinned app does not duplicate or move it`() {
         assertThat(AppOrder.pin(listOf("tv.alpha", "tv.beta"), "tv.alpha"))
             .containsExactly("tv.alpha", "tv.beta").inOrder()
     }
 
+    /** Checks: unpin preserves the relative order of remaining apps. */
     @Test
     fun `unpin preserves the relative order of remaining apps`() {
         assertThat(AppOrder.unpin(listOf("tv.alpha", "tv.beta", "tv.gamma"), "tv.beta"))
             .containsExactly("tv.alpha", "tv.gamma").inOrder()
     }
 
+    /** Checks: move supports both directions. */
     @Test
     fun `move supports both directions`() {
         val order = listOf("tv.alpha", "tv.beta", "tv.gamma")
@@ -37,6 +42,7 @@ class AppOrderTest {
             .containsExactly("tv.alpha", "tv.gamma", "tv.beta").inOrder()
     }
 
+    /** Checks: move cannot lose an app at either edge. */
     @Test
     fun `move cannot lose an app at either edge`() {
         val order = listOf("tv.alpha", "tv.beta", "tv.gamma")
@@ -46,6 +52,7 @@ class AppOrderTest {
         assertThat(AppOrder.move(order, "tv.missing", 1)).isEqualTo(order)
     }
 
+    /** Checks: extreme move offsets clamp without integer overflow. */
     @Test
     fun `extreme move offsets clamp without integer overflow`() {
         val order = listOf("tv.alpha", "tv.beta", "tv.gamma")
@@ -56,6 +63,7 @@ class AppOrderTest {
             .containsExactly("tv.beta", "tv.alpha", "tv.gamma").inOrder()
     }
 
+    /** Checks: uninstalled favorites are removed without disturbing saved order. */
     @Test
     fun `uninstalled favorites are removed without disturbing saved order`() {
         assertThat(
@@ -66,6 +74,7 @@ class AppOrderTest {
         ).containsExactly("tv.alpha", "tv.beta").inOrder()
     }
 
+    /** Checks: empty installed set removes all unavailable favorites. */
     @Test
     fun `empty installed set removes all unavailable favorites`() {
         assertThat(AppOrder.retainInstalled(listOf("tv.removed"), emptySet())).isEmpty()

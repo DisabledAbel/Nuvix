@@ -331,6 +331,7 @@ fun GuideGrid(
     }
 }
 
+/** Displays a focusable guide time-navigation action. */
 @Composable
 private fun GuideNavigationButton(onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -343,8 +344,10 @@ private fun GuideNavigationButton(onClick: () -> Unit, enabled: Boolean = true, 
     ) { content() }
 }
 
+/** Identifies the guide row and program that should receive the next focus request. */
 private data class GuideFocusRequest(val rowKey: Any, val programmeStart: Long?, val serial: Int)
 
+/** Builds a stable key for the guide window and row data that need loading. */
 // Include matching inputs so a provider refresh can reload visible programmes without a scroll.
 private fun ChannelsViewModel.Row.guideLoadKey() = primary.id to variants.map { it.id to it.epgCandidates }
 
@@ -412,6 +415,7 @@ fun ChannelList(
     }
 }
 
+/** Displays a focusable channel row in the guide's list presentation. */
 @Composable
 private fun ChannelListRow(
     row: ChannelsViewModel.Row,
@@ -531,6 +535,7 @@ private fun ChannelListRow(
     }
 }
 
+/** Displays the visible guide timeline's time labels. */
 @Composable
 private fun TimeHeader(windowStartMillis: Long, scroll: ScrollState, minuteWidthDp: Float, nowMillis: Long) {
     Row(Modifier.fillMaxWidth().height(32.dp)) {
@@ -550,6 +555,7 @@ private fun TimeHeader(windowStartMillis: Long, scroll: ScrollState, minuteWidth
     }
 }
 
+/** Displays a channel's bounded program cells within the visible timeline. */
 @Composable
 private fun GuideRow(
     row: ChannelsViewModel.Row,
@@ -666,6 +672,7 @@ private fun GuideRow(
     }
 }
 
+/** Displays a focusable program cell with timing, selection and optional progress. */
 @Composable
 private fun ProgrammeBlock(
     programme: Programme,
@@ -741,6 +748,7 @@ private fun ProgrammeBlock(
     }
 }
 
+/** Draws the current-time indicator within the visible guide window. */
 @Composable
 private fun CurrentTimeMarker(windowStartMillis: Long, nowMillis: Long, minuteWidthDp: Float) {
     if (nowMillis in windowStartMillis until windowStartMillis + GUIDE_WINDOW_MILLIS) {

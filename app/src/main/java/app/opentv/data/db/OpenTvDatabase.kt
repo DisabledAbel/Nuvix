@@ -37,28 +37,38 @@ import app.opentv.data.model.Source
 import app.opentv.data.model.SourceKind
 import app.opentv.data.model.StreamKind
 
+/** Room converters for the source, stream and recording enum values. */
 class Converters {
+    /** Serializes the source kind enum for Room storage. */
     @TypeConverter fun sourceKindToString(value: SourceKind): String = value.name
 
+    /** Decodes a stored source kind value using the supported enum representation. */
     @TypeConverter fun stringToSourceKind(value: String): SourceKind =
         runCatching { SourceKind.valueOf(value) }.getOrDefault(SourceKind.M3U)
 
+    /** Serializes the live stream format enum for Room storage. */
     @TypeConverter fun liveStreamFormatToString(value: LiveStreamFormat): String = value.name
 
+    /** Decodes a stored live stream format value using the supported enum representation. */
     @TypeConverter fun stringToLiveStreamFormat(value: String): LiveStreamFormat =
         runCatching { LiveStreamFormat.valueOf(value) }.getOrDefault(LiveStreamFormat.HLS)
 
+    /** Serializes the stream kind enum for Room storage. */
     @TypeConverter fun streamKindToString(value: StreamKind): String = value.name
 
+    /** Decodes a stored stream kind value using the supported enum representation. */
     @TypeConverter fun stringToStreamKind(value: String): StreamKind =
         runCatching { StreamKind.valueOf(value) }.getOrDefault(StreamKind.LIVE)
 
+    /** Serializes the recording status enum for Room storage. */
     @TypeConverter fun recordingStatusToString(value: RecordingStatus): String = value.name
 
+    /** Decodes a stored recording status value using the supported enum representation. */
     @TypeConverter fun stringToRecordingStatus(value: String): RecordingStatus =
         runCatching { RecordingStatus.valueOf(value) }.getOrDefault(RecordingStatus.FAILED)
 }
 
+/** Room database containing provider catalogs, guide data, user state, recordings and sports caches. */
 @Database(
     entities = [
         Source::class,
@@ -85,22 +95,39 @@ class Converters {
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
 abstract class OpenTvDatabase : RoomDatabase() {
+    /** Returns the Room DAO for sources. */
     abstract fun sources(): SourceDao
+    /** Returns the Room DAO for categories. */
     abstract fun categories(): CategoryDao
+    /** Returns the Room DAO for channels. */
     abstract fun channels(): ChannelDao
+    /** Returns the Room DAO for epg feeds. */
     abstract fun epgFeeds(): EpgFeedDao
+    /** Returns the Room DAO for epg aliases. */
     abstract fun epgAliases(): EpgChannelAliasDao
+    /** Returns the Room DAO for programmes. */
     abstract fun programmes(): ProgrammeDao
+    /** Returns the Room DAO for movies. */
     abstract fun movies(): MovieDao
+    /** Returns the Room DAO for series. */
     abstract fun series(): SeriesDao
+    /** Returns the Room DAO for episodes. */
     abstract fun episodes(): EpisodeDao
+    /** Returns the Room DAO for positions. */
     abstract fun positions(): PlaybackPositionDao
+    /** Returns the Room DAO for profiles. */
     abstract fun profiles(): ProfileDao
+    /** Returns the Room DAO for recordings. */
     abstract fun recordings(): RecordingDao
+    /** Returns the Room DAO for recording events. */
     abstract fun recordingEvents(): RecordingEventDao
+    /** Returns the Room DAO for series rules. */
     abstract fun seriesRules(): SeriesRuleDao
+    /** Returns the Room DAO for reminders. */
     abstract fun reminders(): ReminderDao
+    /** Returns the Room DAO for sports. */
     abstract fun sports(): SportsDao
+    /** Returns the Room DAO for custom groups. */
     abstract fun customGroups(): CustomGroupDao
 
     companion object {
@@ -111,6 +138,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * identity check passes without resetting existing user data.
          */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `profiles` (" +
@@ -142,6 +170,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * than falling through to the destructive rebuild below).
          */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `recordings` (" +
@@ -185,6 +214,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * the entity's @ColumnInfo(defaultValue = "0") so the schema-identity check passes.
          */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `channels` ADD COLUMN `tvArchive` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `channels` ADD COLUMN `tvArchiveDays` INTEGER NOT NULL DEFAULT 0")
@@ -197,6 +227,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * the upgrade rather than falling through to the destructive rebuild.
          */
         private val MIGRATION_5_6 = object : Migration(5, 6) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `reminders` (" +
@@ -224,6 +255,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * schema-identity check and the upgrade preserves favourites and overrides.
          */
         private val MIGRATION_6_7 = object : Migration(6, 7) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `sources` ADD COLUMN `liveFormat` TEXT NOT NULL DEFAULT 'HLS'")
             }
@@ -236,6 +268,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * schema-identity check passes and favourites/overrides survive the upgrade.
          */
         private val MIGRATION_7_8 = object : Migration(7, 8) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `channels` ADD COLUMN `customName` TEXT")
             }
@@ -250,6 +283,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * the destructive rebuild.
          */
         private val MIGRATION_8_9 = object : Migration(8, 9) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `movies` ADD COLUMN `backdropUrl` TEXT")
                 db.execSQL("ALTER TABLE `movies` ADD COLUMN `cast` TEXT")
@@ -266,6 +300,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
         /** Recordings gain a profile owner so a booking can be tagged to whoever set it. Nullable
          *  (no default) to match Room's generated DDL for a `Long?` field — the project's pattern. */
         private val MIGRATION_9_10 = object : Migration(9, 10) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `recordings` ADD COLUMN `profileId` INTEGER")
             }
@@ -278,6 +313,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
          * schema-identity check passes and favourites/overrides survive the upgrade.
          */
         private val MIGRATION_10_11 = object : Migration(10, 11) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `sources` ADD COLUMN `macAddress` TEXT")
                 db.execSQL("ALTER TABLE `channels` ADD COLUMN `cmd` TEXT")
@@ -286,6 +322,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
 
         /** Custom group UUID mappings and desired membership are additive to the provider cache. */
         val MIGRATION_11_12 = object : Migration(11, 12) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `custom_channel_groups` (" +
                     "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cloudId` TEXT NOT NULL, " +
@@ -299,6 +336,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
 
         /** Additive sports cache and local intent; no catalogues or existing reminders are rebuilt. */
         val MIGRATION_12_13 = object : Migration(12, 13) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `sports_events` (`id` TEXT NOT NULL, `sportId` TEXT NOT NULL, `leagueId` TEXT NOT NULL, `homeTeamId` TEXT, `awayTeamId` TEXT, `homeName` TEXT, `awayName` TEXT, `title` TEXT NOT NULL, `startUtcMillis` INTEGER NOT NULL, `endUtcMillis` INTEGER NOT NULL, `status` TEXT NOT NULL, `source` TEXT NOT NULL, `sourceEventId` TEXT NOT NULL, `verified` INTEGER NOT NULL, `updatedAtMillis` INTEGER NOT NULL, `homeLogo` TEXT, `awayLogo` TEXT, `homeScore` INTEGER, `awayScore` INTEGER, `period` TEXT, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE TABLE IF NOT EXISTS `sports_programmes` (`key` TEXT NOT NULL, `eventId` TEXT NOT NULL, `feedId` INTEGER NOT NULL, `epgChannelId` TEXT NOT NULL, `startUtcMillis` INTEGER NOT NULL, `endUtcMillis` INTEGER NOT NULL, `title` TEXT NOT NULL, `confidence` TEXT NOT NULL, PRIMARY KEY(`key`))")
@@ -326,6 +364,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
 
         /** Additive DVR policy metadata. Existing padded windows and all captured files survive. */
         val MIGRATION_13_14 = object : Migration(13, 14) {
+            /** Applies this additive schema migration to preserve existing application data. */
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE recordings ADD COLUMN programmeStartMillis INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE recordings ADD COLUMN programmeEndMillis INTEGER NOT NULL DEFAULT 0")
@@ -338,6 +377,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Builds the encrypted database with all supported schema migrations registered. */
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
                 // Encrypt the complete cache: provider passwords and credential-bearing stream

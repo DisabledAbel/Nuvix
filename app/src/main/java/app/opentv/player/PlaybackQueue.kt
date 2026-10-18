@@ -14,6 +14,7 @@ package app.opentv.player
  * and it only needs to survive the hop from the guide to the player.
  */
 object PlaybackQueue {
+    /** Channel identity and presentation details in the live player's navigation queue. */
     data class Item(val id: Long, val name: String, val logoUrl: String?, val number: Int? = null)
 
     @Volatile

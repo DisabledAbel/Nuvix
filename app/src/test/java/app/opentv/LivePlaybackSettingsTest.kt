@@ -12,11 +12,13 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for live playback settings. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class LivePlaybackSettingsTest {
     private lateinit var context: Application
 
+    /** Creates isolated fixtures before each test. */
     @Before
     fun reset() {
         context = RuntimeEnvironment.getApplication()
@@ -24,6 +26,7 @@ class LivePlaybackSettingsTest {
         context.getSharedPreferences("nuvix_private_settings", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
+    /** Checks: new installs retain live playback and allow preview and in-app audio. */
     @Test
     fun `new installs retain live playback and allow preview and in-app audio`() {
         val settings = freshSettings()
@@ -34,6 +37,7 @@ class LivePlaybackSettingsTest {
         assertThat(settings.resumeLastChannel.value).isFalse()
     }
 
+    /** Checks: local playback choices survive reconstructing settings and can be enabled again. */
     @Test
     fun `local playback choices survive reconstructing settings and can be enabled again`() {
         val original = freshSettings()
@@ -58,6 +62,7 @@ class LivePlaybackSettingsTest {
         assertThat(enabled.continueAudioWhileBrowsing.value).isTrue()
     }
 
+    /** Checks: persistent preview preferences leave independent guide and startup choices intact. */
     @Test
     fun `persistent preview preferences leave independent guide and startup choices intact`() {
         val settings = freshSettings()
@@ -76,6 +81,7 @@ class LivePlaybackSettingsTest {
         assertThat(restored.lastChannelId).isEqualTo(42L)
     }
 
+    /** Checks: diagnostic choices persist locally with compact hidden by default. */
     @Test fun `diagnostic choices persist locally with compact hidden by default`() {
         val settings = freshSettings()
         assertThat(settings.diagnosticsEnabled.value).isTrue()
@@ -89,6 +95,7 @@ class LivePlaybackSettingsTest {
         assertThat(restored.diagnosticsTechnical.value).isFalse()
     }
 
+    /** Constructs a fresh settings store to exercise persisted state independently of the singleton. */
     // Reconstruct the store without modifying the production singleton or its ownership model.
     private fun freshSettings(): AppSettings = AppSettings::class.java
         .getDeclaredConstructor(Context::class.java)

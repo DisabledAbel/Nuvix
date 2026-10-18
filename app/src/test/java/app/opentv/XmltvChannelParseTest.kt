@@ -29,12 +29,14 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], application = android.app.Application::class)
 class XmltvChannelParseTest {
 
+    /** Collected aliases, programs and parse statistics from one synthetic XMLTV input. */
     private data class Parsed(
         val aliases: List<Pair<String, String?>>,
         val programmes: List<Programme>,
         val stats: XmltvParser.Stats,
     )
 
+    /** Parses synthetic XMLTV text and collects aliases, programs and parse statistics. */
     private suspend fun parse(xml: String): Parsed {
         val aliases = mutableListOf<Pair<String, String?>>()
         val programmes = mutableListOf<Programme>()
@@ -47,6 +49,7 @@ class XmltvChannelParseTest {
         return Parsed(aliases, programmes, stats)
     }
 
+    /** Checks: reads display names from a plain guide. */
     @Test
     fun `reads display names from a plain guide`() = runTest {
         val result = parse(

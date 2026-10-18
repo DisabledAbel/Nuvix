@@ -23,6 +23,10 @@ import kotlinx.coroutines.ensureActive
 internal object EncryptedGuideSpool {
     private const val FRAME_BYTES = 64 * 1024
 
+    /**
+     * Encrypts bounded input bytes into authenticated spool frames and returns the one-use
+     * decryption key.
+     */
     suspend fun write(input: InputStream, target: File, maxBytes: Long): SecretKey {
         val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         DataOutputStream(target.outputStream().buffered()).use { output ->
@@ -49,6 +53,7 @@ internal object EncryptedGuideSpool {
         return key
     }
 
+    /** Encrypts and writes one bounded frame with its sequence identity. */
     private fun writeFrame(output: DataOutputStream, key: SecretKey, buffer: ByteArray, count: Int, index: Long) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(Cipher.ENCRYPT_MODE, key)
@@ -61,6 +66,7 @@ internal object EncryptedGuideSpool {
         output.write(encrypted)
     }
 
+    /** Returns a decrypting stream that verifies each frame and the authenticated completion marker. */
     fun open(file: File, key: SecretKey): InputStream = object : InputStream() {
         private val input = DataInputStream(file.inputStream().buffered())
         private var frame = ByteArray(0)
@@ -108,5 +114,6 @@ internal object EncryptedGuideSpool {
         override fun close() { input.close() }
     }
 
+    /** Encodes the frame sequence and plaintext byte count as authenticated associated data. */
     private fun frameIdentity(index: Long, count: Int): ByteArray = ByteBuffer.allocate(12).putLong(index).putInt(count).array()
 }

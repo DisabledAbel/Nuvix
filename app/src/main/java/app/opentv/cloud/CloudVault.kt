@@ -17,6 +17,7 @@ internal class CloudVault(context: Context) {
     private val directory = File(context.noBackupFilesDir, "cloud_v1").apply { mkdirs() }
     private val alias = "nuvix.cloud.v1"
 
+    /** Loads or creates the Android Keystore key protecting cloud values. */
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
@@ -28,6 +29,7 @@ internal class CloudVault(context: Context) {
         }.generateKey()
     }
 
+    /** Decrypts a named cloud value, returning null when no readable value exists. */
     @Synchronized fun read(name: String): String? {
         val file = File(directory, name)
         if (!file.exists()) return null
@@ -41,6 +43,7 @@ internal class CloudVault(context: Context) {
         }
     }
 
+    /** Encrypts and stores a named cloud value with a fresh initialization vector. */
     @Synchronized fun write(name: String, value: String) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -55,6 +58,7 @@ internal class CloudVault(context: Context) {
         check(temp.renameTo(target)) { "Unable to save encrypted cloud state." }
     }
 
+    /** Deletes a named encrypted cloud value. */
     @Synchronized fun remove(name: String) {
         for (file in listOf(File(directory, name), File(directory, "$name.tmp"))) {
             check(!file.exists() || file.delete()) { "Unable to remove encrypted cloud state." }

@@ -27,6 +27,7 @@ object StatusBus {
     /** 0..1 progress for [message], or null for indeterminate (show a spinner, not a bar). */
     val progress: StateFlow<Float?> = _progress.asStateFlow()
 
+    /** Publishes a status message and optional progress for shared UI feedback. */
     fun set(message: String?, progress: Float? = null) {
         _message.value = message
         _progress.value = if (message == null) null else progress

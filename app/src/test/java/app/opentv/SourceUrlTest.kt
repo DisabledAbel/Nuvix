@@ -18,18 +18,21 @@ import org.junit.Test
  */
 class SourceUrlTest {
 
+    /** Checks: adds a scheme when missing. */
     @Test
     fun `adds a scheme when missing`() {
         assertThat(SourceRepository.normaliseUrl("example.com:8080", SourceKind.XTREAM))
             .isEqualTo("http://example.com:8080")
     }
 
+    /** Checks: strips trailing slashes. */
     @Test
     fun `strips trailing slashes`() {
         assertThat(SourceRepository.normaliseUrl("http://example.com:8080/", SourceKind.XTREAM))
             .isEqualTo("http://example.com:8080")
     }
 
+    /** Checks: strips api paths pasted from a provider email. */
     @Test
     fun `strips api paths pasted from a provider email`() {
         val pasted = "http://example.com:8080/get.php?username=u&password=p&type=m3u_plus"
@@ -38,6 +41,7 @@ class SourceUrlTest {
             .isEqualTo("http://example.com:8080")
     }
 
+    /** Checks: strips player api paths. */
     @Test
     fun `strips player_api paths`() {
         val pasted = "http://example.com:8080/player_api.php?username=u&password=p"
@@ -46,6 +50,7 @@ class SourceUrlTest {
             .isEqualTo("http://example.com:8080")
     }
 
+    /** Checks: leaves an M3 U url completely alone. */
     @Test
     fun `leaves an M3U url completely alone`() {
         // Regression guard. Stripping the path off a playlist URL destroys it — the very
@@ -55,12 +60,14 @@ class SourceUrlTest {
         assertThat(SourceRepository.normaliseUrl(playlist, SourceKind.M3U)).isEqualTo(playlist)
     }
 
+    /** Checks: preserves https. */
     @Test
     fun `preserves https`() {
         assertThat(SourceRepository.normaliseUrl("https://example.com", SourceKind.XTREAM))
             .isEqualTo("https://example.com")
     }
 
+    /** Checks: an empty string stays empty. */
     @Test
     fun `an empty string stays empty`() {
         assertThat(SourceRepository.normaliseUrl("   ", SourceKind.XTREAM)).isEmpty()

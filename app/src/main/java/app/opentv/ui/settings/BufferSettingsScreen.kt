@@ -35,6 +35,7 @@ import app.opentv.player.BufferPolicy
 import app.opentv.player.BufferPreset
 import app.opentv.player.BufferSettings
 
+/** Displays buffering presets and validated custom timing controls. */
 @Composable
 fun BufferSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -89,6 +90,7 @@ fun BufferSettingsScreen(onBack: () -> Unit) {
     }
 }
 
+/** Displays an individual buffer timing value and its adjustment controls. */
 @Composable
 private fun BufferValue(label: String, value: String, onChange: (String) -> Unit) {
     OutlinedTextField(

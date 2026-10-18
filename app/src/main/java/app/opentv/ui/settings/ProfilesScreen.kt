@@ -122,6 +122,7 @@ fun ProfilesScreen(
     }
 }
 
+/** Displays a profile name entry dialog and its confirmation action. */
 @Composable
 private fun NameEntry(
     initial: String,

@@ -37,6 +37,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for guide preferences ui. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], qualifiers = "w960dp-h540dp-land")
 @OptIn(ExperimentalTestApi::class)
@@ -44,6 +45,7 @@ class GuidePreferencesUiTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var settings: AppSettings
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         val context: Context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE).edit().clear().commit()
@@ -56,18 +58,21 @@ class GuidePreferencesUiTest {
         }
     }
 
+    /** Opens the settings or customization UI required by the test. */
     private fun open(title: String) {
         val entry = compose.onNode(hasText(title) and hasClickAction())
         entry.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus)
         entry.performKeyInput { pressKey(Key.DirectionCenter) }
     }
 
+    /** Selects the labeled guide preference option using remote-control input. */
     private fun choose(label: String) {
         val option = compose.onNode(hasText(label) and hasAnyAncestor(isDialog()))
         option.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus)
         option.performKeyInput { pressKey(Key.DirectionCenter) }
     }
 
+    /** Checks: remote Switches All Layouts Immediately And Restores Entry Focus. */
     @Test fun remoteSwitchesAllLayoutsImmediatelyAndRestoresEntryFocus() {
         open("Guide layout")
         compose.onNode(hasText("Standard") and hasAnyAncestor(isDialog())).assertIsFocused()
@@ -86,6 +91,7 @@ class GuidePreferencesUiTest {
         compose.onNode(hasText("Guide layout") and hasClickAction()).assertIsFocused()
     }
 
+    /** Checks: back Closes Choices And Remote Reaches Density Sort And Visibility. */
     @Test fun backClosesChoicesAndRemoteReachesDensitySortAndVisibility() {
         open("Channel sorting")
         choose("Alphabetical")
@@ -115,6 +121,7 @@ class GuidePreferencesUiTest {
         }
     }
 
+    /** Checks: remote Back Closes The Focused Choice And Restores Its Settings Entry. */
     @Test fun remoteBackClosesTheFocusedChoiceAndRestoresItsSettingsEntry() {
         open("Guide layout")
         val selected = compose.onNode(hasText("Standard") and hasAnyAncestor(isDialog()))

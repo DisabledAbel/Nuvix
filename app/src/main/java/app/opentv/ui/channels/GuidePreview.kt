@@ -296,4 +296,5 @@ fun GuidePreview(
 
 private val previewTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+/** Formats an epoch timestamp as a localized guide time label. */
 private fun formatTime(utcMillis: Long): String = previewTimeFormat.format(Date(utcMillis))

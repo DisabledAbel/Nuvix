@@ -14,6 +14,7 @@ import java.util.UUID
 class LocalCustomGroups(private val database: OpenTvDatabase) {
     val dao get() = database.customGroups()
 
+    /** Creates a named local group subject to name and group-count limits. */
     suspend fun create(name: String): String = database.withTransaction {
         require(validName(name))
         val active = dao.all().filterNot { it.deleted }
@@ -23,13 +24,16 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
         id
     }
 
+    /** Validates and changes an existing group's display name. */
     suspend fun rename(cloudId: String, name: String) {
         require(validName(name))
         dao.setName(cloudId, name.trim())
     }
 
+    /** Tombstones a group so its deletion can propagate through synchronization. */
     suspend fun delete(cloudId: String) = dao.tombstone(cloudId)
 
+    /** Moves a group within the ordered active-group list. */
     suspend fun moveGroup(cloudId: String, delta: Int) = database.withTransaction {
         val ordered = dao.all().filterNot { it.deleted }.toMutableList()
         val from = ordered.indexOfFirst { it.cloudId == cloudId }
@@ -39,6 +43,7 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
         ordered.forEachIndexed { rank, group -> dao.setRank(group.cloudId, rank) }
     }
 
+    /** Adds a portable channel identity to a group without duplicating membership. */
     suspend fun addMember(cloudId: String, fingerprint: String) = editMembers(cloudId) { members ->
         require(HASH.matches(fingerprint))
         if (fingerprint in members) members else {
@@ -47,8 +52,10 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
         }
     }
 
+    /** Removes the portable channel identity from the group. */
     suspend fun removeMember(cloudId: String, fingerprint: String) = editMembers(cloudId) { it - fingerprint }
 
+    /** Moves a member within the group's saved channel order. */
     suspend fun moveMember(cloudId: String, fingerprint: String, delta: Int) = editMembers(cloudId) { members ->
         val from = members.indexOf(fingerprint)
         if (from < 0) members else members.toMutableList().apply {
@@ -56,6 +63,7 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
         }
     }
 
+    /** Applies a membership edit while preserving validation and persistence rules. */
     private suspend fun editMembers(cloudId: String, edit: (List<String>) -> List<String>) = database.withTransaction {
         val group = dao.byCloudId(cloudId) ?: return@withTransaction
         if (!group.deleted) dao.setMembers(cloudId, edit(group.members))
@@ -66,14 +74,17 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
         const val MAX_MEMBERS = 2000
         const val MAX_NAME = 120
         private val HASH = Regex("[a-f0-9]{64}")
+        /** Normalizes a group name and enforces the supported length and character limits. */
         fun validName(name: String) = name.trim().let { it.codePointCount(0, it.length) in 1..MAX_NAME } &&
             name.none { it.isISOControl() }
+        /** Builds the portable channel identity used by group membership. */
         fun fingerprint(channel: Channel) = CloudIdentity.channel(channel.displayName, channel.epgChannelId)
 
         /** Supply only enabled, authorized source channels. Ambiguous matches stay unresolved. */
         fun matchingChannels(channels: List<Channel>): Map<String, Channel> = channels.groupBy(::fingerprint)
             .mapNotNull { (fingerprint, matches) -> matches.singleOrNull()?.let { fingerprint to it } }.toMap()
 
+        /** Filters channel rows to those allowed by source, visibility and parental restrictions. */
         fun visible(channel: Channel, categories: List<Category>, hiddenCategoryKeys: Set<String>, unlocked: Boolean): Boolean {
             if (channel.hidden) return false
             if (unlocked || hiddenCategoryKeys.isEmpty()) return true
@@ -83,6 +94,7 @@ class LocalCustomGroups(private val database: OpenTvDatabase) {
             }
         }
 
+        /** Resolves ordered portable member identities to currently available local channels. */
         fun resolve(
             group: CustomChannelGroup,
             channels: List<Channel>,

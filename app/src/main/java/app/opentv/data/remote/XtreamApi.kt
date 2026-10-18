@@ -46,6 +46,7 @@ class XtreamApi(
     private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true },
 ) {
 
+    /** Xtream request failure with provider-facing diagnostic text. */
     class XtreamException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     /** Verifies credentials and returns the account's expiry, if the panel reports one. */
@@ -71,15 +72,19 @@ class XtreamApi(
         )
     }
 
+    /** Loads the provider's live-channel categories. */
     suspend fun liveCategories(source: Source): List<Category> =
         categories(source, "get_live_categories", StreamKind.LIVE)
 
+    /** Loads the provider's movie categories. */
     suspend fun movieCategories(source: Source): List<Category> =
         categories(source, "get_vod_categories", StreamKind.MOVIE)
 
+    /** Loads the provider's series categories. */
     suspend fun seriesCategories(source: Source): List<Category> =
         categories(source, "get_series_categories", StreamKind.SERIES)
 
+    /** Maps a category response into source-scoped local catalog categories. */
     private suspend fun categories(
         source: Source,
         action: String,
@@ -98,6 +103,7 @@ class XtreamApi(
         }
     }
 
+    /** Loads live channels and constructs playable URLs for the requested stream format. */
     suspend fun liveStreams(source: Source): List<Channel> = withContext(Dispatchers.IO) {
         getJson(source, "get_live_streams").arrayOrEmpty.mapIndexedNotNull { index, element ->
             val obj = element.jsonObjectOrNull ?: return@mapIndexedNotNull null
@@ -121,6 +127,7 @@ class XtreamApi(
         }
     }
 
+    /** Loads the provider's movie catalog and playback metadata. */
     suspend fun movies(source: Source): List<Movie> = withContext(Dispatchers.IO) {
         getJson(source, "get_vod_streams").arrayOrEmpty.mapNotNull { element ->
             val obj = element.jsonObjectOrNull ?: return@mapNotNull null
@@ -152,6 +159,7 @@ class XtreamApi(
         }
     }
 
+    /** Loads the provider's series catalog. */
     suspend fun series(source: Source): List<Series> = withContext(Dispatchers.IO) {
         getJson(source, "get_series").arrayOrEmpty.mapNotNull { element ->
             val obj = element.jsonObjectOrNull ?: return@mapNotNull null
@@ -286,12 +294,15 @@ class XtreamApi(
 
     // ---- URL construction ----------------------------------------------------------------
 
+    /** Builds the authenticated live-stream URL for a provider channel ID. */
     fun liveStreamUrl(source: Source, streamId: String): String =
         "${source.url}/live/${source.username}/${source.password}/$streamId.${source.liveFormat.extension}"
 
+    /** Builds the authenticated movie URL for a stream ID and container extension. */
     fun vodStreamUrl(source: Source, streamId: String, extension: String?): String =
         "${source.url}/movie/${source.username}/${source.password}/$streamId.${extension ?: "mp4"}"
 
+    /** Builds the authenticated episode URL for a stream ID and container extension. */
     fun seriesStreamUrl(source: Source, episodeId: String, extension: String?): String =
         "${source.url}/series/${source.username}/${source.password}/$episodeId.${extension ?: "mp4"}"
 
@@ -308,6 +319,7 @@ class XtreamApi(
         return "${source.url}/timeshift/${source.username}/${source.password}/$minutes/$stamp/$streamId.ts"
     }
 
+    /** Builds the provider's authenticated XMLTV guide URL. */
     private fun xmltvUrl(source: Source): HttpUrl =
         baseUrl(source).newBuilder()
             .encodedPath("/xmltv.php")
@@ -315,12 +327,14 @@ class XtreamApi(
             .addQueryParameter("password", source.password.orEmpty())
             .build()
 
+    /** Normalizes the configured provider base URL for API and stream requests. */
     private fun baseUrl(source: Source): HttpUrl =
         source.url.toHttpUrlOrNull()
             ?: throw XtreamException("\"${source.url}\" is not a valid server address.")
 
     // ---- Plumbing ------------------------------------------------------------------------
 
+    /** Calls an authenticated player API action and decodes its JSON response. */
     private fun getJson(
         source: Source,
         action: String?,
@@ -353,12 +367,14 @@ class XtreamApi(
         }
     }
 
+    /** Executes a provider HTTP request and converts transport or HTTP failures into provider errors. */
     private fun request(source: Source, url: HttpUrl): Request =
         Request.Builder()
             .url(url)
             .header("User-Agent", source.userAgent)
             .build()
 
+    /** Formats an HTTP status as a provider diagnostic without including private URLs. */
     private fun describeHttpFailure(code: Int): String = when (code) {
         401, 403 -> "The server refused the request (HTTP $code). The username or password " +
             "may be wrong, or the provider may be blocking this app's User-Agent — try " +
@@ -371,6 +387,7 @@ class XtreamApi(
         else -> "The server returned HTTP $code."
     }
 
+    /** Provider-reported connection allowance and active usage observations. */
     data class AccountInfo(
         val username: String?,
         val expiryMillis: Long?,

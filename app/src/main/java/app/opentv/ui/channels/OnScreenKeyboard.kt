@@ -90,6 +90,7 @@ internal fun OnScreenKeyboard(
     LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
 }
 
+/** Displays one focusable on-screen keyboard key and its activation callback. */
 @Composable
 private fun KeyCap(
     label: String,

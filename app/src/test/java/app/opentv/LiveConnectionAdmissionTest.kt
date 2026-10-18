@@ -57,6 +57,7 @@ class LiveConnectionAdmissionTest {
     private var savedRecent: Any? = null
     private var sessionCount = 0
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
         listOf("opentv_settings", "nuvix_private_settings", "nuvix_recent_channels", "nuvix_connection_settings")
@@ -76,6 +77,7 @@ class LiveConnectionAdmissionTest {
         savedRecent = replaceSingleton(RecentChannels::class.java, null)
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() {
         store.clear()
         scheduler.runCurrent()
@@ -87,17 +89,20 @@ class LiveConnectionAdmissionTest {
         Dispatchers.resetMain()
     }
 
+    /** Replaces a lazy application-graph dependency with an isolated test fixture. */
     private fun setGraphDelegate(name: String, value: Any) {
         ServiceLocator.Graph::class.java.getDeclaredField("${name}\$delegate")
             .apply { isAccessible = true }.set(graph, lazyOf(value))
     }
 
+    /** Replaces a process singleton for the test and returns its previous value for restoration. */
     private fun replaceSingleton(type: Class<*>, value: Any?): Any? =
         type.getDeclaredField("instance").run {
             isAccessible = true
             get(null).also { set(null, value) }
         }
 
+    /** Provides a synthetic provider configuration for the test's requested source identity. */
     private suspend fun source(id: Long, maximum: Int?): Source {
         val source = Source(id = id, name = "Offline account $id", kind = SourceKind.M3U,
             url = "https://account-$id.example.invalid/fixture.m3u")
@@ -107,6 +112,7 @@ class LiveConnectionAdmissionTest {
         return source
     }
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private suspend fun channel(id: Long, sourceId: Long): Channel {
         val channel = Channel(id = id, sourceId = sourceId, streamId = "$id", name = "Channel $id",
             categoryId = null, logoUrl = null, epgChannelId = null, number = id.toInt(),
@@ -115,12 +121,14 @@ class LiveConnectionAdmissionTest {
         return channel
     }
 
+    /** Creates a retained live session using the test application. */
     private fun session(): LivePlaybackSession = LivePlaybackSession(app).also {
         store.put("live-admission-${sessionCount++}", it)
         // Admission remains real. Suspension applies before play(), avoiding prepare() and I/O.
         it.setForeground(false)
     }
 
+    /** Provides the recording fixture used by the current scheduling or capture scenario. */
     private fun recording(sourceId: Long, id: String): ReservationToken {
         val token = (connections.reserve(ConnectionRequest(id, 1, sourceId, ConnectionPurpose.RECORDING))
             as ReservationResult.Reserved).token
@@ -129,6 +137,7 @@ class LiveConnectionAdmissionTest {
         return token
     }
 
+    /** Checks: repeated Manual Recording Requests Before Service Delivery Reuse One Durable Booking. */
     @Test fun repeatedManualRecordingRequestsBeforeServiceDeliveryReuseOneDurableBooking() = runTest(dispatcher) {
         source(1, 2)
         val selected = channel(11, 1)
@@ -139,6 +148,7 @@ class LiveConnectionAdmissionTest {
         assertThat(connections.snapshotForSource(1)!!.locallyReserved).isEqualTo(0)
     }
 
+    /** Checks: independent Accounts Keep Separate Live Owners And Recording Reclaims Only Its Own Account. */
     @Test fun independentAccountsKeepSeparateLiveOwnersAndRecordingReclaimsOnlyItsOwnAccount() = runTest(dispatcher) {
         source(1, 1)
         source(2, 1)
@@ -171,6 +181,7 @@ class LiveConnectionAdmissionTest {
         assertThat(connections.snapshotForSource(2)!!.locallyReserved).isEqualTo(1)
     }
 
+    /** Checks: unknown Account Approval Adopts Only The Prompted Request And Is Not Reused. */
     @Test fun unknownAccountApprovalAdoptsOnlyThePromptedRequestAndIsNotReused() = runTest(dispatcher) {
         source(1, null)
         val selected = channel(11, 1)
@@ -208,6 +219,7 @@ class LiveConnectionAdmissionTest {
         scheduler.runCurrent()
     }
 
+    /** Checks: declining Unknown Allowance Never Allocates An Engine Or Additional Reservation. */
     @Test fun decliningUnknownAllowanceNeverAllocatesAnEngineOrAdditionalReservation() = runTest(dispatcher) {
         source(1, null)
         val selected = channel(11, 1)
@@ -229,6 +241,7 @@ class LiveConnectionAdmissionTest {
         assertThat((live.state.value as PlayerController.State.Error).message).contains("canceled")
     }
 
+    /** Checks: known Account Limit Denial Retains The Previous Player And Its Reservation. */
     @Test fun knownAccountLimitDenialRetainsThePreviousPlayerAndItsReservation() = runTest(dispatcher) {
         source(1, 1)
         source(2, 1)

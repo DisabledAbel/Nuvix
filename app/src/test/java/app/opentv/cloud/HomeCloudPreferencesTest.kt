@@ -11,13 +11,16 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for home cloud preferences. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class HomeCloudPreferencesTest {
     private val device = "00000000-0000-0000-0000-000000000001"
     private val owner = "11111111-1111-1111-1111-111111111111"
+    /** Builds a synthetic cloud record for validation and merge assertions. */
     private fun record(kind: String, key: String, entries: List<String>) = AdvancedCloudRecord(key, kind, 1000, device, entries = entries)
 
+    /** Checks: portable local serialization remote application and legacy visibility coexist. */
     @Test fun `portable local serialization remote application and legacy visibility coexist`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
@@ -39,6 +42,7 @@ class HomeCloudPreferencesTest {
         data.close(); store.close()
     }
 
+    /** Checks: incoming group visibility applies before group import but a concurrent local edit wins. */
     @Test fun `incoming group visibility applies before group import but a concurrent local edit wins`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(HomePreferencesStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
@@ -55,6 +59,7 @@ class HomeCloudPreferencesTest {
         data.close(); store.close()
     }
 
+    /** Checks: strict record shape rejects duplicates unknown data credentials and unsupported versions. */
     @Test fun `strict record shape rejects duplicates unknown data credentials and unsupported versions`() {
         val valid = record("home_order", "shelves_v1", HomeShelfOrder.defaults)
         assertThat(valid.isSafe(1000)).isTrue()
@@ -67,6 +72,7 @@ class HomeCloudPreferencesTest {
         ).forEach { assertThat(it.isSafe(1000)).isFalse() }
     }
 
+    /** Checks: offline order revisions merge as a single list deterministically and remain account bound. */
     @Test fun `offline order revisions merge as a single list deterministically and remain account bound`() {
         var disk: String? = null
         var journal = AdvancedCloudJournal({ disk }, { disk = it })
@@ -90,6 +96,7 @@ class HomeCloudPreferencesTest {
         assertThat(journal.pending(otherOwner, categories, 2000)).isEmpty()
     }
 
+    /** Checks: disabled home category neither journals nor applies remote presentation. */
     @Test fun `disabled home category neither journals nor applies remote presentation`() {
         var disk: String? = null
         val journal = AdvancedCloudJournal({ disk }, { disk = it })

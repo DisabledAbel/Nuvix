@@ -17,6 +17,7 @@ import net.zetetic.database.sqlcipher.SQLiteOpenHelper
 
 /** Defers native loading, key access, and conversion until Room's worker thread opens the DB. */
 internal class EncryptedDatabaseFactory(private val context: Context) : SupportSQLiteOpenHelper.Factory {
+    /** Opens the SQLCipher-backed Room database using the protected database passphrase. */
     override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper =
         object : SupportSQLiteOpenHelper {
             private var delegate: SupportSQLiteOpenHelper? = null
@@ -51,6 +52,7 @@ internal class EncryptedDatabaseFactory(private val context: Context) : SupportS
     companion object {
         private val openLock = Any()
         private var loaded = false
+        /** Loads the SQLCipher native library before encrypted database access. */
         private fun loadNative() {
             if (!loaded) {
                 System.loadLibrary("sqlcipher")
@@ -95,6 +97,7 @@ internal class EncryptedDatabaseFactory(private val context: Context) : SupportS
 /** One-time upgrade for any pre-encryption Nuvix database; never replaces a failed conversion. */
 internal object EncryptedDatabaseMigration {
     private val plaintextHeader = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+    /** Checks the file header for the unencrypted SQLite signature. */
     fun isPlaintext(file: File): Boolean {
         if (!file.exists() || file.length() < plaintextHeader.size) return false
         return FileInputStream(file).use { stream ->
@@ -109,6 +112,7 @@ internal object EncryptedDatabaseMigration {
         }
     }
 
+    /** Converts a legacy plaintext database to SQLCipher while preserving the original until verification. */
     fun convertIfNeeded(file: File, password: ByteArray) {
         if (!isPlaintext(file)) return
         val temporary = File(file.parentFile, "${file.name}.encrypted-tmp")

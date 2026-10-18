@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+/** Initializes process-wide services and supplies the application's image loader. */
 class OpenTvApp : Application(), ImageLoaderFactory {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -52,11 +53,13 @@ class OpenTvApp : Application(), ImageLoaderFactory {
             .allowRgb565(true)
             .build()
 
+    /** Applies the saved locale to application resources, including notifications. */
     // So notifications and any app-context resources use the chosen language too, not just the UI.
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleUtils.wrap(base))
     }
 
+    /** Initializes background scheduling and application services at process startup. */
     override fun onCreate() {
         super.onCreate()
         runCatching { app.opentv.cloud.CloudSync.initialize(this) }

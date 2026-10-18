@@ -27,6 +27,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for stream information. */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34], qualifiers = "w960dp-h540dp-land")
@@ -34,14 +35,17 @@ import org.robolectric.annotation.Config
 class StreamInformationTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var settings: AppSettings
+    /** Creates isolated fixtures before each test. */
     @Before fun reset() {
         settings = AppSettings.get(RuntimeEnvironment.getApplication())
         settings.setDiagnosticsEnabled(true); settings.setDiagnosticsDetailed(false); settings.setDiagnosticsTechnical(true)
     }
+    /** Sends a remote Select key to the focused Compose control matching the label. */
     private fun select(label: String) {
         compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithText(label).performKeyInput { pressKey(Key.DirectionCenter) }
     }
+    /** Checks: compact and detailed honor technical preference and mark unsupported values. */
     @Test fun `compact and detailed honor technical preference and mark unsupported values`() {
         val rows = diagnosticRows(DiagnosticSnapshot(), false, true).toMap()
         assertThat(rows["Resolution"]).isEqualTo("Unavailable")
@@ -51,6 +55,7 @@ class StreamInformationTest {
         assertThat(detailed["Available bandwidth (estimate)"]).isEqualTo("Unavailable")
         assertThat(diagnosticRows(DiagnosticSnapshot(), true, false).toMap()).doesNotContainKey("Audio codec")
     }
+    /** Checks: hidden until opened focus close and back never mutate playback or add listeners. */
     @Test fun `hidden until opened focus close and back never mutate playback or add listeners`() {
         val fake = DiagnosticPlayer().apply { state = Player.STATE_READY; playing = true }
         val observer = PlaybackDiagnostics(fake.player)

@@ -61,6 +61,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Displays installed application shortcuts, favorite ordering and launcher settings navigation. */
 @Composable
 fun AppsScreen(onBack: () -> Unit, onLauncherSettings: () -> Unit = {}) {
     val context = LocalContext.current
@@ -244,6 +245,7 @@ fun FavoriteAppsRow(onOpenApps: () -> Unit) {
     }
 }
 
+/** Displays a focusable installed app shortcut with launch and favorite-management actions. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppTile(

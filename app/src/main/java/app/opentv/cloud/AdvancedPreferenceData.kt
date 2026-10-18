@@ -138,8 +138,10 @@ internal class AdvancedPreferenceData(context: Context) {
         return unchanged && apply(record)
     }
 
+    /** Releases the launcher and home preference adapters and their listeners. */
     fun close() { launcher.close(); home.close() }
 
+    /** Reads an allowlisted preference value, falling back when storage is invalid. */
     private fun readEnum(key: String, allowed: List<String>, default: String): String =
         runCatching { settingsStorage.getString(key, default)?.takeIf { it in allowed } ?: default }.getOrDefault(default)
 }

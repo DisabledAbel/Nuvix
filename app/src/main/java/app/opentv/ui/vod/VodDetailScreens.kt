@@ -220,6 +220,7 @@ private fun AddonStreamPicker(
     }
 }
 
+/** Displays an add-on stream choice and invokes playback only on activation. */
 @Composable
 private fun AddonStreamRow(stream: StremioStream, onPick: (StremioStream) -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -578,6 +579,7 @@ private fun SectionLabel(label: String) {
     )
 }
 
+/** Displays a metadata label and its available descriptive content. */
 @Composable
 private fun LabeledBlock(label: String, value: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
@@ -724,6 +726,7 @@ private fun EpisodeRow(ep: app.opentv.data.repo.TvEpisodeListing, onPlay: (media
     }
 }
 
+/** Displays loading feedback while VOD detail data is being resolved. */
 @Composable
 private fun LoadingDetail() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

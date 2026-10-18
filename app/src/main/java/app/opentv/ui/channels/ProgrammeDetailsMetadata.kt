@@ -48,4 +48,5 @@ internal fun ProgrammeDetailsMetadata(programme: Programme, channel: Channel, st
         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 12.dp))
 }
 
+/** Formats program timing for the details UI using the device's local time. */
 private fun formatProgrammeTime(millis: Long) = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault()).format(Date(millis))

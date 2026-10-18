@@ -49,6 +49,7 @@ data class SyncBundle(
     val recordings: List<SyncRecording> = emptyList(),
 )
 
+/** Portable profile and media playback progress included in LAN or NAS synchronization. */
 @Serializable
 data class SyncPosition(
     val profile: String,

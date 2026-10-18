@@ -8,6 +8,7 @@ import app.opentv.data.model.SourceKind
 import org.junit.Assert.*
 import org.junit.Test
 
+/** Regression tests for guide programme actions. */
 class GuideProgrammeActionsTest {
     private val now = 1_000_000_000L
     private val channel = Channel(id = 1, sourceId = 2, streamId = "42", name = "Channel",
@@ -15,11 +16,14 @@ class GuideProgrammeActionsTest {
         streamUrl = "https://provider.invalid/live/42.ts", tvArchive = true, tvArchiveDays = 2)
     private val source = Source(id = 2, name = "Provider", kind = SourceKind.XTREAM,
         url = "https://provider.invalid", username = "authorized-user", password = "authorized-password")
+    /** Builds a synthetic program with configurable timing and guide metadata. */
     private fun programme(start: Long = now - 1000, end: Long = now + 1000) =
         Programme(feedId = 1, epgChannelId = "channel", startUtcMillis = start, endUtcMillis = end, title = "Programme")
+    /** Computes guide action eligibility for the supplied synthetic program, channel and source. */
     private fun actions(programme: Programme = programme(), channel: Channel = this.channel, source: Source? = this.source) =
         GuideProgrammeActions.evaluate(programme, channel, source, now)
 
+    /** Checks: airing starts inclusively ends exclusively and never offers reminders. */
     @Test fun `airing starts inclusively ends exclusively and never offers reminders`() {
         val airing = actions(programme(now, now + 1000))
         assertEquals(GuideProgrammeStatus.AIRING, airing.status)
@@ -37,6 +41,7 @@ class GuideProgrammeActionsTest {
         assertTrue(ended.canCatchup)
     }
 
+    /** Checks: strictly future programmes offer reminders and scheduling without retuning. */
     @Test fun `strictly future programmes offer reminders and scheduling without retuning`() {
         val upcoming = actions(programme(now + 1, now + 1000))
         assertEquals(GuideProgrammeStatus.UPCOMING, upcoming.status)
@@ -48,6 +53,7 @@ class GuideProgrammeActionsTest {
         assertTrue(upcoming.canViewChannel)
     }
 
+    /** Checks: invalid and overflowing windows expose no programme actions. */
     @Test fun `invalid and overflowing windows expose no programme actions`() {
         for (invalid in listOf(programme(now, now), programme(now + 1, now),
             programme(-1, now), programme(Long.MIN_VALUE, Long.MAX_VALUE))) {
@@ -63,6 +69,7 @@ class GuideProgrammeActionsTest {
         }
     }
 
+    /** Checks: recording requires matching enabled source and direct HTTP stream. */
     @Test fun `recording requires matching enabled source and direct HTTP stream`() {
         assertTrue(actions(source = source.copy(kind = SourceKind.M3U)).canRecordNow)
         val stalker = actions(source = source.copy(kind = SourceKind.STALKER))
@@ -81,6 +88,7 @@ class GuideProgrammeActionsTest {
         }
     }
 
+    /** Checks: catchup requires authorized Xtream archive and honors known retention. */
     @Test fun `catchup requires authorized Xtream archive and honors known retention`() {
         val past = programme(now - 1000, now)
         assertTrue(actions(past).canCatchup)
@@ -94,6 +102,7 @@ class GuideProgrammeActionsTest {
         assertTrue(actions(programme(now - 2 * 86_400_000L, now - 86_400_000L)).canCatchup)
     }
 
+    /** Checks: series action requires valid episode metadata and supported recording source. */
     @Test fun `series action requires valid episode metadata and supported recording source`() {
         assertFalse(actions().canRecordSeries)
         assertTrue(actions(programme().copy(season = 0)).canRecordSeries)
@@ -103,6 +112,7 @@ class GuideProgrammeActionsTest {
         assertFalse(actions(programme(now - 1000, now).copy(episode = 2)).canRecordSeries)
     }
 
+    /** Checks: recording eligibility leaves account capacity to recorder while catchup remains protected. */
     @Test fun `recording eligibility leaves account capacity to recorder while catchup remains protected`() {
         val busy = setOf(source.id)
         val airing = GuideProgrammeActions.evaluate(programme().copy(episode = 1), channel, source, now, busy)

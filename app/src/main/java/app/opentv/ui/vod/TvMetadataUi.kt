@@ -21,10 +21,12 @@ import app.opentv.data.remote.*
 import coil.compose.AsyncImage
 import com.disabledabel.nuvix.R
 
+/** Converts optional HTML metadata summaries into displayable plain text. */
 internal fun plainSummary(value: String?) = value?.let {
     HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim()
 }.orEmpty()
 
+/** Displays an explicit action for opening an external metadata source. */
 @Composable
 internal fun MetadataLink(label: String, url: String) {
     val context = LocalContext.current
@@ -34,6 +36,7 @@ internal fun MetadataLink(label: String, url: String) {
     }) { Text(label) }
 }
 
+/** Displays TVmaze source attribution and its external link. */
 @Composable
 internal fun TvmazeAttribution(url: String) {
     Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -43,6 +46,7 @@ internal fun TvmazeAttribution(url: String) {
     }
 }
 
+/** Displays a horizontal list of cast or crew profile choices. */
 @Composable
 internal fun TvPeople(details: TvmazeDetails, onPerson: (String) -> Unit) {
     if (details.cast.isNotEmpty()) {
@@ -63,6 +67,7 @@ internal fun TvPeople(details: TvmazeDetails, onPerson: (String) -> Unit) {
     }
 }
 
+/** Displays a focusable person image and name linked to the profile action. */
 @Composable
 private fun PersonTile(person: TvPerson, role: String?, onPerson: (String) -> Unit) {
     OutlinedButton(onClick = { onPerson(person.route) }) {
@@ -74,6 +79,7 @@ private fun PersonTile(person: TvPerson, role: String?, onPerson: (String) -> Un
     }
 }
 
+/** Displays person biography and credits with explicit show-selection actions. */
 @Composable
 internal fun TvProfileContent(profile: TvProfile) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 16.dp),

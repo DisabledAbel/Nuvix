@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+/** Channel label and request-specific challenge displayed before unknown-capacity admission. */
 data class LiveConnectionPrompt(val channelName: String, val challenge: UnknownConnectionChallenge)
 
 /**
@@ -139,6 +140,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /** Requests account capacity for a live tune and coordinates any required confirmation. */
     private suspend fun reserveLiveConnection(channel: Channel, releaseCurrent: () -> Unit) {
         val source = graph.sourceRepository.byId(channel.sourceId)?.takeIf { it.enabled }
             ?: throw LiveConnectionException("This provider is no longer available.")
@@ -193,6 +195,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /** Completes the current admission prompt with the user's allow or deny choice. */
     fun answerConnectionPrompt(allow: Boolean) {
         val prompt = _connectionPrompt.value ?: return
         approvalResponse?.complete(if (allow) connections.approve(prompt.challenge) else null)
@@ -204,6 +207,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         coordinator.setOptionalPreviewSuppressed(pending)
     }
 
+    /** Registers the optional guide preview and its release callback. */
     // The optional highlighted-channel preview registers only its application-context controller.
     // This closes it synchronously for notification/startup tunes, before Compose can dispose it.
     fun registerGuidePreview(controller: PlayerController, onReleased: () -> Unit = {}) {
@@ -216,10 +220,12 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             guidePreviewReleased = onReleased
         }
     }
+    /** Removes a guide preview registration when its owner leaves composition. */
     fun unregisterGuidePreview(controller: PlayerController) {
         if (guidePreview === controller) releaseGuidePreview()
         else controller.release()
     }
+    /** Closes the currently registered optional guide preview. */
     private fun releaseGuidePreview() {
         guidePreview?.release()
         guidePreview = null
@@ -235,39 +241,51 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         if (nonLivePlayback !== controller) releaseNonLivePlayback()
         nonLivePlayback = controller
     }
+    /** Removes a non-live playback registration when its owner is released. */
     fun unregisterNonLivePlayback(controller: PlayerController) {
         if (nonLivePlayback === controller) releaseNonLivePlayback()
         else controller.release()
     }
+    /** Closes registered non-live playback before live tuning takes ownership. */
     private fun releaseNonLivePlayback() {
         nonLivePlayback?.release()
         nonLivePlayback = null
     }
 
+    /** Launches an explicit channel selection through the shared live coordinator. */
     fun openChannel(id: Long) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id) }
+    /** Tunes the selected channel using the session's current live playback ownership. */
     fun tune(channel: Channel) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel) }
+    /** Clears diagnostics belonging to the current live playback session. */
     fun clearDiagnostics() {
         implementation?.controller?.diagnostics?.clear()
         nonLivePlayback?.diagnostics?.clear()
     }
+    /** Retries the explicitly selected live channel. */
     fun retry() = coordinator.retry()
+    /** Stops the shared live playback session. */
     fun stop() { multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
     /** Capture admission closes only viewing sessions whose account capacity is needed. */
     fun recordChannel(channel: Channel, programme: Programme? = null) {
         viewModelScope.launch { graph.recordingEngine.startChannel(channel, programme) }
     }
+    /** Updates the user's live pause choice. */
     fun setPaused(paused: Boolean) = coordinator.setPaused(paused)
+    /** Selects fullscreen, preview or browsing presentation for the retained live session. */
     fun setPresentation(presentation: LivePresentation) {
         if (presentation != LivePresentation.BROWSING) releaseGuidePreview()
         coordinator.setPresentation(presentation)
     }
+    /** Forwards activity foreground state to the live playback policy. */
     fun setForeground(foreground: Boolean) {
         if (!foreground) releaseGuidePreview()
         multiView.setForeground(foreground)
         coordinator.setForeground(foreground)
     }
+    /** Forwards picture-in-picture state to the live playback policy. */
     fun setInPip(inPip: Boolean) { multiView.setInPip(inPip); coordinator.setInPip(inPip) }
 
+    /** Releases optional playback resources in response to Android memory pressure. */
     fun onMemoryPressure(level: Int) {
         // RUNNING_LOW/CRITICAL concern the foreground; UI_HIDDEN alone is routine backgrounding.
         val critical = level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
@@ -278,6 +296,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         coordinator.onMemoryPressure(critical)
     }
 
+    /** Releases playback ownership and registrations when the retained view model is cleared. */
     override fun onCleared() {
         multiView.release()
         releaseGuidePreview()
@@ -286,6 +305,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         super.onCleared()
     }
 
+    /** Adapts the Media3 controller to the retained live engine interface. */
     private inner class ControllerEngine(application: Application) : LivePlaybackEngine {
         private val scope = CoroutineScope(SupervisorJob(viewModelScope.coroutineContext[Job]) + Dispatchers.Main.immediate)
         val controller = PlayerController(
@@ -299,6 +319,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         private var savedVolume = controller.player.volume
         private var applyingVolume = false
         private val volumeListener = object : Player.Listener {
+            /** Tracks the user's volume independently of temporary browsing muting. */
             override fun onVolumeChanged(volume: Float) {
                 if (applyingVolume) return
                 savedVolume = volume
@@ -315,19 +336,25 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
                 }
             }
         }
+        /** Starts the resolved channel request on the underlying controller. */
         override fun play(request: PlayerController.Request) = controller.play(request, debounce = false)
+        /** Applies the explicit pause state to the underlying player. */
         override fun setPaused(paused: Boolean) = controller.setUserPaused(paused)
+        /** Applies lifecycle suspension to the underlying player. */
         override fun setSuspended(suspended: Boolean) = controller.setSuspended(suspended)
+        /** Updates temporary browsing muting and reapplies effective volume. */
         override fun setBrowsingMuted(muted: Boolean) {
             if (browsingMuted == muted) return
             if (muted) savedVolume = controller.player.volume
             browsingMuted = muted
             applyVolume(if (muted) 0f else savedVolume)
         }
+        /** Combines the user volume with temporary browsing-policy muting. */
         private fun applyVolume(volume: Float) {
             applyingVolume = true
             try { controller.player.volume = volume } finally { applyingVolume = false }
         }
+        /** Unregisters listeners and releases the underlying player controller. */
         override fun release() {
             controller.player.removeListener(volumeListener)
             controller.release()

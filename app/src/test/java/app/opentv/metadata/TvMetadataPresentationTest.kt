@@ -13,9 +13,11 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for tv metadata presentation. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class TvMetadataPresentationTest {
+    /** Checks: T Vmaze and IM Db ratings have distinct labels and do not replace provider score. */
     @Test fun `TVmaze and IMDb ratings have distinct labels and do not replace provider score`() {
         val series = Series(sourceId=1,seriesId="provider-id",name="Show",categoryId=null,
             posterUrl=null,rating=6.0,year=2024,plot=null)
@@ -29,6 +31,7 @@ class TvMetadataPresentationTest {
         assertThat(labels).contains("TMDb ★ 7.0")
         assertThat(seriesMeta(series,null)).doesNotContain("IMDb")
     }
+    /** Checks: HTML summaries are displayed as text with decoded entities. */
     @Test fun `HTML summaries are displayed as text with decoded entities`() {
         assertThat(plainSummary("<p>A &amp; B</p><p><b>Episode</b></p>")).isEqualTo("A & B\nEpisode")
         assertThat(plainSummary(null)).isEmpty()

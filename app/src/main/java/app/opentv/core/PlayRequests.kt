@@ -18,10 +18,12 @@ object PlayRequests {
     private val _channelId = MutableStateFlow<Long?>(null)
     val channelId: StateFlow<Long?> = _channelId.asStateFlow()
 
+    /** Publishes an explicit channel playback request for the navigation host. */
     fun request(id: Long) {
         if (id != 0L) _channelId.value = id
     }
 
+    /** Clears the playback request after navigation has handled it. */
     fun consume() {
         _channelId.value = null
     }

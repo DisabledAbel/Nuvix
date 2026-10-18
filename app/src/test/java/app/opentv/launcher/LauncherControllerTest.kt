@@ -15,9 +15,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for launcher controller. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class LauncherControllerTest {
+    /** Checks: HOME alias is unavailable until the user enables launcher mode. */
     @Test
     fun `HOME alias is unavailable until the user enables launcher mode`() {
         val context = RuntimeEnvironment.getApplication()
@@ -33,6 +35,7 @@ class LauncherControllerTest {
         assertThat(controller.isEnabled()).isFalse()
     }
 
+    /** Checks: launcher opt in is reversible and does not change the normal app activity. */
     @Test
     fun `launcher opt in is reversible and does not change the normal app activity`() {
         val context = RuntimeEnvironment.getApplication()
@@ -50,6 +53,7 @@ class LauncherControllerTest {
         assertThat(context.packageManager.getComponentEnabledSetting(main)).isEqualTo(originalMainState)
     }
 
+    /** Checks: ordinary application launches are distinguished from HOME requests. */
     @Test
     fun `ordinary application launches are distinguished from HOME requests`() {
         assertThat(LauncherController.isHomeIntent(null)).isFalse()

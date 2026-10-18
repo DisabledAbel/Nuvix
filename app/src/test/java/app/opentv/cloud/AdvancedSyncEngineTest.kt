@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
+/** Regression tests for advanced sync engine. */
 class AdvancedSyncEngineTest {
     private val owner = "11111111-1111-1111-1111-111111111111"
     private val deviceA = "00000000-0000-0000-0000-000000000001"
@@ -12,10 +13,12 @@ class AdvancedSyncEngineTest {
     private val group = "33333333-3333-3333-3333-333333333333"
     private val enabled = setOf(AdvancedSyncCategory.CUSTOM_GROUPS, AdvancedSyncCategory.APP_FAVOURITES,
         AdvancedSyncCategory.HOME_PREFERENCES, AdvancedSyncCategory.COMPATIBLE_SETTINGS)
+    /** In-memory cloud endpoint applying the production deterministic merge rules. */
     private class Server {
         val rows = linkedMapOf<String, AdvancedCloudRecord>()
         var pulls = 0
         var pushes = 0
+        /** Merges uploaded records into the fake server's current winning record set. */
         fun push(records: List<AdvancedCloudRecord>) {
             pushes++
             for (record in records) rows[record.identity()] = rows[record.identity()]?.let {
@@ -23,6 +26,7 @@ class AdvancedSyncEngineTest {
             } ?: record
         }
     }
+    /** Independent device fixture with local records, journal state and a shared fake server. */
     private inner class Peer(val device: String, val server: Server) {
         var persisted: String? = null
         val journal = AdvancedCloudJournal({ persisted }, { persisted = it })
@@ -41,16 +45,22 @@ class AdvancedSyncEngineTest {
             server.push(records)
             if (failPush) throw IOException("Accepted request, disconnected before response")
         }, { clock })
+        /** Updates a synthetic local record before the next capture or exchange. */
         fun put(record: AdvancedCloudRecord) { local[record.identity()] = record }
+        /** Captures local fixture changes into the peer's owner-scoped mutation journal. */
         fun capture() {
             journal.bindOwner(owner)
             journal.capture(owner, local.values, enabled, device, clock)
         }
+        /** Runs one synchronization exchange with the fake server for the selected categories. */
         suspend fun sync(categories: Set<AdvancedSyncCategory> = enabled) = engine.sync(owner, device, categories)
     }
+    /** Builds a synthetic custom-group name mutation for cloud merge tests. */
     private fun name(text: String) = AdvancedCloudRecord(group, "group_name", 1000, deviceA, textValue = text)
+    /** Builds a synthetic ordered application-favorites record for cloud tests. */
     private fun apps(vararg values: String) = AdvancedCloudRecord("apps", "app_order", 1000, deviceA, entries = values.toList())
 
+    /** Checks: initial Defaults Receive Existing Cloud Choices And Do Not Echo Them. */
     @Test fun initialDefaultsReceiveExistingCloudChoicesAndDoNotEchoThem() = runBlocking {
         val server = Server()
         val a = Peer(deviceA, server); a.put(apps("com.example.first", "com.example.absent")); a.sync()
@@ -62,6 +72,7 @@ class AdvancedSyncEngineTest {
         assertEquals(pushes, server.pushes)
     }
 
+    /** Checks: two Offline Peers Retain Independent Group Edits Then Converge On Conflicts. */
     @Test fun twoOfflinePeersRetainIndependentGroupEditsThenConvergeOnConflicts() = runBlocking {
         val server = Server()
         val a = Peer(deviceA, server); a.put(name("News")); a.sync()
@@ -81,6 +92,7 @@ class AdvancedSyncEngineTest {
         assertEquals(a.local["group_name:$group"], b.local["group_name:$group"])
     }
 
+    /** Checks: deletion Wins Even When Offline Peer Has Later Rename. */
     @Test fun deletionWinsEvenWhenOfflinePeerHasLaterRename() = runBlocking {
         val server = Server()
         val a = Peer(deviceA, server); a.put(name("News")); a.sync()
@@ -93,6 +105,7 @@ class AdvancedSyncEngineTest {
         assertTrue(server.rows["group_name:$group"]!!.deleted)
     }
 
+    /** Checks: failed Response Replays Safely And Acknowledges Only After Local Completion. */
     @Test fun failedResponseReplaysSafelyAndAcknowledgesOnlyAfterLocalCompletion() = runBlocking {
         val server = Server(); val a = Peer(deviceA, server)
         a.put(apps("com.example.app")); a.failPush = true
@@ -108,6 +121,7 @@ class AdvancedSyncEngineTest {
         assertEquals(listOf("com.example.app"), a.local["app_order:apps"]!!.entries)
     }
 
+    /** Checks: local Edit During Pull Is Captured Before Remote Apply. */
     @Test fun localEditDuringPullIsCapturedBeforeRemoteApply() = runBlocking {
         val server = Server(); val a = Peer(deviceA, server)
         a.put(apps("com.example.original")); a.sync()
@@ -118,6 +132,7 @@ class AdvancedSyncEngineTest {
         assertEquals(0, a.journal.pendingCount(owner))
     }
 
+    /** Checks: disabled Mode And Empty Categories Do Not Read Or Write Cloud Or Journal. */
     @Test fun disabledModeAndEmptyCategoriesDoNotReadOrWriteCloudOrJournal() = runBlocking {
         val server = Server(); val a = Peer(deviceA, server)
         a.put(apps("com.example.privateapp"))
@@ -127,6 +142,7 @@ class AdvancedSyncEngineTest {
         assertEquals(0, server.pulls); assertEquals(0, server.pushes)
     }
 
+    /** Checks: disabled Category Does Not Upload Or Apply While Independent Keys Converge. */
     @Test fun disabledCategoryDoesNotUploadOrApplyWhileIndependentKeysConverge() = runBlocking {
         val server = Server(); val a = Peer(deviceA, server)
         a.put(apps("com.example.privateapp")); a.put(name("Allowed group"))

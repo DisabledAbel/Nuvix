@@ -8,6 +8,7 @@ import app.opentv.data.repo.LocalCustomGroups
 
 /** Names/deletions, rank and membership merge separately; local IDs never enter the protocol. */
 internal class AdvancedGroupData(private val database: OpenTvDatabase) {
+    /** Exports group names, tombstones, ranks and membership as independently mergeable records. */
     suspend fun snapshot(deviceId: String, nowMillis: Long): List<AdvancedCloudRecord> = database.withTransaction {
         buildList {
             for (group in database.customGroups().all()) {
@@ -21,6 +22,7 @@ internal class AdvancedGroupData(private val database: OpenTvDatabase) {
         }.filter { it.isSafe(nowMillis) }
     }
 
+    /** Applies safe group records transactionally, preserving edits made since [expectedLocal]. */
     suspend fun apply(records: List<AdvancedCloudRecord>, expectedLocal: List<AdvancedCloudRecord>? = null): Int = database.withTransaction {
         val dao = database.customGroups()
         val expected = expectedLocal?.associateBy { it.identity() }

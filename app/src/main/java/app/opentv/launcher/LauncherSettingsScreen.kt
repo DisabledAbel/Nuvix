@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
+/** Displays optional HOME activation, default-home selection and startup destination preferences. */
 @Composable
 fun LauncherSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current

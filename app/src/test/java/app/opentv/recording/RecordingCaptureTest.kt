@@ -17,7 +17,9 @@ import java.io.IOException
 import java.io.OutputStream
 import okio.Buffer
 
+/** Regression tests for recording capture. */
 class RecordingCaptureTest {
+    /** Checks: storage Failure Is Terminal And Does Not Open Another Provider Connection. */
     @Test fun storageFailureIsTerminalAndDoesNotOpenAnotherProviderConnection() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(1))))
@@ -34,6 +36,7 @@ class RecordingCaptureTest {
         } finally { server.shutdown() }
     }
 
+    /** Checks: exhausted Reconnects Preserve Bytes And Report Incomplete Capture. */
     @Test fun exhaustedReconnectsPreserveBytesAndReportIncompleteCapture() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(2))))
@@ -52,6 +55,7 @@ class RecordingCaptureTest {
         } finally { server.shutdown() }
     }
 
+    /** Checks: playlist Is Rejected Rather Than Saved As Video. */
     @Test fun playlistIsRejectedRatherThanSavedAsVideo() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES"))
@@ -65,6 +69,7 @@ class RecordingCaptureTest {
         } finally { server.shutdown() }
     }
 
+    /** Checks: independent Captures Keep Their Own Destination And Deadline. */
     @Test fun independentCapturesKeepTheirOwnDestinationAndDeadline() = runBlocking {
         val servers = listOf(MockWebServer(), MockWebServer())
         servers.forEachIndexed { index, server -> server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(index)))); server.start() }
@@ -83,6 +88,7 @@ class RecordingCaptureTest {
         } finally { servers.forEach { it.shutdown() } }
     }
 
+    /** Checks: fragmented Playlist And Html Success Bodies Are Not Playable Recordings. */
     @Test fun fragmentedPlaylistAndHtmlSuccessBodiesAreNotPlayableRecordings() = runBlocking {
         val server = MockWebServer()
         server.enqueue(MockResponse().setChunkedBody("#EXTM3U\n#EXT-X-TARGETDURATION:10", 1))
@@ -100,8 +106,10 @@ class RecordingCaptureTest {
         } finally { server.shutdown() }
     }
 
+    /** Creates synthetic transport-stream bytes for deterministic recording capture assertions. */
     private fun transportBytes(marker: Int) = ByteArray(188 * 3) { offset -> if (offset % 188 == 0) 0x47 else marker.toByte() }
 
+    /** Checks: already Expired Window Never Opens Http Connection. */
     @Test fun alreadyExpiredWindowNeverOpensHttpConnection() = runBlocking {
         val output = ByteArrayOutputStream()
         val client = okhttp3.Call.Factory { throw AssertionError("Expired recording opened a connection") }

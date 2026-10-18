@@ -56,16 +56,19 @@ internal class DiagnosticPlayer {
             else -> error("Diagnostics attempted unexpected player operation: ${method.name}")
         }
     } as ExoPlayer
+    /** Dispatches a synthetic player event to the registered diagnostic listeners. */
     fun emit() {
         val flags = FlagSet.Builder().add(Player.EVENT_PLAYBACK_STATE_CHANGED).build()
         listeners.toList().forEach { it.onEvents(player, Player.Events(flags)) }
     }
 }
 
+/** Regression tests for playback diagnostics. */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
 class PlaybackDiagnosticsTest {
+    /** Checks: extracts known video audio and unavailable fields without inventing measurements. */
     @Test fun `extracts known video audio and unavailable fields without inventing measurements`() {
         val video = DiagnosticFormats.video(Format.Builder().setWidth(1920).setHeight(1080)
             .setSampleMimeType("video/avc").setFrameRate(25f).setAverageBitrate(4_000_000).build())
@@ -83,11 +86,13 @@ class PlaybackDiagnosticsTest {
         assertThat(DiagnosticFormats.video(Format.Builder().build())).isEqualTo(DiagnosticFormat())
         assertThat(DiagnosticFormats.audio(null)).isEqualTo(DiagnosticFormat())
     }
+    /** Checks: HDR transfer and Dolby Vision are extracted only when supplied. */
     @Test fun `HDR transfer and Dolby Vision are extracted only when supplied`() {
         val pq = Format.Builder().setColorInfo(ColorInfo.Builder().setColorTransfer(C.COLOR_TRANSFER_ST2084).build()).build()
         assertThat(DiagnosticFormats.video(pq).hdr).isEqualTo("HDR10 / PQ")
         assertThat(DiagnosticFormats.video(Format.Builder().setSampleMimeType("video/dolby-vision").build()).hdr).isEqualTo("Dolby Vision")
     }
+    /** Checks: buffer duration uses total buffered duration and unknown is unavailable. */
     @Test fun `buffer duration uses total buffered duration and unknown is unavailable`() {
         val fake = DiagnosticPlayer()
         val observer = PlaybackDiagnostics(fake.player)
@@ -103,6 +108,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.renderedFrames).isNull()
         observer.close()
     }
+    /** Checks: counts rebuffer once per transition excluding startup pause and seeks. */
     @Test fun `counts rebuffer once per transition excluding startup pause and seeks`() {
         var now = 0L; val t = DiagnosticTimeline { now }
         t.state(Player.STATE_BUFFERING, true, false); now = 1000
@@ -118,6 +124,7 @@ class PlaybackDiagnosticsTest {
         assertThat(t.rebuffers).isEqualTo(1)
         now = 61000; assertThat(t.frequency()).isWithin(0.001).of(60000.0 / 61000)
     }
+    /** Checks: health follows documented state error and recent interruption rules. */
     @Test fun `health follows documented state error and recent interruption rules`() {
         var now = 0L; val t = DiagnosticTimeline { now }
         assertThat(t.health()).isEqualTo(PlaybackHealth.UNKNOWN)
@@ -136,6 +143,7 @@ class PlaybackDiagnosticsTest {
         assertThat(t.health()).isEqualTo(PlaybackHealth.UNKNOWN)
         assertThat(t.history()).isEmpty()
     }
+    /** Checks: dropped frames throughput and bounded history reset for a new session. */
     @Test fun `dropped frames throughput and bounded history reset for a new session`() {
         var now = 0L; val t = DiagnosticTimeline { now }
         t.dropped(2); t.dropped(3); t.dropped(-10)
@@ -153,6 +161,7 @@ class PlaybackDiagnosticsTest {
         assertThat(t.bufferingMs()).isEqualTo(0)
         assertThat(t.history()).isEmpty()
     }
+    /** Checks: listener ownership is balanced close idempotent and samples never control playback. */
     @Test fun `listener ownership is balanced close idempotent and samples never control playback`() {
         val fake = DiagnosticPlayer(); val observer = PlaybackDiagnostics(fake.player)
         assertThat(fake.listeners).hasSize(1); assertThat(fake.analytics).hasSize(1)
@@ -167,6 +176,7 @@ class PlaybackDiagnosticsTest {
         assertThat(fake.playing).isTrue()
         assertThat(observer.snapshot.value.history).isEmpty()
     }
+    /** Checks: Media3 callbacks retain rendered totals and clear baselines without changing playback. */
     @Test fun `Media3 callbacks retain rendered totals and clear baselines without changing playback`() {
         var now = 0L
         val fake = DiagnosticPlayer()
@@ -203,6 +213,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.droppedFrames).isEqualTo(0)
         observer.close()
     }
+    /** Checks: selected audio ordinal and active renderer format follow track changes. */
     @Test fun `selected audio ordinal and active renderer format follow track changes`() {
         val fake = DiagnosticPlayer()
         val first = Format.Builder().setSampleMimeType("audio/ac3").setLanguage("en").build()
@@ -218,6 +229,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.audio.language).isEqualTo("en")
         observer.close()
     }
+    /** Checks: late callbacks from a previous channel cannot contaminate a new session. */
     @Test fun `late callbacks from a previous channel cannot contaminate a new session`() {
         val fake = DiagnosticPlayer().apply { video = Format.Builder().setSampleMimeType("video/avc").build() }
         val observer = PlaybackDiagnostics(fake.player)
@@ -238,6 +250,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
         observer.close()
     }
+    /** Checks: empty timeline retains only the active item's current playback error. */
     @Test fun `empty timeline retains only the active item's current playback error`() {
         val fake = DiagnosticPlayer()
         val observer = PlaybackDiagnostics(fake.player)
@@ -266,6 +279,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.error).doesNotContain("secret")
         observer.close()
     }
+    /** Checks: empty timeline fallback does not relax filtering for other callbacks. */
     @Test fun `empty timeline fallback does not relax filtering for other callbacks`() {
         val fake = DiagnosticPlayer().apply {
             item = MediaItem.Builder().setMediaId("new").build()
@@ -291,6 +305,7 @@ class PlaybackDiagnosticsTest {
         assertThat(observer.snapshot.value.decoderErrors).isEqualTo(0)
         observer.close()
     }
+    /** Checks: HTTP status is classified through wrapped causes without exposing request data. */
     @Test fun `HTTP status is classified through wrapped causes without exposing request data`() {
         val request = androidx.media3.datasource.DataSpec(android.net.Uri.parse("https://user:pass@private.invalid/token?auth=secret"))
         val cause = androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException(
@@ -300,6 +315,7 @@ class PlaybackDiagnosticsTest {
         assertThat(PlaybackErrors.describe(error)).doesNotContain("secret")
         assertThat(PlaybackErrors.describe(error)).doesNotContain("private.invalid")
     }
+    /** Checks: nested errors and hostile messages cannot expose UR Ls tokens or headers. */
     @Test fun `nested errors and hostile messages cannot expose URLs tokens or headers`() {
         val secret = "https://user:password@private.invalid/live/token?authorization=secret"
         val error = PlaybackException(secret, IOException(secret, SocketTimeoutException(secret)), PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
@@ -311,6 +327,7 @@ class PlaybackDiagnosticsTest {
         }
         assertThat(DiagnosticFormats.token(secret)).isNull()
     }
+    /** Checks: known protocol detection does not mistake all HTTP links for HLS. */
     @Test fun `known protocol detection does not mistake all HTTP links for HLS`() {
         assertThat(DiagnosticProtocol.identify(MediaItem.fromUri("https://private.invalid/live/user/pass"))).isNull()
         assertThat(DiagnosticProtocol.identify(MediaItem.fromUri("https://private.invalid/live.m3u8?token=secret"))).isEqualTo("HLS")

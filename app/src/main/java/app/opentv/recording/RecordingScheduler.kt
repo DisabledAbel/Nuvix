@@ -27,9 +27,11 @@ object RecordingScheduler {
     /** How long before a booking starts to warn the viewer that the screen is about to switch. */
     const val WARN_LEAD_MILLIS = 30_000L
 
+    /** Schedules the recording start alarm at the supplied trigger time. */
     fun set(context: Context, recordingId: Long, triggerAtMillis: Long) =
         arm(context, pendingIntent(context, recordingId, ACTION_START), triggerAtMillis)
 
+    /** Cancels the recording's scheduled alarms. */
     fun cancel(context: Context, recordingId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pendingIntent(context, recordingId, ACTION_START))
@@ -43,11 +45,13 @@ object RecordingScheduler {
         arm(context, pendingIntent(context, recordingId, ACTION_WARN), at)
     }
 
+    /** Cancels the imminent-start warning alarm for a recording. */
     fun cancelWarning(context: Context, recordingId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pendingIntent(context, recordingId, ACTION_WARN))
     }
 
+    /** Registers an alarm using the available exact or fallback scheduling capability. */
     private fun arm(context: Context, pending: PendingIntent, triggerAtMillis: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
@@ -64,8 +68,10 @@ object RecordingScheduler {
         }
     }
 
+    /** Reads the recording ID from the alarm intent, returning -1 when absent. */
     fun recordingIdFrom(intent: Intent): Long = intent.getLongExtra(EXTRA_ID, -1L)
 
+    /** Builds an explicit recording alarm intent with a stable recording identity. */
     private fun intentFor(context: Context, recordingId: Long, action: String): Intent =
         Intent(context, RecordingAlarmReceiver::class.java).apply {
             this.action = action
@@ -74,6 +80,7 @@ object RecordingScheduler {
             putExtra(EXTRA_ID, recordingId)
         }
 
+    /** Builds the immutable PendingIntent used to schedule or cancel a recording alarm. */
     private fun pendingIntent(context: Context, recordingId: Long, action: String): PendingIntent =
         PendingIntent.getBroadcast(
             context,

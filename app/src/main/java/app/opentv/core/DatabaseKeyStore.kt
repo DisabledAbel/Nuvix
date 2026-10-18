@@ -29,6 +29,7 @@ class DatabaseKeyStore internal constructor(
         androidWrappingKey(requireExisting = hasEnvelope)
     })
 
+    /** Unwraps the database passphrase or creates one, refusing replacement when encrypted data exists. */
     fun getOrCreate(encryptedDatabaseExists: Boolean = false): ByteArray = synchronized(lock) {
         try {
             if (storage.contains(WRAPPED_KEY)) {
@@ -70,6 +71,10 @@ class DatabaseKeyStore internal constructor(
         private val associatedData = "nuvix-room-database-key:v1".toByteArray(Charsets.UTF_8)
         private val lock = Any()
 
+        /**
+         * Loads the Android Keystore wrapping key, creating it only when existing data does not
+         * require it.
+         */
         private fun androidWrappingKey(requireExisting: Boolean): SecretKey {
             val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             if (keyStore.containsAlias(ALIAS)) {

@@ -21,6 +21,7 @@ class UpdateChecker(
     private val currentVersionCode: Int,
     private val applicationId: String,
 ) {
+    /** Validated stable release identity, notes and APK integrity metadata offered to the installer. */
     @Serializable
     data class Update(
         val versionCode: Long,
@@ -90,6 +91,7 @@ class UpdateChecker(
         private const val MAX_METADATA_BYTES = 16 * 1024
         internal val json = Json { ignoreUnknownKeys = true }
 
+        /** Sanitizes and bounds release notes before displaying them in update UI. */
         fun cleanNotes(raw: String): String {
             var text = raw
             for (marker in listOf("Built by GitHub Actions", "**Full Changelog**", "## What's Changed", "<!--")) {

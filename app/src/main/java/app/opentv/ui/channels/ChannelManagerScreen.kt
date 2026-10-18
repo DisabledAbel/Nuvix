@@ -299,6 +299,7 @@ private fun BrowsePane(
     }
 }
 
+/** Displays a focusable category or filter entry in the channel manager rail. */
 @Composable
 private fun RailEntry(
     label: String,
@@ -334,6 +335,7 @@ private fun RailEntry(
     )
 }
 
+/** Displays a channel-manager section heading. */
 @Composable
 private fun SectionLabel(text: String) {
     Text(
@@ -344,6 +346,7 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/** Displays remote-control help for channel management. */
 @Composable
 private fun Hint(text: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -351,6 +354,7 @@ private fun Hint(text: String) {
     }
 }
 
+/** Displays a channel's management controls and current presentation overrides. */
 @Composable
 private fun ManagerRow(
     row: ChannelsViewModel.Row,

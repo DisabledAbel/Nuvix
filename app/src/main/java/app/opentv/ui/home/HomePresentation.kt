@@ -22,15 +22,19 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 
+/** Home presentation choices passed to shared movie, series and channel tiles. */
 internal data class HomeTileStyle(val presentation: HomePresentation = HomePresentation(), val onArtwork: (String?) -> Unit = {})
 internal val LocalHomeTileStyle = staticCompositionLocalOf { HomeTileStyle() }
 
+/** Resolves card width from content type, layout and the selected size preference. */
 internal fun homeCardWidth(layout: HomeLayout, size: HomeCardSize): Int {
     val base = when (size) { HomeCardSize.SMALL -> 150; HomeCardSize.MEDIUM -> 190; HomeCardSize.LARGE -> 230 }
     return when (layout) { HomeLayout.COMPACT -> base - 30; HomeLayout.CINEMA -> base + 30; HomeLayout.CLASSIC -> base }
 }
 
+/** Catalog source selected for the featured home content area. */
 internal enum class HomeFeatureSource { NONE, CONTINUE, RECENT, FAVOURITE, CHANNEL }
+/** Selects available featured content according to the saved home preference. */
 internal fun selectHomeFeature(preference: HomeFeatured, resume: Boolean, recent: Boolean, favourite: Boolean, channels: Boolean): HomeFeatureSource = when (preference) {
     HomeFeatured.DISABLED -> HomeFeatureSource.NONE
     HomeFeatured.CONTINUE -> if (resume) HomeFeatureSource.CONTINUE else HomeFeatureSource.NONE
@@ -43,6 +47,7 @@ internal fun selectHomeFeature(preference: HomeFeatured, resume: Boolean, recent
         else -> HomeFeatureSource.NONE
     }
 }
+/** Selects eligible artwork for the home background from the current content selection. */
 internal fun backgroundArtwork(background: HomeBackground, artwork: String?): String? =
     artwork?.takeIf { background == HomeBackground.DYNAMIC_ARTWORK && it.isNotBlank() }
 

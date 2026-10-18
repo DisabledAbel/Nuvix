@@ -25,25 +25,30 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for custom groups. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class CustomGroupsTest {
     private lateinit var db: OpenTvDatabase
     private lateinit var store: LocalCustomGroups
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java)
             .allowMainThreadQueries().build()
         store = LocalCustomGroups(db)
     }
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { db.close() }
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(id: Long = 1, source: Long = 1, name: String = "News", hidden: Boolean = false) = Channel(
         id = id, sourceId = source, streamId = "fixture-$id", name = name, displayName = name,
         categoryId = "news", logoUrl = null, epgChannelId = "news", number = null,
         streamUrl = "https://example.invalid/$id", hidden = hidden,
     )
 
+    /** Checks: create Rename And Reorder Preserve Persistent Cloud Mapping. */
     @Test fun createRenameAndReorderPreservePersistentCloudMapping() = runBlocking {
         val first = store.create("First")
         val second = store.create("Second")
@@ -60,6 +65,7 @@ class CustomGroupsTest {
         assertEquals(localId, db.customGroups().byCloudId(first)!!.id)
     }
 
+    /** Checks: membership Ordering Does Not Drop Unavailable References. */
     @Test fun membershipOrderingDoesNotDropUnavailableReferences() = runBlocking {
         val id = store.create("Favorites")
         val one = LocalCustomGroups.fingerprint(channel())
@@ -76,6 +82,7 @@ class CustomGroupsTest {
         assertEquals(listOf(one), db.customGroups().byCloudId(id)!!.members)
     }
 
+    /** Checks: deletion Is Sticky Even When Tombstone Arrives Before Creation. */
     @Test fun deletionIsStickyEvenWhenTombstoneArrivesBeforeCreation() = runBlocking {
         val id = UUID.randomUUID().toString()
         db.customGroups().tombstone(id)
@@ -90,6 +97,7 @@ class CustomGroupsTest {
         assertTrue(tombstone.members.isEmpty())
     }
 
+    /** Checks: matching Requires Enabled Authorized Source And Rejects Ambiguity. */
     @Test fun matchingRequiresEnabledAuthorizedSourceAndRejectsAmbiguity() = runBlocking {
         db.sources().insert(Source(id = 1, name = "Enabled", kind = SourceKind.M3U, url = "https://example.invalid/one"))
         db.sources().insert(Source(id = 2, name = "Disabled", kind = SourceKind.M3U, url = "https://example.invalid/two", enabled = false))
@@ -105,6 +113,7 @@ class CustomGroupsTest {
         assertEquals(3, db.channels().allForMatching().size)
     }
 
+    /** Checks: visibility Cannot Bypass Hidden Channels Or Locked Categories. */
     @Test fun visibilityCannotBypassHiddenChannelsOrLockedCategories() {
         val visible = channel()
         val group = CustomChannelGroup(cloudId = UUID.randomUUID().toString(), name = "News", members = listOf(LocalCustomGroups.fingerprint(visible)))
@@ -115,6 +124,7 @@ class CustomGroupsTest {
         assertTrue(LocalCustomGroups.resolve(group.copy(deleted = true), listOf(visible), categories, emptySet(), true).isEmpty())
     }
 
+    /** Checks: group Cloud Adapter Applies Independent Fields And Retains Unknown References. */
     @Test fun groupCloudAdapterAppliesIndependentFieldsAndRetainsUnknownReferences() = runBlocking {
         val device = "00000000-0000-0000-0000-000000000001"
         val group = UUID.randomUUID().toString()
@@ -137,6 +147,7 @@ class CustomGroupsTest {
         assertTrue(adapter.snapshot(device, time).single().deleted)
     }
 
+    /** Checks: local Group Rename During Sync Does Not Prevent Independent Remote Membership. */
     @Test fun localGroupRenameDuringSyncDoesNotPreventIndependentRemoteMembership() = runBlocking {
         val device = "00000000-0000-0000-0000-000000000001"
         val group = store.create("Original")
@@ -153,6 +164,7 @@ class CustomGroupsTest {
         assertEquals(listOf("a".repeat(64)), db.customGroups().byCloudId(group)!!.members)
     }
 
+    /** Checks: local Edits Validate Names And Fingerprints. */
     @Test fun localEditsValidateNamesAndFingerprints() = runBlocking {
         assertFalse(LocalCustomGroups.validName("   "))
         assertFalse(LocalCustomGroups.validName("a".repeat(121)))

@@ -15,6 +15,7 @@ import java.net.URLDecoder
  */
 object PairingHttp {
 
+    /** Parsed local HTTP request line, headers and bounded body. */
     data class Request(
         val method: String,
         val path: String,
@@ -57,6 +58,7 @@ object PairingHttp {
         }.toMap()
     }
 
+    /** Decodes form URL encoding for local pairing fields. */
     private fun decode(value: String): String =
         URLDecoder.decode(value.replace("+", "%20"), "UTF-8")
 
@@ -113,6 +115,7 @@ object PairingHttp {
         }
     }
 
+    /** Builds an HTTP response with explicit content type and byte length. */
     fun httpResponse(
         status: String,
         contentType: String,

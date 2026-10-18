@@ -37,6 +37,7 @@ class SyncEngine(private val graph: ServiceLocator.Graph) {
     ) {
         val total: Int get() = positions + favourites + hidden + recordings
 
+        /** Adds merge counters from independent portable-state categories. */
         operator fun plus(other: MergeResult): MergeResult = MergeResult(
             positions = positions + other.positions,
             favourites = favourites + other.favourites,
@@ -45,6 +46,7 @@ class SyncEngine(private val graph: ServiceLocator.Graph) {
         )
     }
 
+    /** Collects portable favorites, hidden channels and playback progress from local storage. */
     suspend fun gather(): SyncBundle {
         val profiles = graph.profiles.all()
         val names = profiles.associate { it.id to it.name }
@@ -101,8 +103,10 @@ class SyncEngine(private val graph: ServiceLocator.Graph) {
         )
     }
 
+    /** Serializes a portable synchronization bundle to JSON. */
     fun encode(bundle: SyncBundle): String = json.encodeToString(SyncBundle.serializer(), bundle)
 
+    /** Decodes a portable synchronization bundle from JSON. */
     fun decode(bundleJson: String): SyncBundle =
         json.decodeFromString(SyncBundle.serializer(), bundleJson)
 
@@ -210,6 +214,7 @@ class SyncEngine(private val graph: ServiceLocator.Graph) {
         )
     }
 
+    /** Resolves a synchronized profile name to the appropriate local profile row. */
     private suspend fun profileIdFor(name: String): Long? {
         graph.profiles.byName(name)?.let { return it.id }
         return runCatching { graph.profiles.insert(Profile(name = name, createdAtMillis = 0)) }.getOrNull()

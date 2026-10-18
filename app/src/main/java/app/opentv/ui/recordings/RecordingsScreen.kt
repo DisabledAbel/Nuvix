@@ -83,6 +83,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
+/** Exposes recording and reminder state and dispatches explicit recording-management actions. */
 class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     private val connections = AccountConnectionManager.get(app)
@@ -116,17 +117,21 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
             { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DvrConflictPlan(emptyMap(), emptySet(), emptySet(), emptyList()))
 
+    /** Observes the selected recording's activity history. */
     fun events(id: Long): Flow<List<RecordingEvent>> = graph.recordingRepository.observeEvents(id) ?: flowOf(emptyList())
 
+    /** Saves recording protection and padding choices through the recording engine. */
     fun updatePreferences(recording: Recording, start: Int, end: Int, protect: Boolean, lock: Boolean) {
         viewModelScope.launch { graph.recordingEngine.updatePreferences(recording.id, start, end, protect, lock) }
     }
 
+    /** Applies an explicitly selected recording conflict-resolution action. */
     fun applyConflictFallback() { viewModelScope.launch { graph.recordingEngine.applyConflictFallback() } }
 
     // NB: cold-start reconciliation of orphaned "recording" rows happens once in OpenTvApp, NOT
     // here — opening this screen must never mark an actively-capturing recording as interrupted.
 
+    /** Requests that the selected active recording stop capturing. */
     fun stop(id: Long) = graph.recordingEngine.stop(id)
 
     /** Re-attempt a failed/interrupted recording (re-arms a future booking or restarts a live one). */
@@ -139,6 +144,7 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.recordingEngine.removeSeriesRule(rule.id) }
     }
 
+    /** Deletes a reminder and cancels its scheduled alarm. */
     fun cancelReminder(reminder: Reminder) {
         viewModelScope.launch {
             ReminderScheduler.cancel(getApplication(), reminder.id)
@@ -146,6 +152,7 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Deletes a recording and its associated stored output through the recording engine. */
     fun delete(recording: Recording) {
         viewModelScope.launch {
             if (recording.status in setOf(RecordingStatus.PREPARING, RecordingStatus.RECORDING, RecordingStatus.FINALIZING)) {
@@ -162,6 +169,7 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
+/** Displays recordings, series rules, reminders and explicit playback or management actions. */
 @Composable
 fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     val viewModel: RecordingsViewModel = viewModel()
@@ -285,6 +293,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     }
 }
 
+/** Displays a recording-library section heading. */
 @Composable
 private fun SectionHeader(text: String) {
     Text(
@@ -295,6 +304,7 @@ private fun SectionHeader(text: String) {
     )
 }
 
+/** Displays a scheduled program reminder with its cancellation action. */
 @Composable
 private fun ReminderRow(reminder: Reminder, onCancel: () -> Unit) {
     Row(
@@ -341,10 +351,12 @@ private fun ReminderRow(reminder: Reminder, onCancel: () -> Unit) {
     }
 }
 
+/** Formats a recording or reminder timestamp using the device's local date and time. */
 private fun formatWhen(utcMillis: Long): String =
     java.text.SimpleDateFormat("EEE d MMM, HH:mm", java.util.Locale.getDefault())
         .format(java.util.Date(utcMillis))
 
+/** Displays a series recording rule and its removal action. */
 @Composable
 private fun SeriesRuleRow(rule: SeriesRule, upcomingCount: Int, nextAtMillis: Long?, onRemove: () -> Unit) {
     Row(
@@ -395,6 +407,7 @@ private fun SeriesRuleRow(rule: SeriesRule, upcomingCount: Int, nextAtMillis: Lo
     }
 }
 
+/** Displays recording status, metadata and available playback or management actions. */
 @Composable
 private fun RecordingRow(
     recording: Recording,
@@ -500,6 +513,7 @@ private fun RecordingRow(
     }
 }
 
+/** Displays a focusable recording-management action. */
 @Composable
 private fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -517,6 +531,7 @@ private fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit) 
     }
 }
 
+/** Builds the recording's status text from its lifecycle state and available details. */
 @Composable
 private fun statusLine(rec: Recording): String {
     // The time it was meant to record (scheduled window), falling back to when it actually began —
@@ -541,6 +556,7 @@ private fun statusLine(rec: Recording): String {
     }
 }
 
+/** Chooses the presentation color for a recording status. */
 @Composable
 private fun statusColor(status: RecordingStatus): Color = when (status) {
     RecordingStatus.RECORDING, RecordingStatus.PREPARING, RecordingStatus.FINALIZING -> Color(0xFFE53935)
@@ -549,12 +565,14 @@ private fun statusColor(status: RecordingStatus): Color = when (status) {
     RecordingStatus.COMPLETED, RecordingStatus.CANCELED -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
+/** Formats a recorded-byte count for the recording list. */
 private fun formatSize(bytes: Long): String {
     if (bytes <= 0) return "0 MB"
     val mb = bytes / (1024.0 * 1024.0)
     return if (mb >= 1024) String.format("%.1f GB", mb / 1024.0) else String.format("%.0f MB", mb)
 }
 
+/** Displays independent recording protection and padding controls. */
 @Composable
 private fun RecordingPreferencesDialog(
     recording: Recording,
@@ -596,6 +614,7 @@ private fun RecordingPreferencesDialog(
     )
 }
 
+/** Displays bounded increment and decrement controls for recording padding. */
 @Composable
 private fun PaddingStepper(label: String, value: Int, maximum: Int, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -606,6 +625,7 @@ private fun PaddingStepper(label: String, value: Int, maximum: Int, onChange: (I
     }
 }
 
+/** Displays proposed recording conflict adjustments and explicit resolution choices. */
 @Composable
 private fun RecordingConflictDialog(
     recordings: List<Recording>,
@@ -645,6 +665,7 @@ private fun RecordingConflictDialog(
     )
 }
 
+/** Formats a recording duration for conflict and schedule presentation. */
 private fun formatDuration(millis: Long): String {
     val totalMinutes = millis / 60000
     val h = totalMinutes / 60

@@ -84,8 +84,10 @@ data class Source(
     }
 }
 
+/** Catalog content category distinguishing live channels, movies and series. */
 enum class StreamKind { LIVE, MOVIE, SERIES }
 
+/** Provider-scoped catalog category and its local presentation order. */
 @Entity(
     tableName = "categories",
     primaryKeys = ["sourceId", "id", "kind"],
@@ -98,6 +100,7 @@ data class Category(
     val sortIndex: Int = 0,
 )
 
+/** Provider channel with playback information, guide mappings and independent user presentation overrides. */
 @Entity(
     tableName = "channels",
     indices = [
@@ -252,15 +255,21 @@ data class Programme(
 ) {
     val durationMillis: Long get() = endUtcMillis - startUtcMillis
 
+    /**
+     * Checks whether the supplied epoch time lies within the program's start-inclusive,
+     * end-exclusive window.
+     */
     fun isLiveAt(nowUtcMillis: Long): Boolean =
         nowUtcMillis in startUtcMillis until endUtcMillis
 
+    /** Returns the elapsed fraction of the program window clamped to the supported display range. */
     fun progressAt(nowUtcMillis: Long): Float {
         if (durationMillis <= 0L) return 0f
         return ((nowUtcMillis - startUtcMillis).toFloat() / durationMillis).coerceIn(0f, 1f)
     }
 }
 
+/** Provider movie, its playback URL, metadata and local favorite state. */
 @Entity(
     tableName = "movies",
     indices = [
@@ -301,6 +310,7 @@ data class Movie(
     @ColumnInfo(defaultValue = "0") val favouriteTouched: Boolean = false,
 )
 
+/** Provider series metadata and local favorite state, with episodes stored separately. */
 @Entity(
     tableName = "series",
     indices = [
@@ -336,6 +346,7 @@ data class Series(
     @ColumnInfo(defaultValue = "0") val favouriteTouched: Boolean = false,
 )
 
+/** Provider episode with its parent series, sequence, metadata and playable stream URL. */
 @Entity(
     tableName = "episodes",
     indices = [

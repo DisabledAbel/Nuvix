@@ -7,15 +7,19 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** Regression tests for advanced cloud record. */
 class AdvancedCloudRecordTest {
     private val deviceA = "00000000-0000-0000-0000-000000000001"
     private val deviceB = "00000000-0000-0000-0000-000000000002"
     private val group = "11111111-1111-1111-1111-111111111111"
     private val hashA = "a".repeat(64)
     private val hashB = "b".repeat(64)
+    /** Builds a synthetic cloud record for validation and merge assertions. */
     private fun record(kind: String, key: String = hashA) = AdvancedCloudRecord(key, kind, 1000, deviceA)
+    /** Builds a synthetic custom-group name mutation for cloud merge tests. */
     private fun name(value: String = "News") = record("group_name", group).copy(textValue = value)
 
+    /** Checks: group Serialization Is Versioned And Only Contains Explicit Fields. */
     @Test fun groupSerializationIsVersionedAndOnlyContainsExplicitFields() {
         val encoded = advancedCloudJson.encodeToString(AdvancedCloudRecord.serializer(), name())
         assertEquals(name(), advancedCloudJson.decodeFromString(AdvancedCloudRecord.serializer(), encoded))
@@ -25,11 +29,13 @@ class AdvancedCloudRecordTest {
         assertFalse(encoded.contains("provider"))
     }
 
+    /** Checks: credential Bearing Unknown Field Is Rejected. */
     @Test(expected = SerializationException::class) fun credentialBearingUnknownFieldIsRejected() {
         val encoded = advancedCloudJson.encodeToString(AdvancedCloudRecord.serializer(), name())
         advancedCloudJson.decodeFromString(AdvancedCloudRecord.serializer(), encoded.dropLast(1) + ",\"provider_password\":\"secret\"}")
     }
 
+    /** Checks: group Names Have Strict Shape And Bounds. */
     @Test fun groupNamesHaveStrictShapeAndBounds() {
         assertTrue(name().isSafe(1000))
         assertTrue(name("x".repeat(120)).isSafe(1000))
@@ -43,12 +49,14 @@ class AdvancedCloudRecordTest {
         assertFalse(name().copy(recordKey = "local-room-id-1").isSafe(1000))
     }
 
+    /** Checks: group Deletion Is Explicit And Only Allowed For Group Identity. */
     @Test fun groupDeletionIsExplicitAndOnlyAllowedForGroupIdentity() {
         assertTrue(name().copy(deleted = true, textValue = null).isSafe(1000))
         assertFalse(name().copy(deleted = true).isSafe(1000))
         assertFalse(record("channel_hidden").copy(boolValue = false, deleted = true).isSafe(1000))
     }
 
+    /** Checks: ordered Membership Is Unique And Contains Only Public Fingerprints. */
     @Test fun orderedMembershipIsUniqueAndContainsOnlyPublicFingerprints() {
         val members = record("group_members", group).copy(entries = listOf(hashB, hashA))
         assertTrue(members.isSafe(1000))
@@ -60,6 +68,7 @@ class AdvancedCloudRecordTest {
         assertFalse(members.copy(entries = (0..2000).map { CloudIdentity.hash("channel:$it") }).isSafe(1000))
     }
 
+    /** Checks: ranks Are Bounded And Typed. */
     @Test fun ranksAreBoundedAndTyped() {
         for ((kind, key) in listOf("group_rank" to group, "channel_order" to hashA)) {
             val rank = record(kind, key).copy(intValue = 0)
@@ -71,6 +80,7 @@ class AdvancedCloudRecordTest {
         }
     }
 
+    /** Checks: hide Unhide And Favourite Removal Have Explicit Boolean States. */
     @Test fun hideUnhideAndFavouriteRemovalHaveExplicitBooleanStates() {
         for (kind in listOf("channel_hidden", "channel_favourite_state", "movie_favourite_state", "series_favourite_state")) {
             val state = record(kind).copy(boolValue = true)
@@ -81,12 +91,14 @@ class AdvancedCloudRecordTest {
         }
     }
 
+    /** Checks: custom Channel Names Can Be Reset With Empty String. */
     @Test fun customChannelNamesCanBeResetWithEmptyString() {
         assertTrue(record("channel_name").copy(textValue = "My station").isSafe(1000))
         assertTrue(record("channel_name").copy(textValue = "").isSafe(1000))
         assertFalse(record("channel_name").copy(textValue = null).isSafe(1000))
     }
 
+    /** Checks: app Order Supports Explicit Unpin And Only Bounded Package Names. */
     @Test fun appOrderSupportsExplicitUnpinAndOnlyBoundedPackageNames() {
         val apps = record("app_order", "apps").copy(entries = listOf("com.example.player", "org.example.app_2"))
         assertTrue(apps.isSafe(1000))
@@ -99,11 +111,13 @@ class AdvancedCloudRecordTest {
         assertFalse(apps.copy(entries = (0..200).map { "com.example.app$it" }).isSafe(1000))
     }
 
+    /** Checks: home Preferences Use The Implemented Shelf Allowlist. */
     @Test fun homePreferencesUseTheImplementedShelfAllowlist() {
         for (key in AdvancedCloudRecord.HOME_SHELVES) assertTrue(record("home_shelf", key).copy(boolValue = false).isSafe(1000))
         assertFalse(record("home_shelf", "arbitrary_ui_state").copy(boolValue = true).isSafe(1000))
     }
 
+    /** Checks: compatible Settings Have Exact Typed Enums. */
     @Test fun compatibleSettingsHaveExactTypedEnums() {
         for ((key, values) in mapOf("theme_mode" to listOf("SYSTEM", "DARK", "LIGHT"),
             "channel_layout" to listOf("GRID", "LIST"),
@@ -119,6 +133,7 @@ class AdvancedCloudRecordTest {
         }
     }
 
+    /** Checks: validation Rejects Unknown Schema Kinds Ids And Clock Skew. */
     @Test fun validationRejectsUnknownSchemaKindsIdsAndClockSkew() {
         assertFalse(name().copy(schemaVersion = 2).isSafe(1000))
         assertFalse(name().copy(kind = "provider_settings").isSafe(1000))
@@ -130,6 +145,7 @@ class AdvancedCloudRecordTest {
         assertTrue(name().copy(updatedAtMillis = Long.MAX_VALUE).isSafe(Long.MAX_VALUE))
     }
 
+    /** Checks: each Category Is Explicit And Only Existing Behaviour Defaults On. */
     @Test fun eachCategoryIsExplicitAndOnlyExistingBehaviourDefaultsOn() {
         assertEquals(setOf(AdvancedSyncCategory.FAVOURITES_PROGRESS), AdvancedSyncCategory.DEFAULTS)
         assertEquals(AdvancedSyncCategory.CUSTOM_GROUPS, name().category)
@@ -140,6 +156,7 @@ class AdvancedCloudRecordTest {
         assertEquals(AdvancedSyncCategory.COMPATIBLE_SETTINGS, record("setting", "theme_mode").category)
     }
 
+    /** Checks: timestamp Then Device Then Payload Produce Same Winner In Both Directions. */
     @Test fun timestampThenDeviceThenPayloadProduceSameWinnerInBothDirections() {
         val first = name("A")
         val later = name("A").copy(updatedAtMillis = 1001)
@@ -159,6 +176,7 @@ class AdvancedCloudRecordTest {
         assertEquals(membersB, newestAdvancedRecord(membersA, membersB))
     }
 
+    /** Checks: deleted Group Cannot Be Resurrected By Even A Newer Rename. */
     @Test fun deletedGroupCannotBeResurrectedByEvenANewerRename() {
         val deleted = name().copy(updatedAtMillis = 1, deleted = true, textValue = null)
         val staleLive = name().copy(updatedAtMillis = 100_000, deviceId = deviceB)
@@ -166,6 +184,7 @@ class AdvancedCloudRecordTest {
         assertEquals(deleted, newestAdvancedRecord(staleLive, deleted))
     }
 
+    /** Checks: unrelated Preference Keys Cannot Overwrite Each Other. */
     @Test(expected = IllegalArgumentException::class) fun unrelatedPreferenceKeysCannotOverwriteEachOther() {
         newestAdvancedRecord(record("home_shelf", "continue").copy(boolValue = true),
             record("home_shelf", "recent").copy(boolValue = false))

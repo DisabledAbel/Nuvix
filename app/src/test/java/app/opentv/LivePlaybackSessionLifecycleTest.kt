@@ -26,13 +26,16 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for live playback session lifecycle. */
 @OptIn(UnstableApi::class)
 @kotlin.OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
 class LivePlaybackSessionLifecycleTest {
+    /** Minimal activity host for retained live-session lifecycle assertions. */
     class PlaybackOwnerActivity : ComponentActivity()
 
+    /** Checks: automatic live request synchronously releases registered guide preview before resolving. */
     @Test fun `automatic live request synchronously releases registered guide preview before resolving`() {
         Dispatchers.setMain(StandardTestDispatcher())
         val activity = Robolectric.buildActivity(PlaybackOwnerActivity::class.java).setup()
@@ -61,6 +64,7 @@ class LivePlaybackSessionLifecycleTest {
         }
     }
 
+    /** Checks: non-live playback survives optional memory cleanup then yields before a live request. */
     @Test fun `non-live playback survives optional memory cleanup then yields before a live request`() {
         Dispatchers.setMain(StandardTestDispatcher())
         val activity = Robolectric.buildActivity(PlaybackOwnerActivity::class.java).setup()
@@ -86,6 +90,7 @@ class LivePlaybackSessionLifecycleTest {
         }
     }
 
+    /** Checks: Activity recreation retains owner and player while final destruction clears all leases. */
     @Test fun `Activity recreation retains owner and player while final destruction clears all leases`() {
         // Keep async repository/settings observers queued: this ownership test uses no database or stream.
         Dispatchers.setMain(StandardTestDispatcher())

@@ -15,6 +15,7 @@ import org.junit.Test
  */
 class PairingHttpTest {
 
+    /** Checks: parses a request line with a query string. */
     @Test
     fun `parses a request line with a query string`() {
         val parsed = PairingHttp.parseRequestLine("GET /?t=abc123 HTTP/1.1")
@@ -26,6 +27,7 @@ class PairingHttpTest {
         assertThat(query["t"]).isEqualTo("abc123")
     }
 
+    /** Checks: parses a request line without a query string. */
     @Test
     fun `parses a request line without a query string`() {
         val (method, path, query) = PairingHttp.parseRequestLine("POST /submit HTTP/1.1")!!
@@ -35,12 +37,14 @@ class PairingHttpTest {
         assertThat(query).isEmpty()
     }
 
+    /** Checks: rubbish request lines are rejected rather than throwing. */
     @Test
     fun `rubbish request lines are rejected rather than throwing`() {
         assertThat(PairingHttp.parseRequestLine("")).isNull()
         assertThat(PairingHttp.parseRequestLine("GET")).isNull()
     }
 
+    /** Checks: decodes form bodies including the awkward characters in passwords. */
     @Test
     fun `decodes form bodies including the awkward characters in passwords`() {
         // Real provider passwords contain +, &, = and spaces, and every one of them means
@@ -54,6 +58,7 @@ class PairingHttpTest {
         assertThat(form["name"]).isEqualTo("Living Room")
     }
 
+    /** Checks: a malformed pair does not discard the rest of the form. */
     @Test
     fun `a malformed pair does not discard the rest of the form`() {
         val form = PairingHttp.parseFormEncoded("a=1&&=nokey&b=2")
@@ -62,6 +67,7 @@ class PairingHttpTest {
         assertThat(form["b"]).isEqualTo("2")
     }
 
+    /** Checks: empty values are preserved rather than dropped. */
     @Test
     fun `empty values are preserved rather than dropped`() {
         val form = PairingHttp.parseFormEncoded("epg=&url=http%3A%2F%2Fx.com")
@@ -70,6 +76,7 @@ class PairingHttpTest {
         assertThat(form["url"]).isEqualTo("http://x.com")
     }
 
+    /** Checks: header names are lowercased. */
     @Test
     fun `header names are lowercased`() {
         assertThat(PairingHttp.parseHeader("Content-Length: 42"))
@@ -77,6 +84,7 @@ class PairingHttpTest {
         assertThat(PairingHttp.parseHeader("not a header")).isNull()
     }
 
+    /** Checks: secret comparison rejects mismatches and length differences. */
     @Test
     fun `secret comparison rejects mismatches and length differences`() {
         assertThat(PairingHttp.secretsMatch("abc123", "abc123")).isTrue()
@@ -85,6 +93,7 @@ class PairingHttpTest {
         assertThat(PairingHttp.secretsMatch("", "")).isTrue()
     }
 
+    /** Checks: private addresses are recognised. */
     @Test
     fun `private addresses are recognised`() {
         assertThat(PairingHttp.isPrivateAddress("192.168.0.14")).isTrue()
@@ -96,6 +105,7 @@ class PairingHttpTest {
         assertThat(PairingHttp.isPrivateAddress("fd00::1")).isTrue()
     }
 
+    /** Checks: public addresses are refused. */
     @Test
     fun `public addresses are refused`() {
         // The pairing form takes IPTV credentials. If a router ever exposes it, the request
@@ -109,6 +119,7 @@ class PairingHttpTest {
         assertThat(PairingHttp.isPrivateAddress("")).isFalse()
     }
 
+    /** Checks: responses carry a correct byte length for multibyte content. */
     @Test
     fun `responses carry a correct byte length for multibyte content`() {
         val response = PairingHttp.httpResponse("200 OK", "text/html", "café ☕")

@@ -6,9 +6,11 @@ import app.opentv.data.model.Channel
 import app.opentv.data.model.Programme
 import kotlinx.coroutines.flow.Flow
 
+/** Feed identity and revision information used to detect guide-derived sports cache changes. */
 data class SportsFeedRevision(val feedId: Long, val lastSyncMillis: Long, val rowCount: Long, val lastId: Long) {
     val revision: String get() = "$lastSyncMillis:$rowCount:$lastId"
 }
+/** Database projection joining a sports program with its provider channel details. */
 data class SportsStreamRow(
     @Embedded val programme: SportsProgramme,
     val channelId: Long,
@@ -18,8 +20,10 @@ data class SportsStreamRow(
     val matchOrder: String,
     @Relation(parentColumn = "channelId", entityColumn = "id") val channel: Channel,
 )
+/** Sports event projection with stream availability and presentation information for shelves. */
 data class SportsEventCard(@Embedded val event: SportsEvent, val streamCount: Int)
 
+/** Room queries and mutations for sports records. */
 @Dao
 interface SportsDao {
     /** Invalidation is coalesced with distinctUntilChanged; favorite edits do not reindex EPG. */
@@ -27,31 +31,46 @@ interface SportsDao {
         FROM epg_feeds f LEFT JOIN programmes p ON p.feedId=f.id WHERE f.enabled=1 GROUP BY f.id""")
     fun observeRevisions(): Flow<List<SportsFeedRevision>>
 
+    /** Returns a bounded batch of eligible guide programs for sports inference. */
     @Query("""SELECT id,feedId,epgChannelId,startUtcMillis,endUtcMillis,SUBSTR(title,1,301) AS title,
         SUBSTR(description,1,2000) AS description,SUBSTR(category,1,500) AS category,season,episode,NULL AS iconUrl
         FROM programmes WHERE feedId=:feedId AND id>:afterId
         AND endUtcMillis>:from AND startUtcMillis<:until ORDER BY id LIMIT 500""")
     suspend fun programmeBatch(feedId: Long, afterId: Long, from: Long, until: Long): List<Programme>
 
+    /** Returns the cached inference revision for a guide feed. */
     @Query("SELECT * FROM sports_feed_state WHERE feedId=:id")
     suspend fun feedState(id: Long): SportsFeedState?
+    /** Saves the inference revision processed for a guide feed. */
     @Upsert suspend fun setFeedState(state: SportsFeedState)
+    /** Clears guide-feed inference revision tracking. */
     @Query("DELETE FROM sports_feed_state") suspend fun clearFeedStates()
+    /** Removes revision state for feeds that are no longer enabled. */
     @Query("DELETE FROM sports_feed_state WHERE feedId NOT IN (:enabled)") suspend fun removeDisabledFeedStates(enabled: List<Long>)
+    /** Checks whether the selected guide feed is currently enabled. */
     @Query("SELECT EXISTS(SELECT 1 FROM epg_feeds WHERE id=:id AND enabled=1)") suspend fun enabledFeed(id: Long): Boolean
 
+    /** Returns a cached sports event by its stable ID. */
     @Query("SELECT * FROM sports_events WHERE id=:id") suspend fun event(id: String): SportsEvent?
+    /** Observes changes to the selected cached sports event. */
     @Query("SELECT * FROM sports_events WHERE id=:id") fun observeEvent(id: String): Flow<SportsEvent?>
+    /** Finds cached event candidates for matching guide-derived sports evidence. */
     @Query("""SELECT * FROM sports_events WHERE leagueId=:league AND
         ((homeTeamId=:first AND awayTeamId=:second) OR (homeTeamId=:second AND awayTeamId=:first))
         AND startUtcMillis BETWEEN :from AND :until ORDER BY startUtcMillis, id LIMIT 10""")
     suspend fun candidates(league: String, first: String, second: String, from: Long, until: Long): List<SportsEvent>
+    /** Inserts or updates cached sports events by stable identity. */
     @Upsert suspend fun upsertEvents(events: List<SportsEvent>)
+    /** Inserts or updates guide-derived sports program associations. */
     @Upsert suspend fun upsertProgrammes(programmes: List<SportsProgramme>)
+    /** Removes cached sports program evidence belonging to a guide feed. */
     @Query("DELETE FROM sports_programmes WHERE feedId=:feedId") suspend fun clearFeedProgrammes(feedId: Long)
+    /** Removes sports program evidence from feeds that are no longer enabled. */
     @Query("DELETE FROM sports_programmes WHERE feedId NOT IN (:enabled)") suspend fun removeDisabledFeeds(enabled: List<Long>)
+    /** Deletes cached events outside the supported retention window. */
     @Query("DELETE FROM sports_events WHERE endUtcMillis<:before AND id NOT IN (SELECT eventId FROM sports_decisions)")
     suspend fun pruneEvents(before: Long)
+    /** Deletes guide-derived sports program evidence outside its retention window. */
     @Query("DELETE FROM sports_programmes WHERE endUtcMillis<:before") suspend fun pruneProgrammes(before: Long)
 
     /**
@@ -86,6 +105,7 @@ interface SportsDao {
         c.sourceId, c.sortIndex, c.id, sp.key LIMIT 200 OFFSET :offset""")
     fun observeStreams(eventId: String, excludedCategories: String = "||", offset: Int = 0): Flow<List<SportsStreamRow>>
 
+    /** Observes a bounded, filtered projection of sports events and available streams. */
     @Query("""SELECT e.*, COUNT(DISTINCT CASE WHEN c.id IS NOT NULL AND s.id IS NOT NULL AND f.id IS NOT NULL
         AND ((d.accepted=1 AND d.eventId=e.id) OR (d.accepted IS NULL AND sp.eventId=e.id AND sp.confidence='CONFIRMED' AND sp.startUtcMillis=e.startUtcMillis)) THEN c.id END) AS streamCount
         FROM sports_events e LEFT JOIN (
@@ -131,26 +151,40 @@ interface SportsDao {
         filter: String = "ALL", now: Long = from, dayFrom: Long = from, dayUntil: Long = until,
         league: String? = null, team: String? = null, sport: String? = null): Flow<List<SportsEventCard>>
 
+    /** Returns cached sports program evidence by its stable program key. */
     @Query("SELECT * FROM sports_programmes WHERE key=:key") suspend fun programme(key: String): SportsProgramme?
+    /** Returns the cached program evidence associated with an event. */
     @Query("""SELECT * FROM sports_programmes WHERE eventId=:eventId AND epgChannelId IN (:epgIds)
         AND endUtcMillis>:from AND startUtcMillis<:until ORDER BY `key`""")
     suspend fun programmeEvidence(eventId: String, epgIds: List<String>, from: Long, until: Long): List<SportsProgramme>
+    /** Persists an explicit user decision about a program-to-event association. */
     @Upsert suspend fun decide(decision: SportsDecision)
+    /** Returns the saved user association decision for a program. */
     @Query("SELECT * FROM sports_decisions WHERE programmeKey=:key AND sourceId=:sourceId AND streamId=:streamId")
     suspend fun decision(key: String, sourceId: Long, streamId: String): SportsDecision?
+    /** Removes an explicit association decision for a program. */
     @Query("DELETE FROM sports_decisions WHERE programmeKey=:key AND sourceId=:sourceId AND streamId=:streamId")
     suspend fun undoDecision(key: String, sourceId: Long, streamId: String)
+    /** Removes saved association decisions targeting an event. */
     @Query("DELETE FROM sports_decisions WHERE eventId=:eventId AND sourceId=:sourceId AND streamId=:streamId")
     suspend fun undoEventDecision(eventId: String, sourceId: Long, streamId: String)
 
+    /** Observes saved favorite teams and leagues in user order. */
     @Query("SELECT * FROM sports_favorites ORDER BY kind,rank,id") fun observeFavorites(): Flow<List<SportsFavorite>>
+    /** Returns saved favorite teams and leagues. */
     @Query("SELECT * FROM sports_favorites WHERE kind=:kind ORDER BY rank,id") suspend fun favorites(kind: String): List<SportsFavorite>
+    /** Inserts or updates a favorite team or league. */
     @Upsert suspend fun favorite(favorite: SportsFavorite)
+    /** Removes a favorite team or league by kind and identity. */
     @Query("DELETE FROM sports_favorites WHERE kind=:kind AND id=:id") suspend fun unfavorite(kind: String, id: String)
+    /** Observes the preferred provider-channel choice for a sports event. */
     @Query("SELECT * FROM sports_preferred WHERE eventId=:id") fun observePreferred(id: String): Flow<SportsPreferred?>
+    /** Saves the preferred provider-channel choice for an event. */
     @Upsert suspend fun prefer(preferred: SportsPreferred)
 
+    /** Clears inferred cached events while retaining independently stored user preferences. */
     @Query("DELETE FROM sports_events WHERE source='epg' AND id NOT IN (SELECT eventId FROM sports_decisions)")
     suspend fun clearInferredEvents()
+    /** Clears cached sports program associations. */
     @Query("DELETE FROM sports_programmes") suspend fun clearProgrammes()
 }

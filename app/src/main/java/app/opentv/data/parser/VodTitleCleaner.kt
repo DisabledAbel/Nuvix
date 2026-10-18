@@ -145,6 +145,7 @@ object VodTitleCleaner {
         }
     }
 
+    /** Checks whether a bracketed title prefix is a provider or quality decoration. */
     private fun isPrefixTag(token: String, bracketed: Boolean, separator: Char?): Boolean {
         if (ChannelNameNormalizer.qualityRankOfToken(token) != null) return true
         if (ChannelNameNormalizer.isStreamMarker(token)) return true

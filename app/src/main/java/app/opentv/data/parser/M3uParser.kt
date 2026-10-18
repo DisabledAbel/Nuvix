@@ -23,6 +23,7 @@ object M3uParser {
 
     private val ATTRIBUTE_REGEX = Regex("""([\w-]+)="([^"]*)"""")
 
+    /** Parsed playlist channels and any guide URLs declared by the playlist. */
     data class Result(
         val channels: List<Channel>,
         /** Value of `url-tvg`/`x-tvg-url` on the #EXTM3U header, if the playlist declares one. */
@@ -30,12 +31,15 @@ object M3uParser {
         val skippedEntries: Int,
     )
 
+    /** Parses playlist content into channels and guide declarations using the supplied source identity. */
     fun parse(input: InputStream, sourceId: Long): Result =
         input.bufferedReader().use { parse(it, sourceId) }
 
+    /** Parses playlist content into channels and guide declarations using the supplied source identity. */
     fun parse(text: String, sourceId: Long): Result =
         parse(text.reader().buffered(), sourceId)
 
+    /** Parses playlist content into channels and guide declarations using the supplied source identity. */
     fun parse(reader: BufferedReader, sourceId: Long): Result {
         val channels = ArrayList<Channel>()
         val seenStreamIds = HashSet<String>()
@@ -120,6 +124,7 @@ object M3uParser {
             ?: attributes["tvg-name"]?.takeIf { it.isNotBlank() }
     }
 
+    /** Extracts quoted or unquoted EXTINF attribute values from a playlist line. */
     private fun parseAttributes(line: String): Map<String, String> =
         ATTRIBUTE_REGEX.findAll(line).associate { match ->
             match.groupValues[1].lowercase() to match.groupValues[2]

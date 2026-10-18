@@ -8,16 +8,21 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Regression tests for connection allocator. */
 class ConnectionAllocatorTest {
+    /** Creates an isolated allocator with registered synthetic accounts and sources. */
     private fun allocator(): ConnectionAllocator {
         val counter = AtomicInteger()
         return ConnectionAllocator { "id-${counter.incrementAndGet()}" }
     }
+    /** Builds a generation-scoped synthetic provider connection request. */
     private fun request(id: String, sourceId: Long = 1, generation: Long = 1, purpose: ConnectionPurpose = ConnectionPurpose.LIVE) =
         ConnectionRequest(id, generation, sourceId, purpose)
+    /** Reserves fixture connection capacity and returns the successfully admitted ownership token. */
     private fun reserve(allocator: ConnectionAllocator, request: ConnectionRequest): ReservationToken =
         (allocator.reserve(request) as ReservationResult.Reserved).token
 
+    /** Checks: independent Accounts Have Independent Capacity. */
     @Test fun independentAccountsHaveIndependentCapacity() {
         val allocator = allocator()
         allocator.registerSource(1, "account-a", AccountConnectionPolicy(1, false))
@@ -28,6 +33,7 @@ class ConnectionAllocatorTest {
         assertEquals(listOf(1, 1), allocator.snapshots.value.map { it.locallyReserved })
     }
 
+    /** Checks: playlists Linked To Same Account Consume One Pool. */
     @Test fun playlistsLinkedToSameAccountConsumeOnePool() {
         val allocator = allocator()
         allocator.registerSource(1, "same-account", AccountConnectionPolicy(1, false))
@@ -37,6 +43,7 @@ class ConnectionAllocatorTest {
         assertEquals(setOf(1L, 2L), allocator.snapshots.value.single().sourceIds)
     }
 
+    /** Checks: unknown Additional Connection Requires Specific One Shot Approval. */
     @Test fun unknownAdditionalConnectionRequiresSpecificOneShotApproval() {
         val allocator = allocator()
         allocator.registerSource(1, "unknown")
@@ -52,6 +59,7 @@ class ConnectionAllocatorTest {
         assertNull(allocator.snapshotForSource(1)!!.effectiveMaximum)
     }
 
+    /** Checks: approval Cannot Be Transferred To Another Request And Attempt Consumes It. */
     @Test fun approvalCannotBeTransferredToAnotherRequestAndAttemptConsumesIt() {
         val allocator = allocator()
         allocator.registerSource(1, "unknown")
@@ -63,6 +71,7 @@ class ConnectionAllocatorTest {
         assertTrue(allocator.reserve(allowed, approval) is ReservationResult.ApprovalRequired)
     }
 
+    /** Checks: newer Generation Invalidates Old Confirmation And Callbacks. */
     @Test fun newerGenerationInvalidatesOldConfirmationAndCallbacks() {
         val allocator = allocator()
         allocator.registerSource(1, "account", AccountConnectionPolicy(2, false))
@@ -80,6 +89,7 @@ class ConnectionAllocatorTest {
         assertTrue(allocator.reserve(request("session", generation = 1)) is ReservationResult.Denied)
     }
 
+    /** Checks: identical Live Reservation Is Idempotent But Released Generation Cannot Reopen. */
     @Test fun identicalLiveReservationIsIdempotentButReleasedGenerationCannotReopen() {
         val allocator = allocator()
         allocator.registerSource(1, "account")
@@ -92,6 +102,7 @@ class ConnectionAllocatorTest {
         assertTrue(allocator.reserve(attempt.copy(generation = 2)) is ReservationResult.Reserved)
     }
 
+    /** Checks: policy Change Invalidates Previously Granted Approval. */
     @Test fun policyChangeInvalidatesPreviouslyGrantedApproval() {
         val allocator = allocator()
         allocator.registerSource(1, "account")
@@ -105,6 +116,7 @@ class ConnectionAllocatorTest {
         assertTrue(allocator.reserve(attempt, approval) is ReservationResult.ApprovalRequired)
     }
 
+    /** Checks: provider Active Observation Does Not Pretend To Know Other Device Usage. */
     @Test fun providerActiveObservationDoesNotPretendToKnowOtherDeviceUsage() {
         val allocator = allocator()
         allocator.registerSource(1, "account")
@@ -118,6 +130,7 @@ class ConnectionAllocatorTest {
         assertEquals(1, allocator.snapshotForSource(1)!!.locallyReserved)
     }
 
+    /** Checks: zero Or Missing Provider Maximum Is Unknown. */
     @Test fun zeroOrMissingProviderMaximumIsUnknown() {
         val allocator = allocator()
         allocator.registerSource(1, "account")
@@ -126,6 +139,7 @@ class ConnectionAllocatorTest {
         assertNull(allocator.snapshotForSource(1)!!.providerReportedActive)
     }
 
+    /** Checks: generic Failure Does Not Become Known Connection Limit Error. */
     @Test fun genericFailureDoesNotBecomeKnownConnectionLimitError() {
         val allocator = allocator()
         allocator.registerSource(1, "account")
@@ -139,6 +153,7 @@ class ConnectionAllocatorTest {
         assertEquals(1, allocator.snapshotForSource(1)!!.knownConnectionLimitErrors)
     }
 
+    /** Checks: association Cannot Move Or Hide Active Reservations. */
     @Test fun associationCannotMoveOrHideActiveReservations() {
         val allocator = allocator()
         allocator.registerSource(1, "a", AccountConnectionPolicy(1, false))
@@ -151,6 +166,7 @@ class ConnectionAllocatorTest {
         assertEquals(setOf(1L, 2L), allocator.snapshotForSource(2)!!.sourceIds)
     }
 
+    /** Checks: pending And Releasing Reservations Keep Capacity Until Real Close. */
     @Test fun pendingAndReleasingReservationsKeepCapacityUntilRealClose() {
         val allocator = allocator()
         allocator.registerSource(1, "account", AccountConnectionPolicy(1, false))
@@ -162,6 +178,7 @@ class ConnectionAllocatorTest {
         assertTrue(allocator.reserve(request("other")) is ReservationResult.Reserved)
     }
 
+    /** Checks: atomic Reservations Never Exceed Capacity Under Concurrent Starts. */
     @Test fun atomicReservationsNeverExceedCapacityUnderConcurrentStarts() {
         val allocator = allocator()
         allocator.registerSource(1, "account", AccountConnectionPolicy(3, false))

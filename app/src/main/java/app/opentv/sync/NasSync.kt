@@ -30,6 +30,7 @@ class NasSync(private val graph: ServiceLocator.Graph) {
 
     private val engine = SyncEngine(graph)
 
+    /** Outcome of exchanging the portable user-state bundle through NAS storage. */
     sealed interface Result {
         /** [merged] items pulled in from [peers] other devices' files (this device's own excluded). */
         data class Success(val merged: Int, val peers: Int) : Result
@@ -81,6 +82,7 @@ class NasSync(private val graph: ServiceLocator.Graph) {
         return (base + listOf(SYNC_DIR, "sync")).joinToString("/")
     }
 
+    /** Builds the SMB location for the synchronization bundle from local NAS settings. */
     private fun locatorFor(config: SmbConfig, fileName: String): String =
         "smb://${config.host}/${config.share}/${syncFolderPath(config)}/$fileName"
 

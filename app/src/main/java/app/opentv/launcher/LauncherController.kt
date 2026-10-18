@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.provider.Settings
 
+/** Device capability and current default-home status displayed by launcher settings. */
 data class LauncherStatus(
     val enabled: Boolean,
     val isDefault: Boolean,
@@ -25,9 +26,11 @@ class LauncherController(private val context: Context) {
     val homeComponent = ComponentName(context.packageName, "app.opentv.launcher.NuvixHome")
     private val pm get() = context.packageManager
 
+    /** Checks whether the optional HOME component is enabled. */
     fun isEnabled(): Boolean = pm.getComponentEnabledSetting(homeComponent) ==
         PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 
+    /** Changes the optional HOME component's enabled state. */
     fun setEnabled(enabled: Boolean) {
         pm.setComponentEnabledSetting(
             homeComponent,
@@ -36,6 +39,7 @@ class LauncherController(private val context: Context) {
         )
     }
 
+    /** Inspects launcher availability and current home selection for this device. */
     fun status(): LauncherStatus {
         val television = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
             (context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager)?.currentModeType ==
@@ -63,6 +67,7 @@ class LauncherController(private val context: Context) {
         )
     }
 
+    /** Builds the supported system request for selecting the default home application. */
     fun defaultHomeRequest(): Intent? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = context.getSystemService(RoleManager::class.java)
@@ -73,16 +78,20 @@ class LauncherController(private val context: Context) {
         return settingsIntent(Settings.ACTION_HOME_SETTINGS)
     }
 
+    /** Finds an available intent for the device's system settings. */
     fun deviceSettingsIntent(): Intent? = settingsIntent(Settings.ACTION_SETTINGS)
 
+    /** Finds an available intent for the default-home settings page. */
     fun homeSettingsIntent(): Intent? = settingsIntent(Settings.ACTION_HOME_SETTINGS)
 
+    /** Builds a resolvable settings intent for the requested system action. */
     private fun settingsIntent(action: String): Intent? {
         val intent = Intent(action)
         return intent.takeIf { pm.resolveActivity(it, PackageManager.MATCH_DEFAULT_ONLY) != null }
     }
 
     companion object {
+        /** Recognizes an Android HOME launch intent. */
         fun isHomeIntent(intent: Intent?): Boolean =
             intent?.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)
     }

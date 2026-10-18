@@ -89,6 +89,7 @@ class TmdbClient(
         return o["imdb_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.startsWith("tt") }
     }
 
+    /** Finds matching TMDB metadata for the requested title and media kind. */
     private fun lookup(isMovie: Boolean, title: String, year: Int?, tmdbId: String?): TmdbMeta? {
         val key = settings.tmdbApiKey.value.trim()
         if (key.isEmpty()) return null
@@ -118,6 +119,7 @@ class TmdbClient(
         return run(withYear = year != null) ?: if (year != null) run(withYear = false) else null
     }
 
+    /** Loads detailed metadata for a known TMDB identity. */
     private fun details(isMovie: Boolean, id: String, key: String): TmdbMeta? {
         val url = TMDB_BASE.newBuilder()
             .addPathSegment(if (isMovie) "movie" else "tv")
@@ -160,6 +162,7 @@ class TmdbClient(
         )
     }
 
+    /** Performs a TMDB JSON request using the configured API key. */
     private fun get(url: HttpUrl): JsonElement? {
         val request = Request.Builder().url(url).header("User-Agent", "Nuvix").build()
         return runCatching {

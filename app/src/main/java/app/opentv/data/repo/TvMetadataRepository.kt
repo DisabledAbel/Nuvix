@@ -9,7 +9,9 @@ import app.opentv.data.remote.*
 data class TvSeriesDetail(val series: Series, val tvmaze: TvmazeDetails?,
     val imdb: ImdbTvMeta?, val tmdbRating: Double?)
 
+/** Combines optional external TV metadata for display while retaining provider playback identities. */
 class TvMetadataRepository(private val tvmaze: TvmazeClient, private val imdb: ImdbApiClient) {
+    /** Matches a series and fills display metadata from TVmaze, IMDb and an optional fallback. */
     suspend fun detail(provider: Series, title: String, imdbId: String?,
         fallback: suspend () -> TmdbMeta?): TvSeriesDetail {
         val suffix = Regex("""\s+\(?(19\d{2}|20\d{2})\)?$""").find(title)
@@ -27,13 +29,16 @@ class TvMetadataRepository(private val tvmaze: TvmazeClient, private val imdb: I
             partial.plot.isNullOrBlank() || partial.cast.isNullOrBlank() || partial.genre.isNullOrBlank()) optional { fallback() } else null
         return TvSeriesDetail(mergeTvMetadata(provider, primary, secondary, last), primary, secondary, last?.rating)
     }
+    /** Loads a TVmaze person profile, returning null for optional-service failures. */
     suspend fun profile(id: Int) = optional { tvmaze.profile(id) }
 
+    /** Treats external metadata failures as unavailable while preserving coroutine cancellation. */
     private suspend fun <T> optional(block: suspend () -> T?): T? = try { block() }
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { null }
 }
 
+/** Combines display metadata by source precedence while preserving provider ratings, year and IDs. */
 internal fun mergeTvMetadata(provider: Series, tvmaze: TvmazeDetails?, imdb: ImdbTvMeta?, tmdb: TmdbMeta?): Series {
     fun first(vararg values: String?) = values.firstOrNull { !it.isNullOrBlank() }
     return provider.copy(
@@ -46,6 +51,7 @@ internal fun mergeTvMetadata(provider: Series, tvmaze: TvmazeDetails?, imdb: Imd
     )
 }
 
+/** Presentation row pairing a provider episode with uniquely matched optional TVmaze metadata. */
 data class TvEpisodeListing(val provider: Episode?, val metadata: TvEpisode?) {
     val key get() = provider?.let { "provider:${it.id}" } ?: "tvmaze:${metadata!!.id}"
     val season get() = metadata?.season ?: provider!!.season

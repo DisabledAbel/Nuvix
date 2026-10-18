@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
  */
 class ReminderAlarmReceiver : BroadcastReceiver() {
 
+    /** Dispatches reminder alarms and system rearm events to background reminder work. */
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED -> rescheduleAll(context)
@@ -46,6 +47,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Loads an eligible reminder, posts its notification and records delivery. */
     private fun fire(context: Context, id: Long) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -60,6 +62,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Rearms eligible future reminders after boot or scheduling changes. */
     private fun rescheduleAll(context: Context) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -73,6 +76,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Builds and posts the program reminder notification with an explicit playback action. */
     private fun notify(context: Context, reminder: Reminder) {
         createChannel(context)
 
@@ -113,6 +117,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) { /* Permission may change between checking and posting. */ }
     }
 
+    /** Creates the reminder notification channel on supported Android versions. */
     private fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

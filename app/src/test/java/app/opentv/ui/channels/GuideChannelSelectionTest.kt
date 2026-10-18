@@ -9,7 +9,9 @@ import app.opentv.data.repo.LocalCustomGroups
 import org.junit.Assert.*
 import org.junit.Test
 
+/** Regression tests for guide channel selection. */
 class GuideChannelSelectionTest {
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(
         id: Long,
         name: String = "Channel $id",
@@ -26,13 +28,16 @@ class GuideChannelSelectionTest {
         favourite = favourite, hidden = hidden, sortIndex = sortIndex,
     )
 
+    /** Builds a custom-group fixture with ordered portable channel member identities. */
     private fun group(vararg channels: Channel) = CustomChannelGroup(
         id = 99, cloudId = "00000000-0000-0000-0000-000000000001", name = "Guide group",
         members = channels.map(LocalCustomGroups::fingerprint),
     )
 
+    /** Extracts ordered channel IDs for concise selection assertions. */
     private fun List<Channel>.ids() = map { it.id }
 
+    /** Checks: all And Provider Filters Use The Supplied Catalogue. */
     @Test fun allAndProviderFiltersUseTheSuppliedCatalogue() {
         val channels = listOf(channel(3, sourceId = 2), channel(2, hidden = true), channel(1))
         listOf(GuideChannelFilter.ALL, GuideChannelFilter.PROVIDER).forEach { filter ->
@@ -44,6 +49,7 @@ class GuideChannelSelectionTest {
             GuideChannelFilter.PROVIDER, GuideChannelSort.PROVIDER_ORDER).ids())
     }
 
+    /** Checks: favourites Filter Uses Current Flags And Excludes Hidden Favourites. */
     @Test fun favouritesFilterUsesCurrentFlagsAndExcludesHiddenFavourites() {
         val channels = listOf(channel(1), channel(2, favourite = true), channel(3, favourite = true, hidden = true))
         assertEquals(listOf(2L), selectGuideChannels(channels, GuideChannelFilter.FAVOURITES,
@@ -52,6 +58,7 @@ class GuideChannelSelectionTest {
             GuideChannelFilter.FAVOURITES, GuideChannelSort.PROVIDER_ORDER).isEmpty())
     }
 
+    /** Checks: recent Defaults To History Order And Honours An Explicit Alternative Sort. */
     @Test fun recentDefaultsToHistoryOrderAndHonoursAnExplicitAlternativeSort() {
         val channels = listOf(channel(10, "Alpha", sortIndex = 2), channel(20, hidden = true),
             channel(30, "Zulu", sourceId = 2, sortIndex = 1), channel(40))
@@ -66,6 +73,7 @@ class GuideChannelSelectionTest {
             GuideChannelSort.PROVIDER_ORDER).isEmpty())
     }
 
+    /** Checks: epg Filters Use Any Available Candidate And Exclude Missing Guide Data. */
     @Test fun epgFiltersUseAnyAvailableCandidateAndExcludeMissingGuideData() {
         val channels = listOf(
             channel(1, epgId = "missing").copy(epgOverrideId = "manual"),
@@ -85,6 +93,7 @@ class GuideChannelSelectionTest {
             GuideChannelSort.PROVIDER_ORDER).ids().containsAll(listOf(4L, 5L)))
     }
 
+    /** Checks: every Sort Has Deterministic Tie Breaks And Does Not Reorder The Catalogue. */
     @Test fun everySortHasDeterministicTieBreaksAndDoesNotReorderTheCatalogue() {
         val channels = listOf(
             channel(40, "Zulu", sourceId = 2, number = 12, sortIndex = 1, favourite = true),
@@ -110,6 +119,7 @@ class GuideChannelSelectionTest {
         assertEquals(original, channels)
     }
 
+    /** Checks: name Sorts Use Manual Names And Fall Back From Blank Manual Names. */
     @Test fun nameSortsUseManualNamesAndFallBackFromBlankManualNames() {
         val channels = listOf(channel(1, "Zulu").copy(customName = "Aardvark"),
             channel(2, "Beta").copy(customName = "   "), channel(3, "Alpha"))
@@ -119,6 +129,7 @@ class GuideChannelSelectionTest {
         }
     }
 
+    /** Checks: group Custom Order Keeps Unavailable References Without Creating Rows. */
     @Test fun groupCustomOrderKeepsUnavailableReferencesWithoutCreatingRows() {
         val first = channel(1)
         val second = channel(2)
@@ -133,6 +144,7 @@ class GuideChannelSelectionTest {
         assertEquals(originalMembers, group.members)
     }
 
+    /** Checks: ambiguous Group Fingerprints Across Sources Stay Unresolved. */
     @Test fun ambiguousGroupFingerprintsAcrossSourcesStayUnresolved() {
         val first = channel(1, "News", sourceId = 1, epgId = "news")
         val ambiguous = channel(2, "News", sourceId = 2, epgId = "news")
@@ -144,6 +156,7 @@ class GuideChannelSelectionTest {
         }
     }
 
+    /** Checks: deleted Missing And Unavailable Groups Never Return Channels. */
     @Test fun deletedMissingAndUnavailableGroupsNeverReturnChannels() {
         val channel = channel(1)
         GuideChannelSort.entries.forEach { sort ->
@@ -154,6 +167,7 @@ class GuideChannelSelectionTest {
         }
     }
 
+    /** Checks: every Filter And Sort Excludes Hidden Rows And Preserves Stable Identity. */
     @Test fun everyFilterAndSortExcludesHiddenRowsAndPreservesStableIdentity() {
         val visible = channel(1, favourite = true, epgId = "visible")
         val hidden = channel(2, favourite = true, hidden = true, epgId = "hidden")
@@ -168,6 +182,7 @@ class GuideChannelSelectionTest {
         }
     }
 
+    /** Checks: twenty Thousand Channels Produce Sparse Selections With Bounded Catalogue Passes. */
     @Test fun twentyThousandChannelsProduceSparseSelectionsWithBoundedCataloguePasses() {
         val catalogue = (1L..20_000L).map { id ->
             channel(id, favourite = id % 400L == 0L, hidden = id % 2_000L == 0L)
@@ -188,9 +203,11 @@ class GuideChannelSelectionTest {
         selected.forEach { row -> assertSame(catalogue[(row.id - 1).toInt()], row) }
     }
 
+    /** List wrapper counting channel reads to verify bounded guide selection work. */
     private class CountingList(private val channels: List<Channel>) : AbstractList<Channel>() {
         var reads = 0
         override val size: Int get() = channels.size
+        /** Counts a channel access before returning the underlying fixture row. */
         override fun get(index: Int): Channel {
             reads++
             return channels[index]

@@ -15,6 +15,7 @@ import app.opentv.data.parser.displayTitle
 import app.opentv.ui.VodViewModel
 import app.opentv.ui.recordings.RecordingsScreen
 
+/** Displays saved and resumable content with navigation to its detail and playback actions. */
 @Composable
 fun LibraryScreen(onPlayRecording: (Recording) -> Unit, onPlayChannel: (Channel) -> Unit, onOpenMovie: (Movie) -> Unit, onResume: (String, String, String) -> Unit, vod: VodViewModel = viewModel()) {
     var recordings by remember { mutableStateOf(true) }

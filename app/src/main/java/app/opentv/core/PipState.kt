@@ -27,6 +27,7 @@ object PipState {
     private val _inPip = MutableStateFlow(false)
     val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
 
+    /** Publishes whether the activity is currently in picture-in-picture mode. */
     fun setInPip(value: Boolean) {
         _inPip.value = value
     }

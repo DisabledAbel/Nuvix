@@ -20,8 +20,10 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Test
 
+/** Regression tests for live playback coordinator. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LivePlaybackCoordinatorTest {
+    /** Playback engine test double recording explicit tune, policy and release calls. */
     private class FakeEngine : LivePlaybackEngine {
         override val state = MutableStateFlow<PlayerController.State>(PlayerController.State.Idle)
         override val paused = MutableStateFlow(false)
@@ -29,23 +31,31 @@ class LivePlaybackCoordinatorTest {
         var muted = false
         var suspendedValue = false
         var releases = 0
+        /** Records the explicit playback request received by the fake engine. */
         override fun play(request: PlayerController.Request) { requests += request; state.value = PlayerController.State.Playing(request.title) }
+        /** Records the pause state applied by the coordinator. */
         override fun setPaused(paused: Boolean) { this.paused.value = paused }
+        /** Records the browsing mute policy applied by the coordinator. */
         override fun setBrowsingMuted(muted: Boolean) { this.muted = muted }
+        /** Records the lifecycle suspension policy applied by the coordinator. */
         override fun setSuspended(suspended: Boolean) { this.suspendedValue = suspended }
+        /** Counts engine releases for ownership and lifecycle assertions. */
         override fun release() { releases++ }
     }
 
+    /** Provides a synthetic channel with the identity and state required by this test. */
     private fun channel(id: Long) = Channel(
         id = id, sourceId = 7L, streamId = id.toString(), name = "Channel $id",
         categoryId = null, logoUrl = null, epgChannelId = null, number = id.toInt(),
         streamUrl = "https://example.invalid/live/$id",
     )
 
+    /** Wraps a synthetic channel in the resolved live-tune representation. */
     private fun resolved(channel: Channel) = ResolvedLiveChannel(
         channel, listOf(channel), PlayerController.Request(channel.streamUrl, channel.name, "Nuvix test"),
     )
 
+    /** Isolated coordinator, fake engines and controllable channel resolver for lifecycle tests. */
     private inner class Fixture(scope: TestScope, resolver: suspend (Channel) -> ResolvedLiveChannel = { resolved(it) }) {
         val engines = mutableListOf<FakeEngine>()
         val session = LivePlaybackCoordinator(
@@ -55,6 +65,7 @@ class LivePlaybackCoordinatorTest {
         val engine get() = engines.single()
     }
 
+    /** Checks: live player is lazy and is created once across Home Guide Sports and fullscreen. */
     @Test fun `live player is lazy and is created once across Home Guide Sports and fullscreen`() = runTest {
         val f = Fixture(this)
         assertThat(f.engines).isEmpty()
@@ -73,6 +84,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(engine.releases).isEqualTo(0)
     }
 
+    /** Checks: explicit channel change tunes once and keeps current channel consistent. */
     @Test fun `explicit channel change tunes once and keeps current channel consistent`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -83,6 +95,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.variants.value.single().id).isEqualTo(2)
     }
 
+    /** Checks: account safe switching closes the old engine before its reservation is freed. */
     @Test fun `account safe switching closes the old engine before its reservation is freed`() = runTest {
         val engines = mutableListOf<FakeEngine>()
         val releases = mutableListOf<Int>()
@@ -102,6 +115,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(releases.last()).isEqualTo(2)
     }
 
+    /** Checks: denied replacement admission preserves the current player. */
     @Test fun `denied replacement admission preserves the current player`() = runTest {
         val engines = mutableListOf<FakeEngine>()
         val session = LivePlaybackCoordinator(
@@ -120,6 +134,7 @@ class LivePlaybackCoordinatorTest {
         assertThat((session.state.value as PlayerController.State.Error).message).contains("account is in use")
     }
 
+    /** Checks: synchronous play failure closes admitted resources and permits a fresh retry. */
     @Test fun `synchronous play failure closes admitted resources and permits a fresh retry`() = runTest {
         var releasedReservations = 0
         val engines = mutableListOf<FakeEngine>()
@@ -140,6 +155,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(engines.single().requests).hasSize(1)
     }
 
+    /** Checks: quality and Mini Guide channel list tune reuse the same engine. */
     @Test fun `quality and Mini Guide channel list tune reuse the same engine`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -152,6 +168,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.currentChannel.value?.id).isEqualTo(3)
     }
 
+    /** Checks: rapid requests cancel obsolete resolutions before any tune. */
     @Test fun `rapid requests cancel obsolete resolutions before any tune`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(this) { selected ->
@@ -165,6 +182,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.currentChannel.value?.id).isEqualTo(2)
     }
 
+    /** Checks: changing presentation while a lookup is pending cannot start background playback. */
     @Test fun `changing presentation while a lookup is pending cannot start background playback`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(this) { gate.await(); resolved(it) }
@@ -177,6 +195,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: browsing audio preference mutes without replacing or pausing the stream. */
     @Test fun `browsing audio preference mutes without replacing or pausing the stream`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -189,6 +208,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: browsing with audio enabled and preview absent retains a single stream. */
     @Test fun `browsing with audio enabled and preview absent retains a single stream`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -199,6 +219,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.active.value).isTrue()
     }
 
+    /** Checks: user pause survives browsing background and return to fullscreen. */
     @Test fun `user pause survives browsing background and return to fullscreen`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -212,6 +233,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: permanent audio focus loss remains paused after navigation. */
     @Test fun `permanent audio focus loss remains paused after navigation`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -225,6 +247,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.paused.value).isFalse()
     }
 
+    /** Checks: Pi P continues one player while stopped Activity suspends after Pi P closes. */
     @Test fun `PiP continues one player while stopped Activity suspends after PiP closes`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -238,6 +261,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: unsupported destinations suspend until supported browsing resumes. */
     @Test fun `unsupported destinations suspend until supported browsing resumes`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -248,6 +272,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: persistence disabled releases only after fullscreen ends. */
     @Test fun `persistence disabled releases only after fullscreen ends`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -263,6 +288,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engines.last().requests).hasSize(1)
     }
 
+    /** Checks: turning persistence off while browsing cancels pending lookup. */
     @Test fun `turning persistence off while browsing cancels pending lookup`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(this) { gate.await(); resolved(it) }
@@ -274,6 +300,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.active.value).isFalse()
     }
 
+    /** Checks: memory pressure only discards optional browsing player. */
     @Test fun `memory pressure only discards optional browsing player`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -291,6 +318,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.guidePreviewSuppressed.value).isFalse()
     }
 
+    /** Checks: Pi P retains decoder under memory pressure. */
     @Test fun `PiP retains decoder under memory pressure`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -300,6 +328,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.releases).isEqualTo(0)
     }
 
+    /** Checks: scheduled recording yields same-provider live without stopping other sources. */
     @Test fun `scheduled recording yields same-provider live without stopping other sources`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -311,6 +340,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.active.value).isFalse()
     }
 
+    /** Checks: VOD and recording ownership release live before another allocation. */
     @Test fun `VOD and recording ownership release live before another allocation`() = runTest {
         for (destination in listOf("VOD", "recording", "catchup")) {
             val f = Fixture(this)
@@ -324,6 +354,7 @@ class LivePlaybackCoordinatorTest {
         }
     }
 
+    /** Checks: player errors remain observable across navigation and recovery reuses engine. */
     @Test fun `player errors remain observable across navigation and recovery reuses engine`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -337,6 +368,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.currentChannel.value?.id).isEqualTo(1)
     }
 
+    /** Checks: recording-owned provider fails safely before allocating another stream. */
     @Test fun `recording-owned provider fails safely before allocating another stream`() = runTest {
         val f = Fixture(this) { throw RecordingOwnsLiveSourceException() }
         f.session.openChannel(1); runCurrent()
@@ -348,6 +380,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.state.value).isEqualTo(error)
     }
 
+    /** Checks: provider exceptions expose safe retry and never leak credentials. */
     @Test fun `provider exceptions expose safe retry and never leak credentials`() = runTest {
         var failed = true
         val f = Fixture(this) {
@@ -364,6 +397,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: non-live handoff suppresses outgoing guide preview until another explicit live request. */
     @Test fun `non-live handoff suppresses outgoing guide preview until another explicit live request`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -378,6 +412,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engines.last().requests).hasSize(1)
     }
 
+    /** Checks: session destruction releases once and cannot allocate again. */
     @Test fun `session destruction releases once and cannot allocate again`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -388,6 +423,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engines).hasSize(1)
     }
 
+    /** Checks: new process owner starts empty and never resumes persisted credentials implicitly. */
     @Test fun `new process owner starts empty and never resumes persisted credentials implicitly`() = runTest {
         val first = Fixture(this)
         first.session.openChannel(1); runCurrent(); first.session.destroy()
@@ -397,6 +433,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(recreated.engines).isEmpty()
     }
 
+    /** Checks: returning to current channel cancels a pending different selection. */
     @Test fun `returning to current channel cancels a pending different selection`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(this) { selected ->
@@ -411,6 +448,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.session.currentChannel.value?.id).isEqualTo(1)
     }
 
+    /** Checks: failure resolving a different channel remains observable over old playback events. */
     @Test fun `failure resolving a different channel remains observable over old playback events`() = runTest {
         val f = Fixture(this) { selected ->
             if (selected.id == 2L) error("Provider unavailable")
@@ -424,6 +462,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(error).isInstanceOf(PlayerController.State.Error::class.java)
     }
 
+    /** Checks: reopening a failed channel retries resolution but healthy reentry does not. */
     @Test fun `reopening a failed channel retries resolution but healthy reentry does not`() = runTest {
         var resolves = 0
         val f = Fixture(this) {
@@ -438,6 +477,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: failed outgoing surface detachment never binds a competing surface. */
     @Test fun `failed outgoing surface detachment never binds a competing surface`() {
         val first = Any(); val second = Any()
         val bindings = mutableListOf<Pair<Any, Boolean>>()
@@ -451,6 +491,7 @@ class LivePlaybackCoordinatorTest {
         owner.clear() // Cleanup cannot crash the Activity.
     }
 
+    /** Checks: failed explicit surface disposal blocks attachments until decoder ownership resets. */
     @Test fun `failed explicit surface disposal blocks attachments until decoder ownership resets`() {
         val first = Any(); val second = Any()
         val bindings = mutableListOf<Pair<Any, Boolean>>()
@@ -467,6 +508,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(owner.attach(second)).isTrue()
     }
 
+    /** Checks: surface handoff detaches first and stale disposal cannot detach replacement. */
     @Test fun `surface handoff detaches first and stale disposal cannot detach replacement`() {
         val bindings = mutableListOf<Pair<Any, Boolean>>()
         val owner = ExclusiveSurfaceOwner<Any> { view, attached -> bindings += view to attached }
@@ -477,6 +519,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(bindings.last()).isEqualTo(preview to false)
     }
 
+    /** Checks: surface disposal does not release or retune session. */
     @Test fun `surface disposal does not release or retune session`() = runTest {
         val f = Fixture(this)
         f.session.openChannel(1); runCurrent()
@@ -487,6 +530,7 @@ class LivePlaybackCoordinatorTest {
         assertThat(f.engine.requests).hasSize(1)
     }
 
+    /** Checks: surface failure clears failed binding for fallback without allocating playback. */
     @Test fun `surface failure clears failed binding for fallback without allocating playback`() {
         val bindings = mutableListOf<Boolean>()
         val owner = ExclusiveSurfaceOwner<Any> { _, attached ->

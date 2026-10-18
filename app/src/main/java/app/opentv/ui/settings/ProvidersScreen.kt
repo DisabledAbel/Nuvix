@@ -108,6 +108,7 @@ fun ProvidersScreen(
     }
 }
 
+/** Displays provider status and explicit edit, refresh or connection-management actions. */
 @Composable
 private fun ProviderRow(
     source: Source,

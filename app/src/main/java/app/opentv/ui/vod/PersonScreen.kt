@@ -138,6 +138,7 @@ private fun PersonTitle.gridKey(): String = when (this) {
     is PersonTitle.SeriesItem -> "s${series.id}"
 }
 
+/** Centers loading or empty-state content within the person profile screen. */
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {

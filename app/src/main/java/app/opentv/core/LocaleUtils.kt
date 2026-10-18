@@ -18,8 +18,10 @@ import java.util.Locale
  */
 object LocaleUtils {
 
+    /** Creates a context using the requested locale or the saved application language. */
     fun wrap(base: Context): Context = wrap(base, AppSettings.savedLanguageTag(base))
 
+    /** Creates a context using the requested locale or the saved application language. */
     fun wrap(base: Context, tag: String): Context {
         if (tag.isBlank()) return base
         val locale = Locale.forLanguageTag(tag)

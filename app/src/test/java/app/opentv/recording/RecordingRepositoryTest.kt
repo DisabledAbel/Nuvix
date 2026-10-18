@@ -18,9 +18,11 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
 
+/** Regression tests for recording repository. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class RecordingRepositoryTest {
+    /** Checks: duplicate Alarm Claims Exactly One Job And Startup Cannot Interrupt It. */
     @Test fun duplicateAlarmClaimsExactlyOneJobAndStartupCannotInterruptIt() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).allowMainThreadQueries().build()
         try {
@@ -36,6 +38,7 @@ class RecordingRepositoryTest {
         } finally { db.close() }
     }
 
+    /** Checks: interruption Recovers Bytes Written Since Last Database Checkpoint. */
     @Test fun interruptionRecoversBytesWrittenSinceLastDatabaseCheckpoint() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         val file = File.createTempFile("partial", ".ts", context.cacheDir).apply { writeBytes(ByteArray(188)) }
@@ -51,6 +54,7 @@ class RecordingRepositoryTest {
         } finally { db.close(); file.delete() }
     }
 
+    /** Checks: failed Capture With Content Is Partial While An Empty Capture Fails. */
     @Test fun failedCaptureWithContentIsPartialWhileAnEmptyCaptureFails() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).allowMainThreadQueries().build()
         try {
@@ -64,6 +68,7 @@ class RecordingRepositoryTest {
         } finally { db.close() }
     }
 
+    /** Provides the recording fixture used by the current scheduling or capture scenario. */
     private fun recording(status: RecordingStatus) = Recording(channelId = 1, sourceId = 1,
         channelName = "Test", title = "Programme", filePath = "/missing/test.ts", streamUrl = "https://example.com/live.ts", status = status)
 }

@@ -12,21 +12,25 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for app settings guide preferences. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class AppSettingsGuidePreferencesTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
     private lateinit var prefs: SharedPreferences
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         prefs = context.getSharedPreferences("opentv_settings", Context.MODE_PRIVATE)
         prefs.edit().clear().commit()
     }
 
+    /** Reconstructs application settings to exercise the on-disk preference read path. */
     // A fresh instance exercises the on-disk read path used after process recreation.
     private fun reopen(): AppSettings = AppSettings::class.java.getDeclaredConstructor(Context::class.java)
         .apply { isAccessible = true }.newInstance(context)
 
+    /** Checks: new guide defaults preserve legacy channel list choice and previews. */
     @Test fun `new guide defaults preserve legacy channel list choice and previews`() {
         prefs.edit().putString("channel_layout", "LIST").putBoolean("guide_preview_video", false)
             .putBoolean("guide_preview_sound", true).commit()
@@ -47,6 +51,7 @@ class AppSettingsGuidePreferencesTest {
         assertThat(prefs.getString("channel_layout", null)).isEqualTo("LIST")
     }
 
+    /** Checks: every layout density filter and sort persists and updates live state. */
     @Test fun `every layout density filter and sort persists and updates live state`() {
         val settings = reopen()
         GuideLayout.entries.forEach {
@@ -71,6 +76,7 @@ class AppSettingsGuidePreferencesTest {
         }
     }
 
+    /** Checks: artwork progress and remember preferences persist independently. */
     @Test fun `artwork progress and remember preferences persist independently`() {
         val settings = reopen()
         settings.setShowGuideArtwork(false)
@@ -85,6 +91,7 @@ class AppSettingsGuidePreferencesTest {
         assertThat(reopen().showGuideProgress.value).isTrue()
     }
 
+    /** Checks: local filter targets survive switching and portable default changes. */
     @Test fun `local filter targets survive switching and portable default changes`() {
         val settings = reopen()
         settings.setGuideFilter(GuideChannelFilter.GROUP, groupId = 12)
@@ -99,6 +106,7 @@ class AppSettingsGuidePreferencesTest {
         assertThat(reopen().guideFilterProviderId.value).isEqualTo(45L)
     }
 
+    /** Checks: guide navigation does not retune or overwrite last watched channel. */
     @Test fun `guide navigation does not retune or overwrite last watched channel`() {
         prefs.edit().putLong("last_channel_id", 99).commit()
         val settings = reopen()
@@ -111,6 +119,7 @@ class AppSettingsGuidePreferencesTest {
         assertThat(settings.lastGuidePosition.value?.channelId).isEqualTo(42L)
     }
 
+    /** Checks: disabling remembered position clears old state and prevents further storage. */
     @Test fun `disabling remembered position clears old state and prevents further storage`() {
         val settings = reopen()
         settings.setGuidePosition(42, 1_800_000_000_000)
@@ -125,6 +134,7 @@ class AppSettingsGuidePreferencesTest {
         assertThat(reopen().lastGuidePosition.value?.channelId).isEqualTo(43L)
     }
 
+    /** Checks: unknown enums invalid types and incomplete position recover to safe defaults. */
     @Test fun `unknown enums invalid types and incomplete position recover to safe defaults`() {
         prefs.edit().putString("guide_layout", "FUTURE_LAYOUT").putInt("guide_density", 99)
             .putString("guide_default_filter", "NO_LONGER_SUPPORTED").putBoolean("guide_sort", true)

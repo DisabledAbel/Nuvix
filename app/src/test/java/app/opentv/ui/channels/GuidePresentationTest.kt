@@ -9,14 +9,17 @@ import org.junit.Test
 import java.time.Instant
 import java.time.ZoneId
 
+/** Regression tests for guide presentation. */
 class GuidePresentationTest {
     private val start = 1_800_000_000_000L
+    /** Builds a synthetic program with configurable timing and guide metadata. */
     private fun programme(offsetMinutes: Int, durationMinutes: Int = 30) = Programme(
         id = offsetMinutes.toLong(), feedId = 1, epgChannelId = "test", title = "Programme $offsetMinutes",
         startUtcMillis = start + offsetMinutes * 60_000L,
         endUtcMillis = start + (offsetMinutes + durationMinutes) * 60_000L,
     )
 
+    /** Checks: layouts Increase Readable Row Space Without Changing Timeline Alignment. */
     @Test fun layoutsIncreaseReadableRowSpaceWithoutChangingTimelineAlignment() {
         val compact = guideLayoutMetrics(GuideLayout.COMPACT, GuideTimelineDensity.COMFORTABLE)
         val standard = guideLayoutMetrics(GuideLayout.STANDARD, GuideTimelineDensity.COMFORTABLE)
@@ -27,6 +30,7 @@ class GuidePresentationTest {
         assertThat(compact.rowHeightDp).isAtLeast(48f)
     }
 
+    /** Checks: densities Change Visible Time While Offsets Round Trip At Sub Minute Precision. */
     @Test fun densitiesChangeVisibleTimeWhileOffsetsRoundTripAtSubMinutePrecision() {
         val widths = GuideTimelineDensity.entries.map { guideLayoutMetrics(GuideLayout.STANDARD, it).minuteWidthDp }
         assertThat(widths.toSet()).hasSize(3)
@@ -37,6 +41,7 @@ class GuidePresentationTest {
         assertThat(guideOffsetDp(start, start - 1, 4f)).isEqualTo(0f)
     }
 
+    /** Checks: slices Clip Window And Overlaps And Discard Invalid Data Without Timeline Drift. */
     @Test fun slicesClipWindowAndOverlapsAndDiscardInvalidDataWithoutTimelineDrift() {
         val source = listOf(programme(10, 20), programme(-15, 30), programme(0, 0), programme(1430, 40), programme(1500))
         val slices = guideProgrammeSlices(source, start)
@@ -45,6 +50,7 @@ class GuidePresentationTest {
         assertThat(source).hasSize(5)
     }
 
+    /** Checks: second Long Programmes Keep Their True Timeline Position. */
     @Test fun secondLongProgrammesKeepTheirTrueTimelinePosition() {
         val short = programme(0).copy(endUtcMillis = start + 1_000L)
         val next = programme(1)
@@ -53,6 +59,7 @@ class GuidePresentationTest {
         assertThat(slices[1].startMillis).isEqualTo(start + 60_000L)
     }
 
+    /** Checks: horizontal Virtualization Keeps Only Viewport And Adjacent Cells. */
     @Test fun horizontalVirtualizationKeepsOnlyViewportAndAdjacentCells() {
         val slices = guideProgrammeSlices((0 until 1440 step 5).map { programme(it, 5) }, start)
         val visible = visibleGuideSlices(slices, start + 600 * 60_000L, start + 660 * 60_000L)
@@ -62,6 +69,7 @@ class GuidePresentationTest {
         assertThat(visible.last().programme.startUtcMillis).isEqualTo(start + 660 * 60_000L)
     }
 
+    /** Checks: missing And Incomplete Guide Data Has Deterministic Focus Fallback. */
     @Test fun missingAndIncompleteGuideDataHasDeterministicFocusFallback() {
         assertThat(guideProgrammeSlices(emptyList(), start)).isEmpty()
         assertThat(visibleGuideSlices(emptyList(), start, start + 1)).isEmpty()
@@ -72,6 +80,7 @@ class GuidePresentationTest {
         assertThat(guideProgrammeAt(programmes, start + 45 * 60_000L)).isEqualTo(programmes[0])
     }
 
+    /** Checks: hour And Day Navigation Preserve The Requested Time Across Daylight Saving. */
     @Test fun hourAndDayNavigationPreserveTheRequestedTimeAcrossDaylightSaving() {
         val zone = ZoneId.of("America/Los_Angeles")
         val beforeSpringChange = Instant.parse("2026-03-07T20:00:00Z").toEpochMilli()
@@ -82,6 +91,7 @@ class GuidePresentationTest {
         assertThat(guideHourAt(beforeSpringChange, -1) + GUIDE_HOUR_MILLIS).isEqualTo(beforeSpringChange)
     }
 
+    /** Checks: visible Prefetch Stays Bounded For Huge Catalogues And At Both Edges. */
     @Test fun visiblePrefetchStaysBoundedForHugeCataloguesAndAtBothEdges() {
         assertThat(guideVisibleRange(20_000, (5000..5010).toList())).isEqualTo(4990..5020)
         assertThat(guideVisibleRange(20_000, (5000..5100).toList()).count()).isEqualTo(60)

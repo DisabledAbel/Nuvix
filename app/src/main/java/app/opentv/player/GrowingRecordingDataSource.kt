@@ -57,6 +57,7 @@ class GrowingRecordingDataSource(private val context: Context) : BaseDataSource(
     private var smb: SmbReadHandle? = null
     private var smbLocator: String = ""
 
+    /** Opens a local or SMB recording at the requested position while capture may still be active. */
     override fun open(dataSpec: DataSpec): Long {
         transferInitializing(dataSpec)
         uri = dataSpec.uri
@@ -112,11 +113,13 @@ class GrowingRecordingDataSource(private val context: Context) : BaseDataSource(
         throw IOException("NAS recording $recordingId not ready: $smbLocator")
     }
 
+    /** Reads captured bytes, waiting for further data while the recording is still growing. */
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         return if (smb != null) readSmb(buffer, offset, length) else readLocal(buffer, offset, length)
     }
 
+    /** Reads the next bytes from a local growing recording. */
     private fun readLocal(buffer: ByteArray, offset: Int, length: Int): Int {
         val f = file ?: return C.RESULT_END_OF_INPUT
         while (!closed) {
@@ -139,6 +142,7 @@ class GrowingRecordingDataSource(private val context: Context) : BaseDataSource(
         return C.RESULT_END_OF_INPUT
     }
 
+    /** Reads the next bytes from a growing SMB recording. */
     private fun readSmb(buffer: ByteArray, offset: Int, length: Int): Int {
         var stallPolls = 0
         while (!closed) {
@@ -183,8 +187,10 @@ class GrowingRecordingDataSource(private val context: Context) : BaseDataSource(
         true
     }
 
+    /** Returns the URI of the currently opened recording. */
     override fun getUri(): Uri? = uri
 
+    /** Closes the recording handle and clears the active read state. */
     override fun close() {
         closed = true
         runCatching { file?.close() }
@@ -198,7 +204,9 @@ class GrowingRecordingDataSource(private val context: Context) : BaseDataSource(
         uri = null
     }
 
+    /** Creates independent growing-recording readers using the application context. */
     class Factory(private val context: Context) : DataSource.Factory {
+        /** Creates a fresh reader for playback of an active recording. */
         override fun createDataSource(): DataSource = GrowingRecordingDataSource(context)
     }
 

@@ -73,6 +73,7 @@ class StremioClient(
         }
     }
 
+    /** Fetches and parses JSON from an add-on endpoint. */
     private fun get(url: HttpUrl): JsonElement? {
         val request = Request.Builder().url(url).header("User-Agent", "Nuvix").build()
         return runCatching {

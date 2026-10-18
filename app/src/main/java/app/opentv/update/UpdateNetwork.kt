@@ -34,6 +34,7 @@ object UpdateNetwork {
     }
 }
 
+/** Awaits an OkHttp response and cancels the underlying call when its coroutine is cancelled. */
 internal suspend fun OkHttpClient.awaitResponse(request: Request): Response = suspendCancellableCoroutine { continuation ->
     val call = newCall(request)
     continuation.invokeOnCancellation { call.cancel() }
@@ -47,6 +48,7 @@ internal suspend fun OkHttpClient.awaitResponse(request: Request): Response = su
     })
 }
 
+/** Decodes the response as UTF-8 while enforcing the maximum byte count. */
 internal fun ResponseBody.readLimited(maxBytes: Int): String = byteStream().use { stream ->
     val output = java.io.ByteArrayOutputStream()
     val buffer = ByteArray(4096)

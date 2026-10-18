@@ -74,6 +74,7 @@ private val OpenTvTypography = Typography(
     labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium),
 )
 
+/** Applies the application color scheme, television typography and shared Material styling. */
 @Composable
 fun OpenTvTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

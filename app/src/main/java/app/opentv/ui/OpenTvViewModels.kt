@@ -78,6 +78,7 @@ import kotlinx.coroutines.sync.withLock
 class SourcesViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
 
+    /** Provider list, draft form, connection-test progress and transient provider feedback. */
     data class UiState(
         val sources: List<Source> = emptyList(),
         /**
@@ -105,6 +106,7 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Tests the current provider draft and publishes its connection result. */
     fun test(draft: Source) {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(testing = true, testResult = null, testError = null)
@@ -180,6 +182,7 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Deletes the selected provider and refreshes dependent catalog state. */
     fun delete(source: Source) {
         viewModelScope.launch { graph.catalogRepository.deleteSource(source.id) }
     }
@@ -194,6 +197,7 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.catalogRepository.setLiveFormat(source.id, format) }
     }
 
+    /** Starts a refresh of enabled provider catalogs and guide data. */
     fun refreshAll() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(syncing = true, syncMessage = "Refreshing…")
@@ -221,9 +225,11 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Creates the initial provider-entry draft for the selected source kind. */
     fun blankDraft() = Source(name = "", kind = SourceKind.XTREAM, url = "")
 }
 
+/** Combines catalog channels, guide preferences, filters and bounded guide-window state. */
 class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     private val settings = graph.settings
@@ -334,10 +340,12 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
     } ?: 0)
     val guideDayOffset: StateFlow<Int> = _guideDayOffset.asStateFlow()
 
+    /** Moves the guide day offset within its supported history and future bounds. */
     fun nudgeGuideDay(delta: Int) {
         _guideDayOffset.value = (_guideDayOffset.value + delta).coerceIn(-1, GUIDE_MAX_DAYS)
     }
 
+    /** Returns the guide's displayed time window to the current time. */
     fun guideToNow() { _guideDayOffset.value = 0 }
 
     val windowStartMillis: StateFlow<Long> =
@@ -356,6 +364,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
                 }.timeInMillis
             })
 
+    /** Finds the UTC epoch time corresponding to the start of the device's local day. */
     private fun startOfLocalDay(millis: Long): Long {
         val cal = java.util.Calendar.getInstance()
         cal.timeInMillis = millis
@@ -366,6 +375,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         return cal.timeInMillis
     }
 
+    /** Channel selection inputs used to avoid rebuilding unchanged guide row queries. */
     private data class RowsKey(
         val categoryIds: List<String>?,
         val favs: Boolean,
@@ -379,6 +389,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
     val guideSort = settings.guideSort
     private val recentIds = RecentChannels.get(app).ids
 
+    /** Selects the guide filter and updates its optional provider or custom-group target. */
     fun selectGuideFilter(filter: GuideChannelFilter, groupId: Long? = null) {
         selectedCategory.value = null
         favouritesOnly.value = filter == GuideChannelFilter.FAVOURITES
@@ -388,12 +399,14 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Only visible channels plus a small prefetch margin hold programme objects. */
     private val visibleGuideIds = MutableStateFlow<List<Long>>(emptyList())
+    /** Updates the visible guide row IDs used for bounded program hydration. */
     fun setVisibleGuideRows(rows: List<Row>) {
         visibleGuideIds.value = rows.take(60).map { it.primary.id }.distinct()
     }
 
     val guideLoaded = MutableStateFlow(false)
 
+    /** Guide filter selection with its optional provider or group target. */
     private data class GuideFilterState(
         val filter: GuideChannelFilter,
         val groupId: Long?,
@@ -463,6 +476,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Builds channel rows for the current guide selection, sorting and visibility rules. */
     private fun buildRows(
         channels: List<Channel>,
         byEpgChannel: Map<String, List<Programme>>,
@@ -540,6 +554,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
             .map { it > 0 }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Changes the selected channel category. */
     fun selectCategory(id: String?) {
         favouritesOnly.value = false
         settings.setGuideFilter(if (selectedSource.value == null) GuideChannelFilter.ALL else GuideChannelFilter.PROVIDER,
@@ -547,6 +562,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         selectedCategory.value = id
     }
 
+    /** Changes whether the channel list shows only favorites. */
     fun selectFavourites() {
         selectGuideFilter(GuideChannelFilter.FAVOURITES)
     }
@@ -560,6 +576,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
             providerId = sourceId)
     }
 
+    /** Updates channel search through the view model's search state. */
     fun search(text: String) { query.value = text }
 
     // ---- Dedicated channel search --------------------------------------------------------------
@@ -568,6 +585,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
     // This path is channel-only — no programme window — debounced, and capped by the DAO's LIMIT.
     private val searchInput = MutableStateFlow("")
 
+    /** Updates the channel-list search text. */
     fun setSearchQuery(text: String) { searchInput.value = text }
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -585,11 +603,13 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Refreshes the current-time input used by guide and now-playing queries. */
     fun tick() { nowTick.value = System.currentTimeMillis() }
 
     // ---- Channel manager (search, then hide/show or favourite) ---------------------------------
     private val managerInput = MutableStateFlow("")
 
+    /** Updates the channel manager's text filter. */
     fun setManagerQuery(text: String) { managerInput.value = text }
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -663,6 +683,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         managerSelectedCategory.value = null
     }
 
+    /** Changes the category filter used by channel management. */
     fun selectManagerCategory(key: String?) { managerSelectedCategory.value = key }
 
     /** Hide or show a whole logical channel — every quality variant follows. */
@@ -672,6 +693,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Toggles the selected channel's favorite flag. */
     fun toggleFavourite(row: Row) {
         viewModelScope.launch {
             // Favouriting the row favourites the logical channel: every variant follows,
@@ -681,6 +703,7 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Changes the selected channel's hidden state. */
     fun hide(row: Row) {
         viewModelScope.launch {
             row.variants.forEach { graph.catalogRepository.setChannelHidden(it.id, true) }
@@ -700,11 +723,13 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     val automaticEpg: StateFlow<Boolean> = graph.settings.automaticEpg
 
+    /** Persists the automatic guide-discovery choice. */
     fun setAutomaticEpg(enabled: Boolean) {
         graph.settings.setAutomaticEpg(enabled)
         if (enabled) refresh()
     }
 
+    /** Configured guide feeds, refresh progress and transient guide settings feedback. */
     data class UiState(
         val feeds: List<EpgFeed> = emptyList(),
         val syncing: Boolean = false,
@@ -723,6 +748,7 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Changes whether a guide feed participates in refresh and guide queries. */
     fun setEnabled(feed: EpgFeed, enabled: Boolean) {
         viewModelScope.launch {
             graph.epgRepository.setFeedEnabled(feed.id, enabled)
@@ -730,6 +756,7 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Validates and adds a manually configured guide feed. */
     fun addCustom(name: String, url: String) {
         viewModelScope.launch {
             graph.epgRepository.addCustomFeed(name, url)
@@ -737,10 +764,12 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Removes a guide feed and updates the configured feed list. */
     fun remove(feed: EpgFeed) {
         viewModelScope.launch { graph.epgRepository.removeFeed(feed) }
     }
 
+    /** Starts a guide refresh and publishes progress and completion feedback. */
     fun refresh() {
         if (_ui.value.syncing) return
         viewModelScope.launch {
@@ -765,6 +794,7 @@ class EpgViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
+/** Combines cached movie and series catalogs, resume state and optional detail metadata. */
 class VodViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     private val settings = graph.settings
@@ -785,6 +815,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
             .mapLatest { positions -> positions.filter { !it.isFinished }.mapNotNull { resolveResume(it) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Resolves a saved playback position to the locally available movie or episode. */
     private suspend fun resolveResume(pos: PlaybackPosition): ResumeItem? {
         val parts = pos.mediaKey.split(":", limit = 2)
         if (parts.size != 2) return null
@@ -846,8 +877,10 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { graph.catalogRepository.observeSeries(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Changes the active movie catalog category. */
     fun selectMovieCategory(id: String?) { movieCategory.value = id }
 
+    /** Changes the active series catalog category. */
     fun selectSeriesCategory(id: String?) { seriesCategory.value = id }
 
     /** True when at least one Stremio add-on is configured — gates the "add-on sources" button. */
@@ -982,6 +1015,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
     /** How long a fetched VOD catalogue is trusted before a warm launch re-syncs it. */
     private val VOD_TTL_MILLIS = 12L * 60 * 60 * 1000  // 12 hours
 
+    /** Loads provider VOD catalogs when the selected source needs them. */
     fun ensureVodLoaded() {
         if (vodRequested) return
         vodRequested = true
@@ -998,6 +1032,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { syncVodIfStale(force = true) }
     }
 
+    /** Refreshes provider VOD data only when its cached catalog is stale. */
     private suspend fun syncVodIfStale(force: Boolean) {
         val now = System.currentTimeMillis()
 
@@ -1037,6 +1072,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
     // ---- VOD search (shared by the unified search screen) --------------------------------------
     private val vodSearchInput = MutableStateFlow("")
 
+    /** Updates the movie and series catalog search text. */
     fun setVodSearchQuery(text: String) { vodSearchInput.value = text }
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -1055,6 +1091,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Toggles the selected movie's local favorite state. */
     fun toggleMovieFavourite(movie: Movie) {
         viewModelScope.launch {
             graph.catalogRepository.setMovieFavourite(movie.id, !movie.favourite)
@@ -1072,6 +1109,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
         graph.catalogRepository.ensureEpisodes(source, series.seriesId)
     }
 
+    /** Observes the selected series' provider episode list. */
     fun episodes(series: Series) =
         graph.catalogRepository.observeEpisodes(series.sourceId, series.seriesId)
 
@@ -1083,6 +1121,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
     val noEpisodes: kotlinx.coroutines.flow.Flow<List<app.opentv.data.model.Episode>> =
         kotlinx.coroutines.flow.flowOf(emptyList())
 
+    /** Returns a movie from the local catalog by row ID. */
     suspend fun movieById(id: Long): Movie? = graph.catalogRepository.movie(id)
 
     // ---- Detail screens -------------------------------------------------------------------------
@@ -1097,6 +1136,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun seriesDetail(id: Long): app.opentv.data.repo.ProviderSeriesDetail? =
         graph.catalogRepository.seriesDetail(id)
 
+    /** Loads series presentation details with optional external metadata. */
     suspend fun tvSeriesDetail(detail: app.opentv.data.repo.ProviderSeriesDetail): app.opentv.data.repo.TvSeriesDetail {
         val series = detail.series
         return graph.tvMetadata.detail(series, app.opentv.data.parser.VodTitleCleaner.clean(series.name), detail.imdbId) {
@@ -1104,6 +1144,7 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Loads optional TV person metadata for the profile destination. */
     suspend fun tvPerson(id: Int) = graph.tvMetadata.profile(id)
 
     /** "More like this" for the movie detail screen. */
@@ -1160,6 +1201,7 @@ class ProfilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Creates a local profile with the entered display name. */
     fun addProfile(name: String) {
         viewModelScope.launch {
             val id = graph.profiles.insert(
@@ -1169,12 +1211,15 @@ class ProfilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Renames the selected local profile. */
     fun rename(id: Long, name: String) {
         viewModelScope.launch { graph.profiles.rename(id, name.trim().ifBlank { "Profile" }) }
     }
 
+    /** Persists the active local profile selection. */
     fun select(id: Long) { settings.setActiveProfile(id) }
 
+    /** Deletes the selected local profile and updates active-profile state. */
     fun remove(id: Long) {
         // The base profile stays — there is always at least one to be.
         if (id == 1L) return
@@ -1201,10 +1246,15 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
 
     val serverState: StateFlow<SyncServer.State> = server.state
 
+    /** Progress and result of receiving a portable bundle from another LAN device. */
     sealed interface ReceiveState {
+        /** Receive state before a LAN transfer begins. */
         data object Idle : ReceiveState
+        /** Receive state while connecting to the selected sharing device. */
         data object Connecting : ReceiveState
+        /** Completed receive state with the number of merged changes. */
         data class Done(val merged: Int) : ReceiveState
+        /** Receive failure with an explanation suitable for display. */
         data class Failed(val message: String) : ReceiveState
     }
 
@@ -1219,18 +1269,25 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
     val smbHost: StateFlow<String> = graph.settings.smbHost
     val nasAutoSync: StateFlow<Boolean> = graph.settings.nasAutoSync
 
+    /** Progress and result of exchanging portable state through NAS storage. */
     sealed interface NasState {
+        /** NAS state before synchronization begins. */
         data object Idle : NasState
+        /** NAS state while the portable bundle is being exchanged. */
         data object Syncing : NasState
+        /** Completed NAS synchronization with a display message. */
         data class Done(val message: String) : NasState
+        /** NAS synchronization failure with a display message. */
         data class Failed(val message: String) : NasState
     }
 
     private val _nasState = MutableStateFlow<NasState>(NasState.Idle)
     val nasState: StateFlow<NasState> = _nasState.asStateFlow()
 
+    /** Persists the automatic NAS synchronization choice. */
     fun setNasAutoSync(enabled: Boolean) = graph.settings.setNasAutoSync(enabled)
 
+    /** Starts a NAS synchronization exchange and publishes its result. */
     fun syncNas() {
         if (_nasState.value is NasState.Syncing) return
         viewModelScope.launch {
@@ -1248,12 +1305,15 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Collects portable user state and starts a temporary LAN sharing session. */
     fun startSharing() {
         viewModelScope.launch { server.start(buildBundleJson()) }
     }
 
+    /** Closes the active LAN sharing session. */
     fun stopSharing() = server.stop()
 
+    /** Connects to the entered LAN session and merges its portable user-state bundle. */
     fun receive(address: String, code: String) {
         viewModelScope.launch {
             _receiveState.value = ReceiveState.Connecting
@@ -1263,8 +1323,10 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Clears the previous LAN receive progress and result. */
     fun resetReceive() { _receiveState.value = ReceiveState.Idle }
 
+    /** Collects and serializes the current portable local user state. */
     private suspend fun buildBundleJson(): String {
         val names = graph.profiles.all().associate { it.id to it.name }
         val items = graph.playbackPositions.all().mapNotNull { pos ->
@@ -1282,6 +1344,7 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
         return Json.encodeToString(SyncBundle.serializer(), SyncBundle(positions = items))
     }
 
+    /** Merges a received portable user-state bundle into matching local rows. */
     private suspend fun merge(bundle: SyncBundle): Int {
         var merged = 0
         for (item in bundle.positions) {
@@ -1309,11 +1372,13 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
         return merged
     }
 
+    /** Resolves a received profile name to a local profile ID. */
     private suspend fun profileIdFor(name: String): Long? {
         graph.profiles.byName(name)?.let { return it.id }
         return runCatching { graph.profiles.insert(Profile(name = name, createdAtMillis = 0)) }.getOrNull()
     }
 
+    /** Closes the temporary LAN sharing server when the view model is cleared. */
     override fun onCleared() {
         server.stop()
     }
@@ -1333,10 +1398,13 @@ class WebManagerViewModel(app: Application) : AndroidViewModel(app) {
 
     val state: StateFlow<ManagerServer.State> = server.state
 
+    /** Starts the local web manager and exposes its session to the settings UI. */
     fun start() = server.start()
 
+    /** Stops the local web manager and clears the displayed session. */
     fun stop() = server.stop()
 
+    /** Closes the web manager when its owning view model is cleared. */
     override fun onCleared() {
         server.stop()
     }

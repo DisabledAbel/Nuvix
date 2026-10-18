@@ -23,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+/** Regression tests for private settings vault. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class PrivateSettingsVaultTest {
@@ -31,6 +32,7 @@ class PrivateSettingsVaultTest {
     private lateinit var plain: SharedPreferences
     private lateinit var wrappingKey: SecretKey
 
+    /** Creates isolated fixtures before each test. */
     @Before
     fun reset() {
         context = RuntimeEnvironment.getApplication()
@@ -41,6 +43,7 @@ class PrivateSettingsVaultTest {
         wrappingKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
     }
 
+    /** Checks: absent setting returns its default without accessing the keystore. */
     @Test
     fun `absent setting returns its default without accessing the keystore`() {
         val unavailable = PrivateSettingsVault(context) { error("Keystore must not be accessed") }
@@ -49,6 +52,7 @@ class PrivateSettingsVaultTest {
         assertThat(unavailable.getString("absent")).isNull()
     }
 
+    /** Checks: secret settings are encrypted with authenticated key specific metadata. */
     @Test
     fun `secret settings are encrypted with authenticated key specific metadata`() {
         vault().putString("smb_password", "private-nas-password")
@@ -66,6 +70,7 @@ class PrivateSettingsVaultTest {
         assertThat(vault().getString("smb_password")).isEqualTo("private-nas-password")
     }
 
+    /** Checks: migration removes selected plaintext only after encrypted values are recoverable. */
     @Test
     fun `migration removes selected plaintext only after encrypted values are recoverable`() {
         plain.edit().putString("smb_password", "private-nas-password")
@@ -81,6 +86,7 @@ class PrivateSettingsVaultTest {
         assertThat(vault().getString("tmdb_api_key")).isEqualTo("private-api-key")
     }
 
+    /** Checks: interrupted migration finishes without replacing a matching encrypted copy. */
     @Test
     fun `interrupted migration finishes without replacing a matching encrypted copy`() {
         vault().putString("smb_password", "private-nas-password")
@@ -94,6 +100,7 @@ class PrivateSettingsVaultTest {
         assertThat(vault().getString("smb_password")).isEqualTo("private-nas-password")
     }
 
+    /** Checks: migration conflict preserves both copies and all other pending keys. */
     @Test
     fun `migration conflict preserves both copies and all other pending keys`() {
         vault().putString("smb_password", "existing-password")
@@ -110,6 +117,7 @@ class PrivateSettingsVaultTest {
         assertThat(plain.all).isEqualTo(originalPlain)
     }
 
+    /** Checks: wrong wrapping key cannot remove plaintext during migration. */
     @Test
     fun `wrong wrapping key cannot remove plaintext during migration`() {
         vault().putString("smb_password", "private-nas-password")
@@ -125,6 +133,7 @@ class PrivateSettingsVaultTest {
         assertThat(encrypted.getString("smb_password", null)).isEqualTo(savedEnvelope)
     }
 
+    /** Checks: ciphertext copied to another setting key is rejected without deleting it. */
     @Test
     fun `ciphertext copied to another setting key is rejected without deleting it`() {
         vault().putString("smb_password", "private-nas-password")
@@ -137,5 +146,6 @@ class PrivateSettingsVaultTest {
         assertThat(vault().getString("smb_password")).isEqualTo("private-nas-password")
     }
 
+    /** Creates a private-settings vault using the test's deterministic key provider. */
     private fun vault() = PrivateSettingsVault(context) { wrappingKey }
 }

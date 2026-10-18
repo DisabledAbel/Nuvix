@@ -55,6 +55,7 @@ import kotlinx.coroutines.launch
  */
 class PairingServer(private val scope: CoroutineScope) {
 
+    /** Address and authorization information for one local phone-pairing session. */
     data class Session(
         /** What the QR code encodes, e.g. `http://192.168.0.14:41234/?t=…` */
         val url: String,
@@ -67,11 +68,15 @@ class PairingServer(private val scope: CoroutineScope) {
         val shortUrl: String get() = "$host:$port"
     }
 
+    /** Observable lifecycle of the local phone-pairing server. */
     sealed interface State {
+        /** Pairing state with no active listener. */
         data object Idle : State
+        /** Pairing state exposing an active session for a phone browser. */
         data class Listening(val session: Session) : State
         /** The phone submitted details. The UI takes it from here. */
         data class Received(val draft: Source) : State
+        /** Pairing startup or request failure with a display-safe explanation. */
         data class Failed(val reason: String) : State
     }
 
@@ -84,6 +89,7 @@ class PairingServer(private val scope: CoroutineScope) {
     private var wrongCodeAttempts = 0
     @Volatile private var running = false
 
+    /** Starts a fresh local pairing listener and publishes its session. */
     fun start() {
         if (running) return
         val host = lanAddress()
@@ -144,6 +150,7 @@ class PairingServer(private val scope: CoroutineScope) {
         }
     }
 
+    /** Closes the active pairing listener and clears the session. */
     fun stop() {
         running = false
         runCatching { serverSocket?.close() }
@@ -155,6 +162,7 @@ class PairingServer(private val scope: CoroutineScope) {
 
     // ---- Request handling ------------------------------------------------------------------
 
+    /** Routes local pairing requests and checks session authorization. */
     private fun handle(client: Socket) {
         client.soTimeout = SOCKET_TIMEOUT_MILLIS
 
@@ -208,6 +216,7 @@ class PairingServer(private val scope: CoroutineScope) {
         }
     }
 
+    /** Validates submitted provider fields and saves the paired source. */
     private fun handleSubmit(output: java.io.OutputStream, body: String) {
         val form = PairingHttp.parseFormEncoded(body)
 

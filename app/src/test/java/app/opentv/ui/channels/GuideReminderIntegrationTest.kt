@@ -24,6 +24,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
+/** Regression tests for guide reminder integration. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -35,19 +36,24 @@ class GuideReminderIntegrationTest {
     private val channel = Channel(id = 11, sourceId = 1, streamId = "11", name = "Original channel",
         customName = "My channel", categoryId = null, logoUrl = null, epgChannelId = "channel", number = 11,
         streamUrl = "https://example.invalid/live/11.ts")
+    /** Builds a synthetic program with configurable timing and guide metadata. */
     private fun programme(start: Long = now + 60_000, end: Long = now + 120_000) =
         Programme(feedId = 1, epgChannelId = "channel", title = "Upcoming programme",
             startUtcMillis = start, endUtcMillis = end)
     private val alarms get() = shadowOf(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).scheduledAlarms
+    /** Reads reminder identities from alarms registered with Robolectric's AlarmManager. */
     private fun alarmReminderIds() = alarms.map { ReminderScheduler.reminderIdFrom(shadowOf(it.operation).savedIntent) }
 
+    /** Creates isolated fixtures before each test. */
     @Before fun setup() {
         database = Room.inMemoryDatabaseBuilder(context, OpenTvDatabase::class.java).allowMainThreadQueries().build()
         repository = ReminderRepository(database.reminders())
     }
 
+    /** Releases test resources and restores shared state after each test. */
     @After fun close() { database.close() }
 
+    /** Checks: guide reminder persists metadata and arms one immutable broadcast without retuning. */
     @Test fun `guide reminder persists metadata and arms one immutable broadcast without retuning`() = runBlocking {
         val future = programme()
         assertTrue(setReminder(repository, context, channel, future, autoTune = true, nowMillis = now))
@@ -74,6 +80,7 @@ class GuideReminderIntegrationTest {
         assertTrue(repository.forProgramme(channel.id, future.startUtcMillis)!!.autoTune)
     }
 
+    /** Checks: canceling one channel slot preserves simultaneous reminder on another channel. */
     @Test fun `canceling one channel slot preserves simultaneous reminder on another channel`() = runBlocking {
         val future = programme()
         setReminder(repository, context, channel, future, autoTune = false, nowMillis = now)
@@ -88,6 +95,7 @@ class GuideReminderIntegrationTest {
         assertEquals(second, ReminderRepository(database.reminders()).forProgramme(22, future.startUtcMillis))
     }
 
+    /** Checks: past current and malformed programmes cannot create a row or alarm. */
     @Test fun `past current and malformed programmes cannot create a row or alarm`() = runBlocking {
         for (invalid in listOf(programme(now - 1, now + 1000), programme(now, now + 1000),
             programme(now + 1000, now + 1000), programme(now + 1000, now), programme(-1, now))) {
@@ -97,6 +105,7 @@ class GuideReminderIntegrationTest {
         assertTrue(alarms.isEmpty())
     }
 
+    /** Checks: reboot rearm query retains only future unfired reminders. */
     @Test fun `reboot rearm query retains only future unfired reminders`() = runBlocking {
         val base = Reminder(channelId = channel.id, channelName = channel.name, title = "Program",
             startUtcMillis = now + 60_000, endUtcMillis = now + 120_000)

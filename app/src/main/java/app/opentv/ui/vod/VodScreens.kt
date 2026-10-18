@@ -325,6 +325,7 @@ internal fun SeriesPosterRow(title: String, series: List<Series>, onOpenSeries: 
     }
 }
 
+/** Displays a VOD shelf heading and its optional navigation action. */
 @Composable
 internal fun SectionHeader(title: String) {
     Text(
@@ -443,6 +444,7 @@ private fun Badge(text: String, modifier: Modifier = Modifier, highlight: Boolea
 
 // ---- Continue watching -------------------------------------------------------------------------
 
+/** Displays resumable media items with their saved playback progress. */
 @Composable
 internal fun ContinueWatchingRow(
     items: List<VodViewModel.ResumeItem>,
@@ -575,6 +577,7 @@ private fun ProviderChips(
     }
 }
 
+/** Displays a compact focusable VOD category or filter choice. */
 @Composable
 private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -637,6 +640,7 @@ private fun SearchAffordance(onOpenSearch: () -> Unit) {
     }
 }
 
+/** Displays empty-catalog guidance for the selected VOD view. */
 @Composable
 private fun EmptyVod(title: String, body: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -648,6 +652,7 @@ private fun EmptyVod(title: String, body: String) {
     }
 }
 
+/** Displays loading feedback while the VOD catalog is being refreshed. */
 @Composable
 private fun LoadingVod(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -6,12 +6,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
+/** Purpose of a connection reservation used for admission and reclaim policy. */
 enum class ConnectionPurpose { LIVE, MULTIVIEW, PREVIEW, RECORDING }
+/** Lifecycle stage of a locally tracked provider connection. */
 enum class ReservationState { PENDING, ACTIVE, RELEASING, RELEASED, FAILED }
 
 /** One network connection attempt. A newer attempt always uses a new generation. */
 data class ConnectionRequest(val sessionId: String, val generation: Long, val sourceId: Long, val purpose: ConnectionPurpose)
 
+/** Opaque ownership token binding one connection to an account and session generation. */
 @ConsistentCopyVisibility
 data class ReservationToken internal constructor(
     val reservationId: String,
@@ -22,17 +25,24 @@ data class ReservationToken internal constructor(
     val purpose: ConnectionPurpose,
 )
 
+/** Request-specific confirmation challenge for another connection with an unknown allowance. */
 @ConsistentCopyVisibility
 data class UnknownConnectionChallenge internal constructor(val challengeId: String, val request: ConnectionRequest, val accountKey: String)
+/** Single-use approval minted for a confirmed unknown-capacity challenge. */
 @ConsistentCopyVisibility
 data class UnknownConnectionApproval internal constructor(val approvalId: String)
 
+/** Admission outcome containing a reservation, a confirmation challenge or a denial reason. */
 sealed interface ReservationResult {
+    /** Successful admission with the token owning the reserved capacity. */
     data class Reserved(val token: ReservationToken) : ReservationResult
+    /** Admission awaiting explicit confirmation for this particular request. */
     data class ApprovalRequired(val challenge: UnknownConnectionChallenge) : ReservationResult
+    /** Rejected admission with an explanation suitable for the UI. */
     data class Denied(val reason: String) : ReservationResult
 }
 
+/** Manual and observed connection allowances; null represents an unknown limit. */
 data class AccountConnectionPolicy(
     val maximumConnections: Int? = null,
     val useProviderMetadata: Boolean = true,
@@ -41,7 +51,9 @@ data class AccountConnectionPolicy(
     val effectiveMaximum: Int? get() = if (useProviderMetadata) providerMaximum else maximumConnections
 }
 
+/** Reservation token paired with its current lifecycle state. */
 data class ConnectionReservation(val token: ReservationToken, val state: ReservationState)
+/** Account policy, associated sources, local reservations and observed provider usage. */
 data class AccountConnectionSnapshot(
     val accountKey: String,
     val sourceIds: Set<Long>,
@@ -63,6 +75,7 @@ data class AccountConnectionSnapshot(
  * All mutations, including approval consumption and reservation insertion, share one lock.
  */
 class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().toString() }) {
+    /** Mutable policy and observational counters for one locally tracked account. */
     private data class Account(
         var policy: AccountConnectionPolicy = AccountConnectionPolicy(),
         var reportedActive: Int? = null,
@@ -81,6 +94,7 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
     private val _snapshots = MutableStateFlow<List<AccountConnectionSnapshot>>(emptyList())
     val snapshots: StateFlow<List<AccountConnectionSnapshot>> = _snapshots.asStateFlow()
 
+    /** Registers a source and policy, refusing to move a source with outstanding reservations. */
     @Synchronized
     fun registerSource(sourceId: Long, accountKey: String, policy: AccountConnectionPolicy? = null): Boolean {
         require(sourceId > 0 && accountKey.isNotBlank())
@@ -93,10 +107,13 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return true
     }
 
+    /** Returns the opaque account key associated with a source, or null if unregistered. */
     @Synchronized fun accountKeyForSource(sourceId: Long): String? = sources[sourceId]
+    /** Returns the current account snapshot for a source, or null if unregistered. */
     @Synchronized fun snapshotForSource(sourceId: Long): AccountConnectionSnapshot? =
         _snapshots.value.firstOrNull { sourceId in it.sourceIds }
 
+    /** Updates a registered account policy and invalidates outstanding approvals. */
     @Synchronized
     fun configure(sourceId: Long, policy: AccountConnectionPolicy): Boolean {
         val key = sources[sourceId] ?: return false
@@ -106,6 +123,7 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return true
     }
 
+    /** Records provider allowance and usage observations and invalidates stale approvals. */
     @Synchronized
     fun observeProvider(sourceId: Long, maximum: Int?, active: Int?, observedAt: Long) {
         val key = sources[sourceId] ?: return
@@ -124,6 +142,7 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return reservations.values.none { it.token.accountKey == old || it.token.accountKey == targetKey }
     }
 
+    /** Moves a registered source to another account only when both pools are idle. */
     @Synchronized
     fun reassociateSource(sourceId: Long, targetKey: String, policy: AccountConnectionPolicy? = null): Boolean {
         if (!canReassociate(sourceId, targetKey)) return false
@@ -146,6 +165,10 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return true
     }
 
+    /**
+     * Attempts generation-scoped admission, consuming any matching approval and returning the
+     * reservation outcome.
+     */
     @Synchronized
     fun reserve(request: ConnectionRequest, approval: UnknownConnectionApproval? = null): ReservationResult {
         if (request.sessionId.isBlank() || request.generation < 0) return ReservationResult.Denied("Invalid connection request.")
@@ -193,15 +216,19 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return UnknownConnectionApproval(newId()).also { approvals[it.approvalId] = challenge }
     }
 
+    /** Discards a pending unknown-capacity challenge without admitting its request. */
     @Synchronized
     fun discardChallenge(challenge: UnknownConnectionChallenge) {
         if (challenges[challenge.challengeId] == challenge) challenges.remove(challenge.challengeId)
     }
 
+    /** Returns the tracked state only when the complete reservation token matches. */
     @Synchronized fun reservationState(token: ReservationToken): ReservationState? =
         (reservations[token.reservationId] ?: terminalReservations[token.reservationId])?.takeIf { it.token == token }?.state
 
+    /** Marks a matching pending reservation active after its connection opens. */
     @Synchronized fun markActive(token: ReservationToken): Boolean = transition(token, setOf(ReservationState.PENDING), ReservationState.ACTIVE)
+    /** Marks a matching connection as releasing while retaining its capacity until close completes. */
     @Synchronized fun beginRelease(token: ReservationToken): Boolean = transition(token, setOf(ReservationState.PENDING, ReservationState.ACTIVE), ReservationState.RELEASING)
 
     /** Returns false after the first release; an old callback never touches a newer token. */
@@ -214,6 +241,7 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return true
     }
 
+    /** Finishes a matching reservation as failed and optionally records a connection-limit error. */
     @Synchronized
     fun fail(token: ReservationToken, knownConnectionLimit: Boolean = false): Boolean {
         if (reservations[token.reservationId]?.token != token) return false
@@ -224,10 +252,12 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         return true
     }
 
+    /** Clears locally observed connection-limit errors for the source account. */
     @Synchronized fun clearKnownConnectionLimitErrors(sourceId: Long) {
         sources[sourceId]?.let { accounts[it]?.limitErrors = 0 }; publish()
     }
 
+    /** Temporarily blocks optional admission while a recording reclaims account capacity. */
     @Synchronized internal fun beginRecordingReclaim(sourceId: Long): String? {
         val key = sources[sourceId] ?: return null
         val recordingCount = reservations.values.count {
@@ -239,30 +269,37 @@ class ConnectionAllocator(private val newId: () -> String = { UUID.randomUUID().
         if (maximum?.let { recordingCount >= it } ?: (recordingCount > 0)) return null
         return key.takeIf { reclaiming.add(it) }
     }
+    /** Ends the temporary optional-admission block for an account. */
     @Synchronized internal fun endRecordingReclaim(accountKey: String) { reclaiming.remove(accountKey) }
+    /** Lists active or pending preview and multiview reservations eligible for reclaim. */
     @Synchronized internal fun optionalReservations(accountKey: String): List<ReservationToken> = reservations.values
         .map { it.token }.filter { it.accountKey == accountKey && it.purpose != ConnectionPurpose.RECORDING }
         .sortedBy { if (it.purpose == ConnectionPurpose.PREVIEW) 0 else 1 }
 
+    /** Changes a matching token's state only when its current state is allowed. */
     private fun transition(token: ReservationToken, from: Set<ReservationState>, state: ReservationState): Boolean {
         val current = reservations[token.reservationId] ?: return false
         if (current.token != token || current.state !in from) return false
         reservations[token.reservationId] = current.copy(state = state); publish(); return true
     }
+    /** Discards challenges and approvals associated with an account. */
     private fun invalidateApprovals(key: String) {
         challenges.entries.removeAll { it.value.accountKey == key }
         approvals.entries.removeAll { it.value.accountKey == key }
     }
+    /** Records a terminal reservation state and its completed session generation. */
     private fun finish(token: ReservationToken, state: ReservationState) {
         completedGeneration[token.sessionId] = maxOf(completedGeneration[token.sessionId] ?: -1, token.generation)
         terminalReservations[token.reservationId] = ConnectionReservation(token, state)
         while (terminalReservations.size > 64) terminalReservations.remove(terminalReservations.keys.first())
     }
+    /** Normalizes nonpositive manual or provider limits to unknown capacity. */
     private fun validPolicy(policy: AccountConnectionPolicy): AccountConnectionPolicy {
         require(policy.maximumConnections == null || policy.maximumConnections > 0)
         require(policy.providerMaximum == null || policy.providerMaximum > 0)
         return policy
     }
+    /** Publishes immutable account snapshots after a ledger change. */
     private fun publish() {
         _snapshots.value = accounts.mapNotNull { (key, value) ->
             val ids = sources.filterValues { it == key }.keys.toSet()

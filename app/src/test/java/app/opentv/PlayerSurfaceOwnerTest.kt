@@ -19,6 +19,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class PlayerSurfaceOwnerTest {
+    /**
+     * Checks: fullscreen preview and recreated Activity views transfer one player without changing
+     * intent.
+     */
     @Test
     fun `fullscreen preview and recreated Activity views transfer one player without changing intent`() {
         val context = RuntimeEnvironment.getApplication()
@@ -62,6 +66,7 @@ class PlayerSurfaceOwnerTest {
         }
     }
 
+    /** Checks: missing session surface falls back without creating or retaining a player. */
     @Test
     fun `missing session surface falls back without creating or retaining a player`() {
         val context = RuntimeEnvironment.getApplication()

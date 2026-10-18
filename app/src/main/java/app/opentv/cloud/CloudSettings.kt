@@ -10,14 +10,17 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.ByteString.Companion.decodeBase64
 
+/** Supabase project URL and public client key stored in the local cloud vault. */
 @Serializable
 internal data class CloudConfig(val url: String, val publishableKey: String)
 
+/** Authenticated owner, email and expiring access and refresh tokens kept on this device. */
 @Serializable
 internal data class CloudSession(
     val userId: String, val email: String, val accessToken: String, val refreshToken: String, val expiresAtMillis: Long,
 )
 
+/** Stores encrypted cloud configuration, session data and local synchronization choices. */
 internal class CloudSettings(context: Context) {
     private val prefs = context.getSharedPreferences("nuvix_cloud_flags", Context.MODE_PRIVATE)
     val vault = CloudVault(context)
@@ -36,13 +39,17 @@ internal class CloudSettings(context: Context) {
     val deviceId: String get() = prefs.getString("device", null) ?: UUID.randomUUID().toString().also {
         prefs.edit().putString("device", it).commit()
     }
+    /** Reads the saved project configuration, returning null when unavailable. */
     fun config(): CloudConfig? = vault.read("config")?.let { json.decodeFromString(CloudConfig.serializer(), it) }
+    /** Reads the saved authenticated session, returning null when unavailable. */
     fun session(): CloudSession? = vault.read("session")?.let { json.decodeFromString(CloudSession.serializer(), it) }
+    /** Persists refreshed authentication data in the encrypted vault. */
     fun saveSession(session: CloudSession) {
         require(UUID.fromString(session.userId).toString() == session.userId) { "Invalid cloud account." }
         vault.write("session", json.encodeToString(CloudSession.serializer(), session))
     }
 
+    /** Validates and saves a project URL and public client key. */
     fun configure(url: String, key: String) {
         val parsed = url.trim().toHttpUrlOrNull()
         require(parsed != null && parsed.isHttps && parsed.username.isEmpty() && parsed.password.isEmpty() &&
@@ -58,6 +65,7 @@ internal class CloudSettings(context: Context) {
         vault.write("config", json.encodeToString(CloudConfig.serializer(), config))
     }
 
+    /** Removes local authentication and owner-specific synchronization state. */
     fun clearSession() {
         enabled = false
         vault.remove("session")
@@ -69,6 +77,7 @@ internal class CloudSettings(context: Context) {
         lastSynced = 0
     }
 
+    /** Clears cloud configuration, session data and synchronization preferences. */
     fun reset() { clearSession(); vault.remove("config"); lastSynced = 0 }
 }
 

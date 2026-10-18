@@ -48,25 +48,32 @@ fun newestRecord(first: CloudRecord, second: CloudRecord): CloudRecord {
     }
 }
 
+/** Combines record kind, profile and media keys for legacy cloud conflict resolution. */
 fun CloudRecord.identity(): String = "$kind:$profileKey:$recordKey"
 
 /** Input is selected public metadata, never a provider URL, login, MAC, or local database ID. */
 object CloudIdentity {
+    /** Returns a SHA-256 identity without exposing the original identifying text. */
     fun hash(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    /** Normalizes identity text with stable casing and whitespace. */
     private fun normalized(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
 
+    /** Builds a portable profile identity from its normalized name. */
     fun profile(name: String): String = hash("profile:${normalized(name)}")
+    /** Builds a portable channel identity from its normalized name and any safe EPG ID. */
     fun channel(name: String, epgId: String?): String {
         // Some unusual feeds put URLs in the ID field. Do not even fingerprint those values.
         val safeEpgId = epgId?.takeIf { it.matches(Regex("[A-Za-z0-9._-]{1,128}")) }.orEmpty()
         return hash("channel:${normalized(name)}:${normalized(safeEpgId)}")
     }
+    /** Builds a portable movie or series identity using metadata IDs when available. */
     fun media(kind: String, title: String, year: Int?, tmdbId: String?): String {
         val tmdb = tmdbId?.toLongOrNull()?.takeIf { it > 0 }
         return hash(if (tmdb != null) "$kind:tmdb:$tmdb" else "$kind:title:${normalized(title)}:${year ?: 0}")
     }
+    /** Builds an episode identity from its parent series, season and episode number. */
     fun episode(seriesKey: String, season: Int, number: Int): String = hash("episode:$seriesKey:$season:$number")
 }

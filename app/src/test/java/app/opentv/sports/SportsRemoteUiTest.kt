@@ -20,12 +20,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** Regression tests for sports remote ui. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], qualifiers = "w1280dp-h720dp-land")
 @OptIn(ExperimentalTestApi::class)
 class SportsRemoteUiTest {
     @get:Rule val compose = createComposeRule()
     private val event = SportsMatching.inferred(sportsProgramme(), SPORTS_NOW)!!
+    /** Checks: dpad Focus Does Not Tune And Select Only Opens Game Details. */
     @Test fun dpadFocusDoesNotTuneAndSelectOnlyOpensGameDetails() {
         var focused = 0; var opened = 0
         compose.setContent { MaterialTheme {
@@ -42,6 +44,7 @@ class SportsRemoteUiTest {
         card.performKeyInput { pressKey(Key.DirectionRight) }
         compose.onNodeWithText("Other control").assertIsFocused()
     }
+    /** Checks: stream Switch Requires Explicit Watch Selection And Focus Is Restorable. */
     @Test fun streamSwitchRequiresExplicitWatchSelectionAndFocusIsRestorable() {
         var tunes = 0
         compose.setContent { MaterialTheme {
@@ -57,6 +60,7 @@ class SportsRemoteUiTest {
         watch.assertIsFocused()
         compose.runOnIdle { assertEquals(1, tunes) }
     }
+    /** Checks: suggested Streams Cannot Be Opened Until Confirmed And Quality Is Explicitly Unverified. */
     @Test fun suggestedStreamsCannotBeOpenedUntilConfirmedAndQualityIsExplicitlyUnverified() {
         var confirms = 0; var tunes = 0
         val stream = sportsStream(sportsChannel().copy(qualityLabel = "4K"), MatchConfidence.POSSIBLE)
@@ -103,6 +107,7 @@ class SportsRemoteUiTest {
         providerTwo.performKeyInput { pressKey(Key.DirectionCenter) }
         compose.runOnIdle { assertEquals(listOf(second), choices) }
     }
+    /** Checks: returning Game Card Requests Focus Without Opening Playback. */
     @Test fun returningGameCardRequestsFocusWithoutOpeningPlayback() {
         var opens = 0
         compose.setContent { MaterialTheme { SportsGameCard(SportsEventCard(event, 2), SPORTS_NOW, false,
@@ -110,6 +115,7 @@ class SportsRemoteUiTest {
         compose.onNodeWithText(event.title).assertIsFocused()
         compose.runOnIdle { assertEquals(0, opens) }
     }
+    /** Checks: cached Event Card Clearly Labels Inference And Does Not Invent Score. */
     @Test fun cachedEventCardClearlyLabelsInferenceAndDoesNotInventScore() {
         compose.setContent { MaterialTheme {
             Column { SportsGameCard(SportsEventCard(event, 2), SPORTS_NOW, true, onClick = {}) }

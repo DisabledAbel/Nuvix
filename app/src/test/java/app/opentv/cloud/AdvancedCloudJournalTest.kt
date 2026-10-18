@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** Regression tests for advanced cloud journal. */
 class AdvancedCloudJournalTest {
     private val ownerA = "11111111-1111-1111-1111-111111111111"
     private val ownerB = "22222222-2222-2222-2222-222222222222"
@@ -12,19 +13,24 @@ class AdvancedCloudJournalTest {
     private val group = "33333333-3333-3333-3333-333333333333"
     private val enabled = setOf(AdvancedSyncCategory.CUSTOM_GROUPS, AdvancedSyncCategory.APP_FAVOURITES,
         AdvancedSyncCategory.HOME_PREFERENCES, AdvancedSyncCategory.COMPATIBLE_SETTINGS)
+    /** Mutable in-memory journal storage used to simulate reloads and persistence failures. */
     private class Storage {
         var encryptedValue: String? = null
         var failWrites = false
+        /** Creates a journal backed by the fixture's mutable in-memory storage. */
         fun journal() = AdvancedCloudJournal({ encryptedValue }, {
             if (failWrites) throw java.io.IOException("Simulated interrupted durable write")
             encryptedValue = it
         })
     }
+    /** Builds a synthetic custom-group name mutation for cloud merge tests. */
     private fun name(value: String = "News", time: Long = 1000) =
         AdvancedCloudRecord(group, "group_name", time, device, textValue = value)
+    /** Builds a synthetic ordered application-favorites record for cloud tests. */
     private fun apps(entries: List<String>, time: Long = 1000) =
         AdvancedCloudRecord("apps", "app_order", time, device, entries = entries)
 
+    /** Checks: offline Outbox And Owner Survive A Process Restart. */
     @Test fun offlineOutboxAndOwnerSurviveAProcessRestart() {
         val store = Storage()
         val first = store.journal()
@@ -36,6 +42,7 @@ class AdvancedCloudJournalTest {
         assertEquals(1L, reopened.pending(ownerA, enabled, 1000).single().updatedAtMillis)
     }
 
+    /** Checks: rapidly Changing One Record Coalesces To Final Intent. */
     @Test fun rapidlyChangingOneRecordCoalescesToFinalIntent() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -45,6 +52,7 @@ class AdvancedCloudJournalTest {
         assertEquals(1001L, queued.updatedAtMillis)
     }
 
+    /** Checks: initial Default Seed Cannot Override An Existing Older Cloud Edit. */
     @Test fun initialDefaultSeedCannotOverrideAnExistingOlderCloudEdit() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -54,6 +62,7 @@ class AdvancedCloudJournalTest {
         assertEquals(0, journal.pendingCount(ownerA))
     }
 
+    /** Checks: initial Default Seed Loses To Other Device Seed Regardless Device Id Tie. */
     @Test fun initialDefaultSeedLosesToOtherDeviceSeedRegardlessDeviceIdTie() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -63,6 +72,7 @@ class AdvancedCloudJournalTest {
         assertEquals(0, journal.pendingCount(ownerA))
     }
 
+    /** Checks: newly Available Local Content Does Not Author A Change Over Known Remote Value. */
     @Test fun newlyAvailableLocalContentDoesNotAuthorAChangeOverKnownRemoteValue() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -72,6 +82,7 @@ class AdvancedCloudJournalTest {
         assertEquals("Remote", journal.mergeRemote(ownerA, emptyList(), enabled, 2000).single().textValue)
     }
 
+    /** Checks: catalogue Disappearance And Reimport Defaults Never Become Favourite Removals Or Resets. */
     @Test fun catalogueDisappearanceAndReimportDefaultsNeverBecomeFavouriteRemovalsOrResets() {
         val selected = setOf(AdvancedSyncCategory.CHANNEL_ORGANIZATION, AdvancedSyncCategory.FAVOURITE_REMOVALS)
         val cloudValues = listOf(
@@ -93,6 +104,7 @@ class AdvancedCloudJournalTest {
         assertEquals(cloudValues.toSet(), journal.mergeRemote(ownerA, emptyList(), selected, 3000).toSet())
     }
 
+    /** Checks: missing And Reimported Content Preserves Unsynced Local Intent As Well As Cloud State. */
     @Test fun missingAndReimportedContentPreservesUnsyncedLocalIntentAsWellAsCloudState() {
         val selected = setOf(AdvancedSyncCategory.FAVOURITE_REMOVALS)
         val journal = Storage().journal()
@@ -107,6 +119,7 @@ class AdvancedCloudJournalTest {
         assertTrue(journal.pending(ownerA, selected, 4000).single().boolValue!!)
     }
 
+    /** Checks: explicit Sparse Reset After Absence Is Still A New Edit. */
     @Test fun explicitSparseResetAfterAbsenceIsStillANewEdit() {
         val selected = setOf(AdvancedSyncCategory.FAVOURITE_REMOVALS)
         val initial = AdvancedCloudRecord("a".repeat(64), "channel_favourite_state", 1000, device, boolValue = true)
@@ -121,6 +134,7 @@ class AdvancedCloudJournalTest {
         assertEquals(3000L, pending.updatedAtMillis)
     }
 
+    /** Checks: exact Acknowledgement Does Not Drop An Edit Made During Upload. */
     @Test fun exactAcknowledgementDoesNotDropAnEditMadeDuringUpload() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -133,6 +147,7 @@ class AdvancedCloudJournalTest {
         assertEquals(0, journal.pendingCount(ownerA))
     }
 
+    /** Checks: interrupted Upload Replays Identical Immutable Versions. */
     @Test fun interruptedUploadReplaysIdenticalImmutableVersions() {
         val store = Storage()
         val journal = store.journal()
@@ -146,6 +161,7 @@ class AdvancedCloudJournalTest {
         assertEquals(0, journal.pendingCount(ownerA))
     }
 
+    /** Checks: remote Application Baseline Prevents An Upload Feedback Loop. */
     @Test fun remoteApplicationBaselinePreventsAnUploadFeedbackLoop() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -158,6 +174,7 @@ class AdvancedCloudJournalTest {
         assertEquals("User changed it", journal.pending(ownerA, enabled, 10_000).single().textValue)
     }
 
+    /** Checks: disabled Categories Neither Upload Nor Download And Keep Their Queue. */
     @Test fun disabledCategoriesNeitherUploadNorDownloadAndKeepTheirQueue() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -170,6 +187,7 @@ class AdvancedCloudJournalTest {
         assertEquals("Disabled edit", journal.pending(ownerA, enabled, 3000).single().textValue)
     }
 
+    /** Checks: unavailable References Remain Known Until Later Reconciliation. */
     @Test fun unavailableReferencesRemainKnownUntilLaterReconciliation() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -181,6 +199,7 @@ class AdvancedCloudJournalTest {
         assertEquals(0, journal.pendingCount(ownerA))
     }
 
+    /** Checks: missing Apps Are Preserved And Explicit Unpin Propagates As Ordered Collection. */
     @Test fun missingAppsArePreservedAndExplicitUnpinPropagatesAsOrderedCollection() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -193,6 +212,7 @@ class AdvancedCloudJournalTest {
         assertEquals(listOf("com.missing.app"), journal.pending(ownerA, enabled, 3000).single().entries)
     }
 
+    /** Checks: independent Group Name And Membership Edits Survive Together. */
     @Test fun independentGroupNameAndMembershipEditsSurviveTogether() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -205,6 +225,7 @@ class AdvancedCloudJournalTest {
         assertEquals(members.entries, winners.single { it.kind == "group_members" }.entries)
     }
 
+    /** Checks: newer Remote Version Wins While Pending Exact Version Still Requires Acknowledgement. */
     @Test fun newerRemoteVersionWinsWhilePendingExactVersionStillRequiresAcknowledgement() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -218,6 +239,7 @@ class AdvancedCloudJournalTest {
         assertEquals(listOf(remote), journal.mergeRemote(ownerA, emptyList(), enabled, 3000))
     }
 
+    /** Checks: group Tombstone Survives Newer Remote And Local Rename. */
     @Test fun groupTombstoneSurvivesNewerRemoteAndLocalRename() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -231,6 +253,7 @@ class AdvancedCloudJournalTest {
         assertTrue(journal.mergeRemote(ownerA, emptyList(), enabled, 4000).single().deleted)
     }
 
+    /** Checks: future Clock Revision Waits Durably Instead Of Being Discarded. */
     @Test fun futureClockRevisionWaitsDurablyInsteadOfBeingDiscarded() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
@@ -241,6 +264,7 @@ class AdvancedCloudJournalTest {
         assertEquals("Future", journal.pending(ownerA, enabled, 900_000).single().textValue)
     }
 
+    /** Checks: account Switch Clears Queue And Acknowledged State Before Any Replay. */
     @Test fun accountSwitchClearsQueueAndAcknowledgedStateBeforeAnyReplay() {
         val store = Storage()
         val journal = store.journal()
@@ -254,12 +278,14 @@ class AdvancedCloudJournalTest {
         assertFalse(store.encryptedValue.orEmpty().contains("com.private.app"))
     }
 
+    /** Checks: wrong Account Cannot Read Queue Without Binding. */
     @Test(expected = IllegalStateException::class) fun wrongAccountCannotReadQueueWithoutBinding() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)
         journal.pending(ownerB, enabled, 1000)
     }
 
+    /** Checks: interrupted Atomic Write Leaves Previous Queue Available. */
     @Test fun interruptedAtomicWriteLeavesPreviousQueueAvailable() {
         val store = Storage()
         val journal = store.journal()
@@ -271,12 +297,14 @@ class AdvancedCloudJournalTest {
         assertEquals("Durable", store.journal().pending(ownerA, enabled, 2000).single().textValue)
     }
 
+    /** Checks: corrupt Encrypted Payload Fails Closed. */
     @Test(expected = IllegalStateException::class) fun corruptEncryptedPayloadFailsClosed() {
         val store = Storage()
         store.encryptedValue = "{\"owner\":\"$ownerA\",\"provider_password\":\"not allowed\"}"
         store.journal().bindOwner(ownerA)
     }
 
+    /** Checks: malformed Local Records Never Enter The Outbox. */
     @Test fun malformedLocalRecordsNeverEnterTheOutbox() {
         val journal = Storage().journal()
         journal.bindOwner(ownerA)

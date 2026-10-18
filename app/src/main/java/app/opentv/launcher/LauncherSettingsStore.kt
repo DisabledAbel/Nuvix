@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 
+/** Supported initial application destination when entering the launcher. */
 enum class StartupDestination(val title: String) {
     HOME("Nuvix Home"),
     LIVE_TV("Live TV"),
@@ -18,6 +19,7 @@ enum class StartupDestination(val title: String) {
     APPS("Apps"),
 }
 
+/** Saved startup destination and ordered favorite application packages. */
 data class LauncherPreferences(
     val startupDestination: StartupDestination = StartupDestination.HOME,
     val favoritePackages: List<String> = emptyList(),
@@ -25,11 +27,14 @@ data class LauncherPreferences(
 
 /** Ordered operations shared by app tiles and the local preferences store. */
 object AppOrder {
+    /** Adds a package to the favorite order without creating duplicates. */
     fun pin(order: List<String>, id: String): List<String> =
         if (id.isBlank()) order.distinct() else (order + id).distinct()
 
+    /** Removes a package from the favorite order. */
     fun unpin(order: List<String>, id: String): List<String> = order.filterNot { it == id }.distinct()
 
+    /** Moves an existing favorite within the supported ordering bounds. */
     fun move(order: List<String>, id: String, offset: Int): List<String> {
         val result = order.distinct().toMutableList()
         val from = result.indexOf(id)
@@ -39,6 +44,7 @@ object AppOrder {
         return result
     }
 
+    /** Filters favorite ordering to packages still present in the installed-app set. */
     fun retainInstalled(order: List<String>, installed: Set<String>): List<String> =
         order.filter { it in installed }.distinct()
 }
@@ -60,13 +66,17 @@ class LauncherSettingsStore(context: Context) {
 
     init { storage.registerOnSharedPreferenceChangeListener(listener) }
 
+    /** Persists and publishes the selected initial application destination. */
     fun setStartupDestination(destination: StartupDestination) {
         storage.edit().putString("startup_destination", destination.name).apply()
         state.value = read()
     }
 
+    /** Adds an eligible package to persisted application favorites. */
     fun pin(packageName: String) = updateFavorites { AppOrder.pin(it, packageName) }
+    /** Removes a package from persisted application favorites. */
     fun unpin(packageName: String) = updateFavorites { AppOrder.unpin(it, packageName) }
+    /** Moves a favorite application within its saved order. */
     fun moveFavorite(packageName: String, offset: Int) = updateFavorites { AppOrder.move(it, packageName, offset) }
     /**
      * Availability is a display filter only. A package missing on this TV may be installed on
@@ -97,6 +107,7 @@ class LauncherSettingsStore(context: Context) {
     /** Release the listener when a screen leaves composition. */
     fun close() { storage.unregisterOnSharedPreferenceChangeListener(listener) }
 
+    /** Validates and saves the ordered favorite package list. */
     private fun updateFavorites(update: (List<String>) -> List<String>) {
         val previous = read().favoritePackages
         val next = update(previous).filter(::isSupportedPackage).distinct()
@@ -104,6 +115,7 @@ class LauncherSettingsStore(context: Context) {
         state.value = read()
     }
 
+    /** Restores launcher preferences with defaults for malformed stored values. */
     private fun read(): LauncherPreferences {
         val destination = runCatching {
             StartupDestination.valueOf(storage.getString("startup_destination", null).orEmpty())
@@ -120,6 +132,7 @@ class LauncherSettingsStore(context: Context) {
         const val MAX_FAVORITES = 200
         // Android package identifiers, never launch intents, filesystem paths, or URLs.
         private val PACKAGE_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
+        /** Checks whether a package name is eligible for the launcher favorite list. */
         fun isSupportedPackage(value: String): Boolean = value.length <= 255 && PACKAGE_NAME.matches(value)
     }
 }

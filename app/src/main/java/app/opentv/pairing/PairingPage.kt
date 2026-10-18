@@ -15,6 +15,7 @@ package app.opentv.pairing
  */
 object PairingPage {
 
+    /** Builds the phone pairing form for entering provider configuration. */
     fun form(token: String, error: String?): String = page(
         """
         <h1>Set up OpenTV</h1>
@@ -94,6 +95,7 @@ object PairingPage {
         """.trimIndent(),
     )
 
+    /** Builds a pairing status page with escaped user-facing text. */
     fun message(title: String, body: String): String = page(
         """
         <h1>${escape(title)}</h1>
@@ -101,6 +103,7 @@ object PairingPage {
         """.trimIndent(),
     )
 
+    /** Wraps pairing content in the shared HTML page template. */
     private fun page(content: String): String = """
         <!DOCTYPE html>
         <html lang="en">

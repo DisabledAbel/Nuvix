@@ -50,6 +50,7 @@ object RecordingBackgroundPrompt {
     fun shouldShow(context: Context): Boolean =
         !shownThisSession && !context.isIgnoringBatteryOptimizations()
 
+    /** Records that the recording background-readiness prompt has been shown. */
     fun markShown() {
         shownThisSession = true
     }

@@ -10,6 +10,7 @@ import javax.net.ssl.SSLException
 
 /** Never surface exception text: request URLs and signed playlist query strings can be credentials. */
 object ProviderDiagnostics {
+    /** Turns provider failures into display-safe diagnostics without exposing request credentials. */
     fun describe(error: Throwable): String {
         val causes = generateSequence(error) { it.cause }.take(8).toList()
         return when {

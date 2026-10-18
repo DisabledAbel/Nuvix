@@ -87,12 +87,14 @@ fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
     }
 }
 
+/** Obtains the shared application settings for the diagnostic controls. */
 @Composable
 private fun rememberSettings(): AppSettings {
     val context = LocalContext.current
     return remember(context) { AppSettings.get(context) }
 }
 
+/** Displays a focusable stream information action. */
 @Composable
 private fun DiagnosticButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -102,6 +104,7 @@ private fun DiagnosticButton(label: String, modifier: Modifier = Modifier, onCli
     }
 }
 
+/** Displays one stream diagnostic label and formatted value. */
 @Composable
 private fun DiagnosticRow(label: String, value: String) {
     var focused by remember { mutableStateOf(false) }
@@ -115,10 +118,14 @@ private fun DiagnosticRow(label: String, value: String) {
 }
 
 private const val UNAVAILABLE = "Unavailable"
+/** Formats an optional diagnostic value using an unavailable-value fallback. */
 private fun value(value: Any?) = value?.toString() ?: UNAVAILABLE
+/** Formats a diagnostic duration in seconds. */
 private fun seconds(ms: Long?) = ms?.let { String.format(Locale.ROOT, "%.1f s", it / 1000.0) } ?: UNAVAILABLE
+/** Formats a diagnostic transfer rate for display. */
 private fun rate(bps: Long?) = bps?.let { String.format(Locale.ROOT, "%.2f Mbps", it / 1_000_000.0) } ?: UNAVAILABLE
 
+/** Builds stream information rows from the current diagnostic snapshot and detail preferences. */
 internal fun diagnosticRows(s: DiagnosticSnapshot, detailed: Boolean, technical: Boolean): List<Pair<String, String>> = buildList {
     add("Playback health" to s.health.label)
     add("Playback status" to s.state)

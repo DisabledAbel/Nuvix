@@ -7,6 +7,7 @@ import app.opentv.data.model.Source
 import app.opentv.data.model.SourceKind
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/** Temporal program state used to determine eligible viewing, reminder and recording actions. */
 enum class GuideProgrammeStatus { INVALID, AIRING, UPCOMING, ENDED }
 
 /** UI eligibility only; playback, reminders and recording remain owned by their existing services. */

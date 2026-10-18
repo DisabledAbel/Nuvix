@@ -89,6 +89,7 @@ internal class AdvancedCloudJournal(
         owner: String, enabled: Set<AdvancedSyncCategory>, nowMillis: Long,
     ): List<AdvancedCloudRecord> = owned(owner).pending.filter { it.isSafe(nowMillis) && it.category in enabled }
 
+    /** Counts queued mutations belonging to the specified cloud owner. */
     @Synchronized fun pendingCount(owner: String): Int = owned(owner).pending.size
 
     /**
@@ -154,12 +155,15 @@ internal class AdvancedCloudJournal(
         if (next != current) save(next)
     }
 
+    /** Identifies records that change channel organization fields. */
     private fun isContentOrganization(record: AdvancedCloudRecord): Boolean =
         record.category == AdvancedSyncCategory.CHANNEL_ORGANIZATION || record.category == AdvancedSyncCategory.FAVOURITE_REMOVALS
 
+    /** Combines baseline and pending records using deterministic conflict resolution. */
     private fun winners(state: AdvancedJournalState): List<AdvancedCloudRecord> =
         (state.known + state.pending).groupBy { it.identity() }.values.map { it.reduce(::newestAdvancedRecord) }
 
+    /** Returns journal state for the requested owner, isolating other accounts. */
     private fun owned(owner: String): AdvancedJournalState {
         require(canonicalUuid(owner)) { "Invalid cloud account identifier." }
         val current = load()
@@ -167,6 +171,7 @@ internal class AdvancedCloudJournal(
         return current
     }
 
+    /** Decodes the stored journal, returning null when it cannot be read. */
     private fun load(): AdvancedJournalState? {
         val encoded = read() ?: return null
         require(encoded.toByteArray(Charsets.UTF_8).size <= MAX_STATE_BYTES) { "Encrypted cloud journal is too large." }
@@ -180,6 +185,7 @@ internal class AdvancedCloudJournal(
         return state
     }
 
+    /** Persists the journal state in the encrypted cloud vault. */
     private fun save(state: AdvancedJournalState) {
         require(listOf(state.known, state.observed, state.pending).all { it.size <= MAX_IDENTITIES }) {
             "Cloud journal has too many pending records."
