@@ -1,13 +1,56 @@
 > Current live playback validation and historical upstream testing notes. Earlier Nuvix foundation validation is recorded in [implementation-report.md](implementation-report.md); build setup is in [building.md](building.md).
 
-# Testing OpenTV
+# Testing Nuvix
+
+## Smart Multi-View
+
+Use the unchanged Build workflow and the required local commands:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/benchmark_sports_queries.py
+bash scripts/test-supabase.sh
+```
+
+The Android suite includes deterministic fake-player/allocator tests rather than production
+IPTV credentials. `MultiViewSessionManagerTest` exercises two/three/four-channel admission,
+hardware limits, failure isolation, replacement, duplicate choices, stable panel ordering,
+request-specific Unknown approval, delayed audio, Guide ownership, fullscreen, background
+cleanup and DVR priority. The allocator's existing shared-account/concurrency tests remain
+part of the same suite. `MultiViewPresetStoreTest` covers preset CRUD/order/references,
+interrupted-session durability, disconnected preview with missing channels/account changes,
+safe identifiers, bounded records and preservation of malformed/future documents.
+`AppSettingsMultiViewPreferencesTest` covers defaults, persistence, enum validation,
+malformed values and opt-out behavior. `MultiViewGeometryTest` checks nonoverlapping layouts, stable primary arrangement and
+bounded edit moves. `MultiViewGuideIntegrationTest` navigates the actual compact preview
+and Guide grid over two fake players, preserving audio, starts and reservations.
+`MultiViewSettingsScreenTest` exercises nested remote navigation, explicit setting selection
+and recovery disablement without deleting presets. `MultiViewRemoteUiTest` sends remote
+Menu/OK input to panel controls, Edit Layout/Done and mute selection;
+`MultiViewPreviewCatalogTest` checks current local account registration and rejects moved,
+hidden or disabled channel references without exposing stream credentials.
+
+`SportsRemoteUiTest` verifies that Add Game first shows a chooser, providers are visible,
+only one confirmed broadcast is selected, and unconfirmed suggestions expose no playback
+action. `SportsViewModelTest` revalidates the one selected broadcast before dispatch.
+Existing `SportsRepositoryTest`, Guide action/preview/selection tests and live lifecycle,
+surface, PiP, recording and diagnostics regressions remain required.
+
+Physical-TV checks **have not been performed for this feature**. Record Android TV,
+Google TV and Fire TV model/OS, decoder formats/resolution, account allowance, storage and
+pass/fail evidence using the [hardware checklist](smart-multiview-dvr.md#hardware-checklist).
+In particular, verify actual two/three/four-decoder behavior, meaningful buffering,
+physical D-pad focus/edit mode, 150 ms audio, focus interruptions/mute, surface transfers,
+Guide focus/scroll, PiP entry/failure/return and simultaneous protected DVR. Fake players
+and Robolectric do not prove these hardware properties. A host build is not device acceptance.
 
 ## Connection management and DVR foundation
 
 Run the full existing unit, lint, assembly, Python and database-security checks listed in
 [the feature architecture](smart-multiview-dvr.md#verification-and-remaining-acceptance).
-The existing Build workflow remains the source of CI validation; this draft does not
-introduce a second recorder or a parallel validation workflow.
+The existing Build workflow remains the source of CI validation; Multi-View reuses the
+existing recorder and account allocator without adding a parallel validation workflow.
 
 New deterministic tests cover account-local capacity, exact shared-account associations,
 request-specific unknown-capacity approval, concurrent reservations, idempotent release,
@@ -27,8 +70,8 @@ Android foreground-start eligibility, exact-alarm delivery or decoder stability.
 
 Use the [hardware checklist](smart-multiview-dvr.md#hardware-checklist) for upgrades,
 simultaneous viewing/capture, external drives, screen-off behavior, boot, process death and
-permission revocation. Multi-View layouts/audio/presets and their device acceptance remain
-outstanding; do not interpret allocator coverage as completed multi-channel playback.
+permission revocation. Multi-View now has dedicated player, presentation and persistence coverage above; physical
+decoder, surface, audio and remote acceptance remain outstanding.
 
 ## Advanced EPG
 

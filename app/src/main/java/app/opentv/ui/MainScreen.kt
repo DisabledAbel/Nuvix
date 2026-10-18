@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,6 +61,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import app.opentv.player.LivePlaybackSession
 import app.opentv.player.LivePresentation
+import app.opentv.multiview.MultiViewSessionManager
+import app.opentv.ui.multiview.MultiViewCompactPreview
 import app.opentv.ui.player.LivePlaybackPreview
 import app.opentv.core.AppSettings
 import androidx.compose.foundation.rememberScrollState
@@ -133,12 +136,16 @@ fun MainScreen(
     onOpenLauncherSettings: () -> Unit,
     startupGeneration: Int = 0,
     initialStartupGeneration: Int = 0,
+    multiViewManager: MultiViewSessionManager? = null,
+    onOpenMultiView: ((Channel?) -> Unit)? = null,
+    guideRequestGeneration: Int = 0,
 ) {
     // Content-type toggles: a switched-off type has its tab hidden here (and its sync skipped in
     // CatalogRepository). Recordings is never a content type, so it always stays — which also means
     // there is always at least one tab and never a blank shell, even with all three types off.
     val context = LocalContext.current
     val settings = remember { AppSettings.get(context) }
+    val multiViewPreferences by settings.multiViewPreferences.collectAsState()
     val launcherSettings = remember { LauncherSettingsStore(context) }
     DisposableEffect(launcherSettings) { onDispose { launcherSettings.close() } }
     val liveEnabled by settings.liveEnabled.collectAsState()
@@ -159,6 +166,21 @@ fun MainScreen(
     // still switched on (or Recordings if none are).
     val homeTab = Tab.HOME
     var tab by rememberSaveable { mutableStateOf(homeTab) }
+    var appliedGuideRequest by rememberSaveable { mutableIntStateOf(0) }
+    val multiViewState = multiViewManager?.state?.collectAsState()?.value
+    val multiViewActive = multiViewState?.panels?.isNotEmpty() == true
+    val addToMultiView: ((Channel) -> Unit)? = onOpenMultiView?.takeIf { multiViewPreferences.enabled }
+        ?.let { open -> { channel -> open(channel) } }
+    val replaceMultiViewPanel: ((Channel) -> Unit)? = if (multiViewActive && onOpenMultiView != null && multiViewManager != null) {
+        { channel ->
+            multiViewManager.state.value.focusedPanelId?.let { panelId -> multiViewManager.replace(panelId, channel.id) }
+            onOpenMultiView(null)
+        }
+    } else null
+    DisposableEffect(multiViewManager, tab) {
+        multiViewManager?.setGuideOpen(tab == Tab.GUIDE || tab == Tab.LIVE)
+        onDispose { multiViewManager?.setGuideOpen(false) }
+    }
     var startupApplied by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(startupGeneration) {
         if (startupGeneration != initialStartupGeneration) {
@@ -174,6 +196,12 @@ fun MainScreen(
             StartupDestination.APPS -> Tab.APPS
             else -> Tab.HOME
         }.takeIf { it in visibleTabs } ?: Tab.HOME
+    }
+    LaunchedEffect(guideRequestGeneration) {
+        if (guideRequestGeneration > appliedGuideRequest && Tab.GUIDE in visibleTabs) {
+            appliedGuideRequest = guideRequestGeneration
+            tab = Tab.GUIDE
+        }
     }
 
     // If the selected tab gets hidden (its type toggled off while it's open), drop back to the
@@ -227,16 +255,23 @@ fun MainScreen(
             onOpenSettings = onOpenSettings,
             onOpenProfiles = onOpenProfiles,
             activeProfileName = activeProfileName,
+            onOpenMultiView = onOpenMultiView?.takeIf { multiViewPreferences.enabled || multiViewActive }?.let { open -> { open(null) } },
         )
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
+            if (multiViewActive && multiViewManager != null && (tab == Tab.GUIDE || tab == Tab.LIVE)) {
+                if (multiViewPreferences.compactGuide) {
+                    MultiViewCompactPreview(multiViewManager, onFocusMultiView = { onOpenMultiView?.invoke(null) })
+                } else TextButton(onClick = { onOpenMultiView?.invoke(null) }) { Text("Focus Multi-View") }
+            }
             if (tab == Tab.HOME || tab == Tab.SPORTS) {
                 LivePlaybackPreview(liveSession, onFullscreen = onReturnToLive)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
                     Tab.HOME -> TelevisionHomeScreen(hasSources, onPlayChannel, onOpenMovie, onOpenSeries, onResume, onAddSource, { tab = Tab.GUIDE }, { tab = Tab.APPS })
-                    Tab.SPORTS -> SportsScreen(onPlayChannel)
+                    Tab.SPORTS -> SportsScreen(onPlayChannel, onAddToMultiView = addToMultiView,
+                        onReplaceMultiViewPanel = replaceMultiViewPanel)
                     Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
                     Tab.LIVE, Tab.GUIDE -> HomeScreen(
                         isTelevision = isTelevision,
@@ -249,6 +284,9 @@ fun MainScreen(
                         onRefresh = onRefresh,
                         onPlayCatchup = onPlayCatchup,
                         layoutOverride = if (tab == Tab.GUIDE) AppSettings.ChannelLayout.GRID else AppSettings.ChannelLayout.LIST,
+                        multiViewActive = multiViewActive,
+                        onAddToMultiView = addToMultiView,
+                        onReplaceMultiViewPanel = replaceMultiViewPanel,
                     )
                     Tab.MOVIES -> MoviesScreen(
                         onOpenMovie = onOpenMovie,
@@ -331,6 +369,7 @@ private fun NavRail(
     onOpenSettings: () -> Unit,
     onOpenProfiles: () -> Unit,
     activeProfileName: String,
+    onOpenMultiView: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Expand whenever focus is anywhere inside the rail; collapse back to icons when it leaves.
@@ -378,6 +417,7 @@ private fun NavRail(
         tabs.forEach { t ->
             RailItem(t.icon, stringResource(t.labelRes), expanded, current == t) { onSelect(t) }
         }
+        onOpenMultiView?.let { open -> RailItem(Icons.Filled.LiveTv, "Multi-View", expanded, false, open) }
 
         Spacer(Modifier.height(1.dp).fillMaxWidth())
         Spacer(Modifier.height(16.dp))

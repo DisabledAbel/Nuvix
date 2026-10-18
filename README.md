@@ -20,6 +20,9 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 - Real-time Stream Information with Compact/Detailed views, buffer health and safe errors. See [playback diagnostics](docs/playback-diagnostics.md).
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.
 - Persistent live TV across Home, Guide, Sports, and Search, with an optional current-channel preview. See [live playback](docs/live-playback.md).
+- Smart Multi-View for two, three or four authorized live channels, with account-aware admission,
+  balanced/focused layouts, remote audio selection, compact Guide browsing, Sports actions,
+  local presets and review-before-restore recovery. See [Multi-View](docs/smart-multiview-dvr.md#multi-view-playback).
 - Optional home launcher with installed-app shortcuts and customizable startup destinations.
 - Automatic TVmaze show, season, episode, and cast metadata with clickable actor profiles; no key required. See [TV metadata](docs/tv-metadata.md).
 - Optional Supabase sync for favorites/progress, channel organization, custom groups,
@@ -50,6 +53,11 @@ Nuvix Home on an Android TV emulator, with no provider configured.
   while an existing explicitly saved On preference is preserved.
 - **Launcher:** Open **Settings → Home launcher** and enable the HOME entry. Use your device's default-home selector where supported. Restore the original default launcher before disabling the entry. See [device compatibility](docs/launcher-compatibility.md).
 - **Live playback:** Under **Settings → Display & playback → Playback**, choose **Persistent Live Playback**, **Live Preview**, and **Continue Audio While Browsing**. Select the preview to return to fullscreen. Disable persistence on devices that struggle to retain video while browsing.
+- **Multi-View:** Open **Multi-View** from live playback or use a Guide/Sports Multi-View action.
+  Choose **Add Channel** or **Panel Actions**, use D-pad to focus and OK to select audio, and
+  use **Edit Layout** to rearrange panels. **Settings → Display & playback → Multi-View**
+  controls focus-follow audio (150 ms by default), fullscreen restoration and presentation.
+  Presets are previewed without connecting; restoring channels always checks current capacity.
 - **Guide:** Open **Guide settings** to choose the layout, default filter, sorting, timeline
   density, artwork, progress and position preferences. Guide controls apply without restarting;
   D-pad and Select open programs, and Back returns to the guide. Filters use your existing
@@ -64,10 +72,12 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 
 Nuvix is in development. Real-device testing is still needed for launcher selection, remote navigation, playback, database migration, cloud sync, and APK updates.
 
-Smart Multi-View/background DVR work is being delivered as a working connection-management
-and recording foundation. The current scope and remaining acceptance criteria are tracked in
-[connection management and DVR](docs/smart-multiview-dvr.md). Two-, three- and four-panel
-Multi-View, saved layouts and Multi-View Guide/Sports controls are not available in this draft.
+Smart Multi-View extends the merged account-management and background DVR foundation.
+Additional streams depend on configured provider allowances, recording reservations and
+available hardware decoders; four-channel support is not guaranteed on every device.
+Unknown allowances require approval for each extra stream. Android TV, Google TV and Fire TV
+playback, audio, remote, PiP and decoder acceptance still require physical-device verification.
+See [implemented scope and limits](docs/smart-multiview-dvr.md).
 
 See the [implementation report](docs/implementation-report.md), [roadmap](docs/ROADMAP.md), [architecture](docs/nuvix-architecture.md), and [contributing guide](CONTRIBUTING.md).
 

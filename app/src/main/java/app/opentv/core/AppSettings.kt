@@ -8,6 +8,7 @@ package app.opentv.core
 
 import android.content.Context
 import app.opentv.data.model.StremioAddon
+import app.opentv.multiview.MultiViewPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -149,6 +150,45 @@ class AppSettings private constructor(context: Context) {
         val channel = readGuideId(KEY_GUIDE_POSITION_CHANNEL) ?: return null
         val time = (prefs.all[KEY_GUIDE_POSITION_TIME] as? Long)?.takeIf { it >= 0 } ?: return null
         return GuidePosition(channel, time)
+    }
+
+    // Multi-View choices are device-local and do not alter account connection policies.
+    // The additive v1 preference namespace leaves existing AppSettings and Room data intact.
+    private val _multiViewPreferences = MutableStateFlow(readMultiViewPreferences())
+    val multiViewPreferences: StateFlow<MultiViewPreferences> = _multiViewPreferences.asStateFlow()
+
+    fun setMultiViewPreferences(value: MultiViewPreferences) {
+        val next = value.validated()
+        prefs.edit().putInt("multiview_preferences_version", 1)
+            .putBoolean("multiview_enabled", next.enabled)
+            .putString("multiview_audio_mode", next.audioMode.name)
+            .putInt("multiview_focus_delay_ms", next.focusDelayMs)
+            .putString("multiview_fullscreen_restoration", next.fullscreenRestoration.name)
+            .putBoolean("multiview_buffering_suggestions", next.bufferingSuggestions)
+            .putBoolean("multiview_compact_guide", next.compactGuide)
+            .putBoolean("multiview_show_labels", next.showLabels)
+            .putBoolean("multiview_save_presentation", next.savePresentationPreferences)
+            .putString("multiview_recovery", next.recovery.name).apply()
+        _multiViewPreferences.value = next
+    }
+
+    private fun readMultiViewPreferences(): MultiViewPreferences {
+        val defaults = MultiViewPreferences()
+        // Unknown versions and malformed values never grant automatic restoration.
+        val version = prefs.all["multiview_preferences_version"]
+        if (version != null && version != 1) return defaults
+        return MultiViewPreferences(
+            enabled = readGuideBoolean("multiview_enabled", defaults.enabled),
+            audioMode = readGuideEnum("multiview_audio_mode", defaults.audioMode),
+            focusDelayMs = (prefs.all["multiview_focus_delay_ms"] as? Int)
+                ?.takeIf { it in 0..2_000 } ?: defaults.focusDelayMs,
+            fullscreenRestoration = readGuideEnum("multiview_fullscreen_restoration", defaults.fullscreenRestoration),
+            bufferingSuggestions = readGuideBoolean("multiview_buffering_suggestions", defaults.bufferingSuggestions),
+            compactGuide = readGuideBoolean("multiview_compact_guide", defaults.compactGuide),
+            showLabels = readGuideBoolean("multiview_show_labels", defaults.showLabels),
+            savePresentationPreferences = readGuideBoolean("multiview_save_presentation", defaults.savePresentationPreferences),
+            recovery = readGuideEnum("multiview_recovery", defaults.recovery),
+        )
     }
 
     // Local-only diagnostics preferences. Live measurements never enter cloud records.

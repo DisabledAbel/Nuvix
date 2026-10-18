@@ -34,6 +34,41 @@ fullscreen/retry/stop actions. It is focusable with a visible D-pad focus indica
 not handle unrelated remote keys. No session means no persistent preview and no automatic
 provider connection.
 
+## Smart Multi-View
+
+Choose **Multi-View** from the live player's controls or main navigation to watch up to four
+channels. Entering closes the single-channel owner before Multi-View opens its primary, so
+the old viewer does not remain as a hidden extra connection. This entry may re-resolve the
+current stream; layout, audio and fullscreen changes inside Multi-View preserve player
+identity where supported. Exiting Multi-View releases its players and returns to browsing.
+
+The Activity's `LivePlaybackSession` owns the dedicated `MultiViewSessionManager` alongside
+the existing single-channel coordinator. Both use PR #35's application-scoped account
+allocator. A Multi-View start hands off single-channel/optional-preview ownership; an
+explicit single-channel tune releases the wall. Recordings retain their independent
+foreground service and reservations. Multi-View secondary owners yield before its primary
+when the existing recording policy reclaims same-account viewing. Other accounts continue.
+
+Two equal panels, a three-channel primary-plus-stack, a four-channel grid and a focused
+primary-plus-stack use the same stable panel identities. Reordering and surface attachment
+do not allocate players. Each hardware-decoded panel has its own exclusive
+`PlayerSurfaceOwner`; a late outgoing view cannot detach its replacement. Admission starts
+one channel at a time and never exceeds four allocated players, including a candidate
+replacement. Make-before-break requires confirmed account and decoder headroom; constrained
+or Unknown allowances use break-before-make and fresh approval when needed.
+
+The wall has one Android audio-focus lease. D-pad focus selects audio after a cancelable
+150 ms delay by default; OK-only mode waits for explicit selection. Guide navigation does
+not change audio. Fullscreen preserves the selected player and releases secondary resources;
+Back defaults to asking before progressive restoration with fresh capacity checks. PiP uses
+one selected panel and preserves the existing single-channel PiP path.
+
+Ordinary backgrounding releases Multi-View players/reservations and leaves paused panels
+for explicit review/resume. Memory pressure pauses secondary panels. Process death restores
+no runtime lease: safe local presentation state offers Review & Restore without connecting.
+Preset preview also opens no stream. See the [Multi-View guide](smart-multiview-dvr.md#multi-view-playback)
+for controls, settings, Sports/Guide actions, presets and compatibility limits.
+
 ## Ownership and surfaces
 
 `MainActivity` obtains one `LivePlaybackSession` from its Activity `ViewModelStore`.
@@ -53,8 +88,9 @@ and bounded retry behavior stay with `PlayerController`.
 Actual channel changes now use the shared account allocator. A replacement resolves while
 the old stream is still owned, then safe switching closes the old decoder before opening
 the new one. Known unavailable capacity can be rejected before relinquishing playback.
-The foundation does not implement seamless overlapping streams; presentation-only surface
-transfers retain the existing player. See [connection rules](smart-multiview-dvr.md#draft-foundation)
+The single-channel coordinator continues to use break-before-make; Multi-View additionally
+permits a bounded candidate when account and decoder headroom are confirmed. Presentation-only
+surface transfers retain the existing player. See [connection rules](smart-multiview-dvr.md#connection-management-and-dvr-foundation)
 for unknown allowances, manual account associations and local limits.
 
 `PlayerSurfaceOwner` grants one surface attachment at a time. A replacement `PlayerView`

@@ -1,12 +1,28 @@
 # Nuvix development roadmap
 
-Smart Multi-View and advanced background DVR are staged work. The current draft establishes
-shared account allocation and extends the existing DVR service; it does not ship Multi-View
-panels or claim complete acceptance. See the [architecture audit, remaining criteria and
-hardware checklist](smart-multiview-dvr.md). Subsequent stages must deliver real two-channel
-playback before expanding to three/four views, 150 ms audio selection, fullscreen handoff,
-Guide/Sports integration, safe presets/recovery and recording conflict review. Preserve the
-existing CI suite and distinguish fake-provider policy tests from physical-TV verification.
+Smart Multi-View now extends the merged account-aware connection and background DVR
+foundation with two-, three- and four-channel playback, balanced/focused layouts, remote
+editing, 150 ms focus-follow or OK-only audio, compact Guide browsing, Sports Hub actions,
+local presets, fullscreen transitions and review-before-restore recovery. The existing live
+owner and connection allocator remain shared with optional previews and DVR. See the
+[feature guide and architecture](smart-multiview-dvr.md).
+
+The next Multi-View milestone is physical-device acceptance on Android TV, Google TV and
+Fire TV, including a memory-constrained model: progressive decoder allocation, mixed
+codecs/resolutions, surface transfers, remote focus, audio-focus interruptions, PiP and
+simultaneous DVR. MediaCodec declarations and fake-player tests do not certify concurrent
+playback. No four-panel device guarantee or uninterrupted unattended recording guarantee
+is made. Retain the existing CI suite and record model/OS/stream format/provider allowance
+for each hardware check.
+
+Interactive primary-panel recording-conflict review with an authorized alternative-provider
+picker remains a Multi-View acceptance item. Current recording-priority reclamation pauses
+viewing with an explanation and keeps protected capture intact.
+
+Further DVR work remains separate: explicit alternative-provider recording resolution,
+running duration changes, reliable-source sports extensions, external-storage capacity
+estimates and opt-in protection-aware retention. Existing Protect Recording, Lock Padding,
+two/five-minute defaults, partial recovery and recording-priority policy remain intact.
 
 The initial source import preserves OpenTV's functional native systems. The Nuvix foundation adds branding/navigation, home/provider shelves, installed apps and optional launcher, opt-in cloud synchronization, configurable buffering, cache protection, and verified release/update infrastructure. See implementation-report.md for earlier foundation checks and [cloud sync](cloud-sync.md) for current scope.
 

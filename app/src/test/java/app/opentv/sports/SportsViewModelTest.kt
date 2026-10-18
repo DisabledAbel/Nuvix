@@ -106,6 +106,28 @@ class SportsViewModelTest {
         settings.setHiddenUnlocked(false)
         await(vm) { it.cards.isEmpty() && it.channels.isEmpty() && it.streams.isEmpty() && it.selectedEvent == null }
     }
+    @Test fun multiViewActionsRevalidateOneSelectedProviderBroadcastBeforeDispatch(): Unit = runBlocking {
+        seed()
+        val vm = model()
+        val event = await(vm) { it.cards.size == 1 }.cards.single().event
+        vm.select(event.id)
+        val stream = await(vm) { it.streams.size == 1 }.streams.single()
+        val choices = mutableListOf<Pair<SportsPlaybackAction, Channel>>()
+        assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
+        for (requested in SportsPlaybackAction.entries) {
+            vm.chooseBroadcast(stream, requested) { action, channel -> choices += action to channel }.join()
+        }
+        assertEquals(SportsPlaybackAction.entries.toList(), choices.map { it.first })
+        assertEquals(listOf(1L, 1L, 1L), choices.map { it.second.id })
+        val source = db.sources().byId(1)!!
+        db.sources().update(source.copy(enabled = false))
+        await(vm) { it.streams.isEmpty() }
+        for (requested in SportsPlaybackAction.entries) {
+            vm.chooseBroadcast(stream, requested) { action, channel -> choices += action to channel }.join()
+        }
+        assertEquals(3, choices.size)
+        assertEquals(0, graph.httpClient.dispatcher.runningCallsCount())
+    }
     @Test fun manualAssociationCandidatesIgnoreTheCurrentSearchButRespectVisibility(): Unit = runBlocking {
         seed()
         db.channels().upsertAll(listOf(sportsChannel(2, 1, "sports-2")))

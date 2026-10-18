@@ -45,7 +45,8 @@ import java.time.format.DateTimeFormatter
 
 /** The existing Sports destination owns both hub and details; fullscreen playback returns here. */
 @Composable
-fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = viewModel(key = "sports_hub")) {
+fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = viewModel(key = "sports_hub"),
+    onAddToMultiView: ((Channel) -> Unit)? = null, onReplaceMultiViewPanel: ((Channel) -> Unit)? = null) {
     val state by model.state.collectAsState()
     val query by model.query.collectAsState()
     val selectedId by model.selectedId.collectAsState()
@@ -95,7 +96,13 @@ fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = view
                     onBack = { model.select(null) }, onPlay = { stream -> model.play(stream, onPlayChannel) }, onRemind = { remind(event.id) },
                     onCancelReminder = { model.cancelReminder(event.id) }, onFavorite = model::favorite,
                     onFavoriteChannel = model::favoriteChannel, onDecide = model::decide, onUndo = model::undo,
-                    onPrefer = model::prefer, onOpenEvent = model::select, onStreamPage = model::streamsPage)
+                    onPrefer = model::prefer, onOpenEvent = model::select, onStreamPage = model::streamsPage,
+                    onAddToMultiView = onAddToMultiView?.let { callback ->
+                        { stream -> model.chooseBroadcast(stream, SportsPlaybackAction.ADD_TO_MULTIVIEW) { _, channel -> callback(channel) }; Unit }
+                    },
+                    onReplaceMultiViewPanel = onReplaceMultiViewPanel?.let { callback ->
+                        { stream -> model.chooseBroadcast(stream, SportsPlaybackAction.REPLACE_MULTIVIEW_PANEL) { _, channel -> callback(channel) }; Unit }
+                    })
             }
             search -> {
                 SportsAction("Done searching") { search = false }
@@ -272,11 +279,13 @@ private fun SportsDetails(state: SportsHubState, event: SportsEvent, reminderSet
     onPlay: (SportsStream) -> Unit, onRemind: () -> Unit, onCancelReminder: () -> Unit,
     onFavorite: (String, String, String, String) -> Unit, onFavoriteChannel: (Channel) -> Unit,
     onDecide: (String, SportsStream, Boolean) -> Unit, onUndo: (SportsStream) -> Unit,
-    onPrefer: (String, SportsStream) -> Unit, onOpenEvent: (String?) -> Unit, onStreamPage: (Int) -> Unit) {
+    onPrefer: (String, SportsStream) -> Unit, onOpenEvent: (String?) -> Unit, onStreamPage: (Int) -> Unit,
+    onAddToMultiView: ((SportsStream) -> Unit)? = null, onReplaceMultiViewPanel: ((SportsStream) -> Unit)? = null) {
     val streams = remember(state.streams, state.preferred, state.preferences.streamSort) {
         orderSportsStreams(state.streams, state.preferred, state.preferences.streamSort)
     }
     var assigning by remember(event.id) { mutableStateOf<SportsStream?>(null) }
+    var choosingGameBroadcast by remember(event.id) { mutableStateOf(false) }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
         item { SportsAction("Back to Sports", onClick = onBack) }
         item {
@@ -310,14 +319,25 @@ private fun SportsDetails(state: SportsHubState, event: SportsEvent, reminderSet
         }
         item {
             Text("Available Streams", style = MaterialTheme.typography.titleLarge)
-            Text("Confirmed viewing choices use your enabled provider catalogs. Choosing Watch switches the existing player; Back from playback returns to this game.")
+            Text("Confirmed viewing choices use your enabled provider catalogs. Select a broadcast to watch fullscreen or add one stream to Multi-View.")
             if (streams.none { it.available }) Text("No confirmed streams. Review suggestions or use manual association below.")
+        }
+        if (onAddToMultiView != null && streams.any { it.available }) item {
+            SportsAction("Add Game to Multi-View") { choosingGameBroadcast = !choosingGameBroadcast }
+        }
+        if (choosingGameBroadcast && onAddToMultiView != null) item {
+            SportsBroadcastChooser(streams, onChoose = { stream ->
+                choosingGameBroadcast = false
+                onAddToMultiView(stream)
+            }, onCancel = { choosingGameBroadcast = false })
         }
         items(streams.filter { it.available }, key = { "available:${it.channel.id}" }) { stream ->
             SportsStreamCard(stream, preferred = state.preferred?.let { it.sourceId == stream.channel.sourceId && it.streamId == stream.channel.streamId } == true,
                 onPlay = { onPlay(stream) }, onFavorite = { onFavoriteChannel(stream.channel) },
                 onConfirm = { onDecide(event.id, stream, true) }, onReject = { onDecide(event.id, stream, false) },
-                onPrefer = { onPrefer(event.id, stream) }, onAssign = { assigning = stream })
+                onPrefer = { onPrefer(event.id, stream) }, onAssign = { assigning = stream },
+                onAddToMultiView = onAddToMultiView?.let { callback -> { callback(stream) } },
+                onReplaceMultiViewPanel = onReplaceMultiViewPanel?.let { callback -> { callback(stream) } })
         }
         item { Text("Suggested Matches", style = MaterialTheme.typography.titleLarge) }
         items(streams.filter { !it.rejected && !it.available && (state.preferences.showPossible || it.confidence != MatchConfidence.POSSIBLE) },
@@ -358,7 +378,8 @@ private fun SportsDetails(state: SportsHubState, event: SportsEvent, reminderSet
 
 @Composable
 internal fun SportsStreamCard(stream: SportsStream, preferred: Boolean, onPlay: () -> Unit, onFavorite: () -> Unit,
-    onConfirm: () -> Unit, onReject: () -> Unit, onPrefer: () -> Unit, onAssign: () -> Unit) {
+    onConfirm: () -> Unit, onReject: () -> Unit, onPrefer: () -> Unit, onAssign: () -> Unit,
+    onAddToMultiView: (() -> Unit)? = null, onReplaceMultiViewPanel: (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -373,13 +394,28 @@ internal fun SportsStreamCard(stream: SportsStream, preferred: Boolean, onPlay: 
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (stream.available) item { SportsAction("Watch / Switch to ${stream.channel.shownName}", onClick = onPlay) }
+            if (stream.available) item { SportsAction("Watch Fullscreen", onClick = onPlay) }
             else item { SportsAction("Confirm match", onClick = onConfirm) }
+            if (stream.available && onAddToMultiView != null) item { SportsAction("Add Broadcast to Multi-View", onClick = onAddToMultiView) }
+            if (stream.available && onReplaceMultiViewPanel != null) item { SportsAction("Replace Multi-View Panel", onClick = onReplaceMultiViewPanel) }
             item { SportsAction(if (stream.channel.favourite) "Unfavorite channel" else "Favorite channel", onClick = onFavorite) }
             if (stream.available) item { SportsAction("Prefer this broadcast", onClick = onPrefer) }
             item { SportsAction("Remove match", onClick = onReject) }
             item { SportsAction("Select game", onClick = onAssign) }
         }
+    }
+}
+
+/** Only confirmed options are actionable; users choose one provider broadcast explicitly. */
+@Composable
+internal fun SportsBroadcastChooser(streams: List<SportsStream>, onChoose: (SportsStream) -> Unit, onCancel: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Choose one broadcast", style = MaterialTheme.typography.titleMedium)
+        Text("Provider connection capacity is checked after selection.")
+        streams.filter { it.available }.distinctBy { it.channel.sourceId to it.channel.streamId }.forEach { stream ->
+            SportsAction("${stream.providerName} · ${stream.channel.shownName} · Confirmed") { onChoose(stream) }
+        }
+        SportsAction("Cancel broadcast selection", onClick = onCancel)
     }
 }
 

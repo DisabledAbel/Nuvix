@@ -131,6 +131,9 @@ fun HomeScreen(
     onPlayCatchup: (mediaKey: String, url: String, title: String, ua: String) -> Unit = { _, _, _, _ -> },
     viewModel: ChannelsViewModel = viewModel(),
     layoutOverride: AppSettings.ChannelLayout? = null,
+    multiViewActive: Boolean = false,
+    onAddToMultiView: ((Channel) -> Unit)? = null,
+    onReplaceMultiViewPanel: ((Channel) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val graph = remember { ServiceLocator.get(context) }
@@ -245,8 +248,8 @@ fun HomeScreen(
     val recordingSnapshotReady = activeRecordingSnapshot != null
     val accountConnections = remember { AccountConnectionManager.get(context) }
     val previewScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
-    val previewController = remember(previewEnabled, livePreviewEnabled, screenResumed, recordingSnapshotReady, persistentActive, optionalPreviewSuppressed) {
-        if (previewEnabled && livePreviewEnabled && screenResumed && recordingSnapshotReady && !persistentActive && !optionalPreviewSuppressed) {
+    val previewController = remember(previewEnabled, livePreviewEnabled, screenResumed, recordingSnapshotReady, persistentActive, optionalPreviewSuppressed, multiViewActive) {
+        if (previewEnabled && livePreviewEnabled && screenResumed && recordingSnapshotReady && !persistentActive && !optionalPreviewSuppressed && !multiViewActive) {
             PlayerController(context.applicationContext, previewScope, graph.streamingHttpClient, subtitlesEnabled = false, preview = true)
                 .also { it.player.volume = 0f }
         } else null
@@ -492,7 +495,7 @@ fun HomeScreen(
                         SimpleDateFormat("EEE d MMM", Locale.getDefault()).format(Date(windowStart))
                     }
                 }
-                GuidePreview(
+                if (!multiViewActive) GuidePreview(
                     row = highlightedRow,
                     nowMillis = nowMillis,
                     onWatch = { highlightedRow?.let { goFullscreen(it.primary) } },
@@ -515,6 +518,12 @@ fun HomeScreen(
                     onPrevDay = { viewModel.nudgeGuideDay(-1) },
                     onNextDay = { viewModel.nudgeGuideDay(1) },
                 )
+                else Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TextButton(onClick = { viewModel.nudgeGuideDay(-1) }, enabled = guideDayOffset > -1) { Text("Previous day") }
+                    Text(dayLabel, Modifier.weight(1f), textAlign = TextAlign.Center)
+                    androidx.compose.material3.TextButton(onClick = viewModel::guideToNow) { Text("Now") }
+                    androidx.compose.material3.TextButton(onClick = { viewModel.nudgeGuideDay(1) }, enabled = guideDayOffset < 6) { Text("Next day") }
+                }
                 // Shared by both layouts: focus follows the highlight and collapses the rail; LEFT
                 // from the leftmost element reopens the rail (consumed only when it was hidden).
                 val onFocusChannel: (ChannelsViewModel.Row) -> Unit = {
@@ -601,6 +610,8 @@ fun HomeScreen(
             onPlayCatchup = onPlayCatchup,
             onRecordingScheduled = ::promptBackgroundIfNeeded,
             onDismiss = { recordTarget = null },
+            onAddToMultiView = onAddToMultiView,
+            onReplaceMultiViewPanel = onReplaceMultiViewPanel,
         )
     }
 
@@ -627,6 +638,7 @@ fun HomeScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                sources.firstOrNull { it.id == channel.sourceId }?.let { Text(it.name, style = MaterialTheme.typography.bodyMedium) }
                 nowProg?.let {
                     Text(
                         stringResource(R.string.guide_now_title, it.title),
@@ -642,9 +654,23 @@ fun HomeScreen(
                     Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    RecordActionRow(stringResource(R.string.guide_watch)) {
+                    RecordActionRow(if (onAddToMultiView != null) "Watch Fullscreen" else stringResource(R.string.guide_watch)) {
                         channelMenu = null
                         requestLive(channel)
+                    }
+                    onAddToMultiView?.let { add ->
+                        RecordActionRow("Add to Multi-View") {
+                            channelMenu = null
+                            previewController?.let(liveSession::unregisterGuidePreview)
+                            add(channel)
+                        }
+                    }
+                    onReplaceMultiViewPanel?.let { replace ->
+                        RecordActionRow("Replace Selected Panel") {
+                            channelMenu = null
+                            previewController?.let(liveSession::unregisterGuidePreview)
+                            replace(channel)
+                        }
                     }
                     RecordActionRow(stringResource(R.string.guide_open_external)) {
                         channelMenu = null

@@ -180,6 +180,7 @@ class MainActivity : ComponentActivity() {
         val session = liveSession
         // A device that rejected surface cleanup cannot retain a View into a destroyed Activity.
         if (session != null && !session.surfaceOwner.clear()) session.stop()
+        if (session != null && !session.multiView.clearSurfaces()) session.multiView.stop()
         liveSession = null
         super.onDestroy()
     }
@@ -223,12 +224,20 @@ class MainActivity : ComponentActivity() {
     /** Explicit request from the player's PiP button — no eligibility guard, the user asked. */
     fun enterPipNow() {
         if (!supportsPip()) return
-        runCatching {
+        val multiView = liveSession?.multiView
+        val hasMultiView = multiView?.state?.value?.panels?.isNotEmpty() == true
+        val previousFullscreen = multiView?.state?.value?.fullscreenPanelId
+        if (hasMultiView) multiView?.setInPip(true)
+        val entered = runCatching {
             enterPictureInPictureMode(
                 PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
                     .build(),
             )
+        }.getOrDefault(false)
+        if (!entered && hasMultiView) {
+            multiView?.setInPip(false)
+            if (previousFullscreen == null) multiView?.leaveFullscreen()
         }
     }
 
@@ -257,6 +266,7 @@ object Routes {
     const val ADD_SOURCE = "add-source"
     const val PLAYER = "player/{channelId}"
     const val SEARCH = "search"
+    const val MULTIVIEW = "multiview"
     const val EPG_SETTINGS = "epg-settings"
     const val APP_SETTINGS = "app-settings"
     const val SETTINGS_HUB = "settings"
@@ -350,6 +360,10 @@ private fun NuvixNavigation(
         )
     }
     val navController = rememberNavController()
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val multiView = liveSession.multiView
+    val multiViewState by multiView.state.collectAsState()
+    var guideRequestGeneration by rememberSaveable { mutableIntStateOf(0) }
     var mainLivePresentation by rememberSaveable { mutableStateOf(LivePresentation.BROWSING) }
     var guideVisible by rememberSaveable { mutableStateOf(false) }
     DisposableEffect(navController, liveSession) {
@@ -361,11 +375,18 @@ private fun NuvixNavigation(
                 Routes.VOD_PLAYER -> liveSession.stop() // release provider connection before VOD allocates
                 else -> liveSession.setPresentation(LivePresentation.HIDDEN)
             }
+            if (destination.route != Routes.HOME) multiView.setGuideOpen(false)
         }
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
     }
     fun openLive(id: Long) {
+        val existingPanel = multiView.state.value.panels.firstOrNull { it.channelId == id }
+        if (existingPanel != null) {
+            multiView.enterFullscreen(existingPanel.id)
+            navController.navigate(Routes.MULTIVIEW) { launchSingleTop = true }
+            return
+        }
         // Accept the request before navigation, cancelling obsolete lookups and guide preview.
         liveSession.setPresentation(LivePresentation.FULLSCREEN)
         liveSession.openChannel(id)
@@ -378,6 +399,13 @@ private fun NuvixNavigation(
     fun openVod(route: String) {
         liveSession.stop()
         navController.navigate(route) { launchSingleTop = true }
+    }
+    fun openMultiView(channel: app.opentv.data.model.Channel? = null) {
+        val settings = ServiceLocator.get(startupContext).settings
+        if (!settings.multiViewPreferences.value.enabled) return
+        val initialId = channel?.id ?: if (multiView.state.value.panels.isEmpty()) liveSession.currentChannel.value?.id else null
+        if (initialId != null) multiView.add(initialId)
+        navController.navigate(Routes.MULTIVIEW) { launchSingleTop = true }
     }
     val sourcesViewModel: SourcesViewModel = viewModel()
     val vodViewModel: VodViewModel = viewModel()
@@ -406,6 +434,26 @@ private fun NuvixNavigation(
     // Runs once; backing out returns to the guide and doesn't re-trigger.
     val bootContext = androidx.compose.ui.platform.LocalContext.current
     val bootSettings = remember { ServiceLocator.get(bootContext).settings }
+    val multiViewPreferences by bootSettings.multiViewPreferences.collectAsState()
+    val recoveryStore = remember { app.opentv.multiview.MultiViewPresetStore(bootContext) }
+    val interruptedMultiView by recoveryStore.recovery.collectAsState()
+    var recoveryOffered by rememberSaveable { mutableStateOf(false) }
+    DisposableEffect(recoveryStore) { onDispose { recoveryStore.close() } }
+    val recoveryPending = interruptedMultiView != null && multiViewState.panels.isEmpty() && multiViewPreferences.enabled &&
+        multiViewPreferences.recovery == app.opentv.multiview.MultiViewRecoveryPolicy.ASK_BEFORE_RESTORE
+    SideEffect { liveSession.setRecoveryReviewPending(recoveryPending) }
+    if (!recoveryOffered && recoveryPending && currentEntry != null && currentEntry?.destination?.route != Routes.MULTIVIEW &&
+        multiViewPreferences.recovery == app.opentv.multiview.MultiViewRecoveryPolicy.ASK_BEFORE_RESTORE) {
+        AlertDialog(
+            onDismissRequest = { recoveryOffered = true },
+            title = { Text("Review interrupted Multi-View?") },
+            text = { Text("Your previous layout is available to review. No channels will open until you confirm; provider capacity and device resources will be checked again.") },
+            confirmButton = { TextButton(onClick = { recoveryOffered = true; openMultiView() }) { Text("Review & Restore") } },
+            dismissButton = { TextButton(onClick = {
+                recoveryStore.clearRecovery(); recoveryOffered = true
+            }) { Text("Dismiss") } },
+        )
+    }
     val launcherSettings = remember { app.opentv.launcher.LauncherSettingsStore(bootContext) }
     val restoringAfterProcessDeath = remember { restoringNavigation && !liveSession.startupNavigationHandled }
     DisposableEffect(launcherSettings) { onDispose { launcherSettings.close() } }
@@ -417,13 +465,13 @@ private fun NuvixNavigation(
         if (liveSession.startupNavigationHandled) return@LaunchedEffect
         liveSession.startupNavigationHandled = true
         val destination = launcherSettings.preferences.value.startupDestination
-        val resumeLast = destination == app.opentv.launcher.StartupDestination.LAST_WATCHED ||
-            (destination == app.opentv.launcher.StartupDestination.HOME && bootSettings.resumeLastChannel.value)
+        val resumeLast = !recoveryPending && (destination == app.opentv.launcher.StartupDestination.LAST_WATCHED ||
+            (destination == app.opentv.launcher.StartupDestination.HOME && bootSettings.resumeLastChannel.value))
         val startupChannel = if (resumeLast && bootSettings.lastChannelId != 0L) {
             ServiceLocator.get(bootContext).catalogRepository.channel(bootSettings.lastChannelId)
         } else null
         if (homeGeneration == initialHomeGeneration && resumeLast && sourcesUi.sources.isNotEmpty() &&
-            startupChannel != null && !liveSession.active.value) {
+            startupChannel != null && !liveSession.active.value && multiView.state.value.panels.isEmpty()) {
             openLive(startupChannel.id)
         } else if (restoringAfterProcessDeath && !liveSession.active.value &&
             navController.currentDestination?.route == Routes.PLAYER) {
@@ -434,14 +482,14 @@ private fun NuvixNavigation(
         }
     }
 
-    val currentEntry by navController.currentBackStackEntryAsState()
     val liveActive by liveSession.active.collectAsState()
     val route = currentEntry?.destination?.route
     val liveRoute = route == Routes.PLAYER
     val previewVideo by bootSettings.livePreview.collectAsState()
     val guideVideo by bootSettings.guidePreviewVideo.collectAsState()
     val previewSuppressed by liveSession.guidePreviewSuppressed.collectAsState()
-    val keepAwake = route == Routes.PLAYER || route == Routes.VOD_PLAYER ||
+    val keepAwake = route == Routes.PLAYER || route == Routes.VOD_PLAYER || route == Routes.MULTIVIEW ||
+        (multiViewState.panels.isNotEmpty() && route == Routes.HOME) ||
         (previewVideo && ((liveActive && (route == Routes.SEARCH ||
             (route == Routes.HOME && mainLivePresentation == LivePresentation.BROWSING))) ||
             (route == Routes.HOME && guideVisible && guideVideo && !previewSuppressed)))
@@ -451,8 +499,10 @@ private fun NuvixNavigation(
         else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    DisposableEffect(liveSession, liveRoute, liveActive) {
-        val player = if (liveRoute && liveActive) liveSession.controller.player else null
+    DisposableEffect(liveSession, liveRoute, liveActive, route, multiViewState) {
+        val selectedPanel = multiViewState.audioPanelId ?: multiViewState.focusedPanelId
+        val player = if (liveRoute && liveActive) liveSession.controller.player
+            else if (route == Routes.MULTIVIEW && selectedPanel != null) multiView.player(selectedPanel) else null
         val listener = object : androidx.media3.common.Player.Listener {
             fun update() {
                 app.opentv.core.PipState.eligible = player != null
@@ -607,6 +657,29 @@ private fun NuvixNavigation(
                     onOpenLauncherSettings = { navController.navigate(Routes.LAUNCHER_SETTINGS) },
                     startupGeneration = homeGeneration,
                     initialStartupGeneration = initialHomeGeneration,
+                    multiViewManager = multiView,
+                    onOpenMultiView = { openMultiView(it) },
+                    guideRequestGeneration = guideRequestGeneration,
+                )
+            }
+
+            composable(
+                Routes.MULTIVIEW,
+                enterTransition = { androidx.compose.animation.EnterTransition.None },
+                exitTransition = { androidx.compose.animation.ExitTransition.None },
+                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+                popExitTransition = { androidx.compose.animation.ExitTransition.None },
+            ) {
+                app.opentv.ui.multiview.MultiViewScreen(
+                    manager = multiView,
+                    onExit = {
+                        multiView.stop()
+                        navController.navigate(Routes.HOME) { popUpTo(Routes.HOME); launchSingleTop = true }
+                    },
+                    onOpenGuide = {
+                        guideRequestGeneration++
+                        navController.navigate(Routes.HOME) { popUpTo(Routes.HOME); launchSingleTop = true }
+                    },
                 )
             }
 
@@ -743,6 +816,7 @@ private fun NuvixNavigation(
                 PlayerScreen(
                     liveSession = liveSession,
                     onBack = { navController.popBackStack() },
+                    onOpenMultiView = { openMultiView() },
                 )
             }
 

@@ -24,6 +24,9 @@ data class SportsHubState(
     val streamPage: Int = 0, val hasMoreStreams: Boolean = false, val relatedEvents: List<SportsEvent> = emptyList(),
 )
 
+/** A single explicitly selected broadcast is handed to the existing playback owner. */
+enum class SportsPlaybackAction { WATCH_FULLSCREEN, ADD_TO_MULTIVIEW, REPLACE_MULTIVIEW_PANEL }
+
 /** Calendar-day boundaries, including 23/25-hour DST days; persisted timestamps are always UTC. */
 fun sportsDayWindow(now: Long, zone: ZoneId, tomorrow: Boolean = false): LongRange {
     val date = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(if (tomorrow) 1 else 0)
@@ -159,10 +162,16 @@ class SportsViewModel(application: Application, private val saved: SavedStateHan
     fun favoriteChannel(channel: Channel) = viewModelScope.launch(Dispatchers.IO) {
         action { graph.database.channels().setFavourite(channel.id, !channel.favourite) }
     }
-    fun play(stream: SportsStream, onPlay: (Channel) -> Unit) = viewModelScope.launch { action {
+    fun play(stream: SportsStream, onPlay: (Channel) -> Unit) =
+        chooseBroadcast(stream, SportsPlaybackAction.WATCH_FULLSCREEN) { _, channel -> onPlay(channel) }
+
+    /** Browsing and opening the chooser never creates a player or a provider reservation. */
+    fun chooseBroadcast(stream: SportsStream, requestedAction: SportsPlaybackAction,
+        onChoose: (SportsPlaybackAction, Channel) -> Unit) = viewModelScope.launch { action {
         val id = selectedId.value ?: return@action
         val channel = repository.playable(id, stream)
-        if (channel != null && (channel.sourceId to channel.categoryId) !in hiddenCategories.first()) onPlay(channel)
+        if (channel != null && selectedId.value == id &&
+            (channel.sourceId to channel.categoryId) !in hiddenCategories.first()) onChoose(requestedAction, channel)
         else notify("This viewing choice is no longer available. Choose another stream or refresh the local schedule.")
     } }
     fun decide(eventId: String, stream: SportsStream, accepted: Boolean) = viewModelScope.launch(Dispatchers.IO) {
