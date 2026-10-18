@@ -124,6 +124,9 @@ class MultiViewSessionManager(
     private val records = linkedMapOf<String, PanelRecord>()
     private val admission = Mutex()
     private val sessionId = "multiview:${newId()}"
+    // Presets can reuse panel IDs within this manager's lifetime. Attempts must still be newer
+    // than the account allocator's completed generation for that panel/session identity.
+    private var generationSequence = 0L
     private val _state = MutableStateFlow(MultiViewState())
     val state = _state.asStateFlow()
     val capability get() = hardware.capability
@@ -217,7 +220,8 @@ class MultiViewSessionManager(
         record.operation?.cancel()
         record.candidate?.let { close(it) }; record.candidate = null
         if (record.current?.released == true) record.current = null
-        val generation = ++record.generation
+        val generation = ++generationSequence
+        record.generation = generation
         record.channelId = channelId
         record.operation = scope.launch {
             admission.withLock {
@@ -487,6 +491,19 @@ class MultiViewSessionManager(
     fun answerApproval(allow: Boolean) {
         val prompt = _state.value.approval ?: return
         approvalResponse?.complete(if (allow) connections.approve(prompt.challenge) else null)
+    }
+    /** Guide/Sports fullscreen requests keep the wall available for checked restoration. */
+    fun watchFullscreen(channelId: Long) {
+        val existing = findChannel(channelId)
+        if (existing != null) {
+            _state.value = _state.value.copy(duplicate = MultiViewDuplicate(channelId, existing.id, null))
+            resolveDuplicate(MultiViewDuplicateChoice.FOCUS_EXISTING)
+            enterFullscreen(existing.id)
+            return
+        }
+        val selected = _state.value.focusedPanelId ?: records.keys.firstOrNull() ?: return
+        replace(selected, channelId)
+        enterFullscreen(selected)
     }
     fun enterFullscreen(panelId: String) {
         if (panelId !in records) return

@@ -381,9 +381,8 @@ private fun NuvixNavigation(
         onDispose { navController.removeOnDestinationChangedListener(listener) }
     }
     fun openLive(id: Long) {
-        val existingPanel = multiView.state.value.panels.firstOrNull { it.channelId == id }
-        if (existingPanel != null) {
-            multiView.enterFullscreen(existingPanel.id)
+        if (multiView.state.value.panels.isNotEmpty()) {
+            multiView.watchFullscreen(id)
             navController.navigate(Routes.MULTIVIEW) { launchSingleTop = true }
             return
         }

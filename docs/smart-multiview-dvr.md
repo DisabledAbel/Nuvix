@@ -72,7 +72,8 @@ selected audio alone. Opening the compact presentation transfers existing surfac
 it does not allocate another player or tune a highlighted row. Disabling compact Guide
 presentation hides the wall while leaving the session policy in charge of playback.
 Guide channel/program actions offer **Add to Multi-View**, **Replace Selected Panel** and
-**Watch Fullscreen**. Returning from Guide keeps the prior panel arrangement; the existing
+**Watch Fullscreen**. Fullscreen reuses a playing broadcast or replaces the selected panel,
+retaining the other panel references for checked restoration. Returning from Guide keeps the prior panel arrangement; the existing
 Guide position preferences remain in effect. A surface-attachment failure displays a
 safe fallback rather than allocating a duplicate player.
 
