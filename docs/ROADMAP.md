@@ -15,9 +15,11 @@ playback. No four-panel device guarantee or uninterrupted unattended recording g
 is made. Retain the existing CI suite and record model/OS/stream format/provider allowance
 for each hardware check.
 
-Interactive primary-panel recording-conflict review with an authorized alternative-provider
-picker remains a Multi-View acceptance item. Current recording-priority reclamation pauses
-viewing with an explanation and keeps protected capture intact.
+Pre-recording Multi-View conflict review now includes configurable padded-start warnings, an
+explicit authorized independent-provider picker, panel release, durable Keep Watching and
+recording-priority deadline fallback. Hardware acceptance remains required for remote focus,
+notification delivery, provider/decoder behavior and absent-user recording starts. See the
+[conflict review guide](smart-multiview-dvr.md#pre-recording-multi-view-conflict-review).
 
 Further DVR work remains separate: explicit alternative-provider recording resolution,
 running duration changes, reliable-source sports extensions, external-storage capacity

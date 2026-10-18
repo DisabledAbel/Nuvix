@@ -397,6 +397,15 @@ class AppSettings private constructor(context: Context) {
 
     // ---- Recording behaviour -----------------------------------------------------------------
 
+    private val _recordConflictLeadMinutes = MutableStateFlow(prefs.getInt("record_conflict_lead_minutes", 2).coerceIn(1, 10))
+    val recordConflictLeadMinutes: StateFlow<Int> = _recordConflictLeadMinutes.asStateFlow()
+
+    fun setRecordConflictLeadMinutes(minutes: Int) {
+        val value = minutes.coerceIn(1, 10)
+        prefs.edit().putInt("record_conflict_lead_minutes", value).apply()
+        _recordConflictLeadMinutes.value = value
+    }
+
     /** Minutes to start a scheduled recording early, so a late start isn't clipped. */
     private val _recordPadStartMinutes = MutableStateFlow(prefs.getInt(KEY_PAD_START, 2))
     val recordPadStartMinutes: StateFlow<Int> = _recordPadStartMinutes.asStateFlow()

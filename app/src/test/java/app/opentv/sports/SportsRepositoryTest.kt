@@ -411,4 +411,14 @@ class SportsRepositoryTest {
         val future = SPORTS_NOW + SportsEvent.CACHE_FRESH_MILLIS + 1
         assertFalse(game().isFresh(future))
     }
+    @Test fun currentConflictEvidenceReusesConfirmedPlayableBroadcasts() = runBlocking {
+        seed()
+        val eventIds = db.sports().currentEventIds(listOf("one"), SPORTS_NOW + 120_000)
+        assertEquals(listOf(game().id), eventIds)
+        val options = streams(eventIds.single()).filter { it.available }
+        assertEquals(setOf(1L, 2L, 3L), options.map { it.channel.id }.toSet())
+        for (stream in options) assertNotNull(repo.playable(eventIds.single(), stream))
+        assertTrue(db.sports().currentEventIds(listOf("one"), SPORTS_NOW).isEmpty())
+    }
+
 }

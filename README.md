@@ -17,6 +17,8 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
   favorite teams/leagues, manual match corrections and game reminders. See [Sports Hub](docs/sports-hub.md).
 - M3U/M3U8, Xtream Codes, authorized Stalker/MAC portals, and XMLTV.
 - Favorites, continue watching, search, multiple providers, and LAN/NAS sync.
+- Pre-recording Multi-View conflict warnings with explicit authorized provider choices, remote-friendly
+  panel release and recording-priority deadline fallback. See [conflict review](docs/smart-multiview-dvr.md#pre-recording-multi-view-conflict-review).
 - Real-time Stream Information with Compact/Detailed views, buffer health and safe errors. See [playback diagnostics](docs/playback-diagnostics.md).
 - Adjustable buffering, catch-up where supported, PiP, recordings, and reminders.
 - Persistent live TV across Home, Guide, Sports, and Search, with an optional current-channel preview. See [live playback](docs/live-playback.md).

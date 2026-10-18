@@ -49,6 +49,8 @@ explicit single-channel tune releases the wall. Recordings retain their independ
 foreground service and reservations. Multi-View secondary owners yield before its primary
 when the existing recording policy reclaims same-account viewing. Other accounts continue.
 
+Before a scheduled recording needs occupied account capacity, the global [conflict review](smart-multiview-dvr.md#pre-recording-multi-view-conflict-review) offers explicit independent-provider replacement or release. The original stream stays active during candidate startup where possible; its panel position and audio role remain. Keep Watching dismisses review for that booking window; the independent recording service still reclaims capacity at the deadline. Guide/fullscreen navigation does not dismiss the warning or authorize a provider change.
+
 Two equal panels, a three-channel primary-plus-stack, a four-channel grid and a focused
 primary-plus-stack use the same stable panel identities. Reordering and surface attachment
 do not allocate players. Each hardware-decoded panel has its own exclusive

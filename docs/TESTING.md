@@ -2,6 +2,24 @@
 
 # Testing Nuvix
 
+## Pre-recording conflict review
+
+`MultiViewRecordingConflictTest` covers exact/shared/independent pools, confirmed spare and
+Unknown capacity, padded timing/expiration, duplicate evaluation, simultaneous demand,
+priority and locked padding. `MultiViewSessionManagerTest` adds warning-approved switches,
+failed alternatives, deadline/stale callback rejection, paused primary preservation,
+unrelated audio/players, cancellation, rescheduling, background notification and deferral history.
+`RecordingWarningPersistenceTest` checks process-reopened acknowledgment, full-Long alarm
+identities, alarm rearming/cancellation and configurable lead time. `RecordingConflictAlternativesTest`
+checks strict guide identity, confirmed Sports precedence, independent/full/unavailable pools,
+Unknown labeling and disconnected discovery. `RecordingConflictRemoteTest` exercises explicit
+D-pad/OK actions and no-alternative recovery. Tests use synthetic URLs and virtual time; no
+production IPTV credentials are required. Existing allocator/DVR/locked-padding tests remain active.
+
+Device execution remains required; use the [conflict-review hardware checklist](smart-multiview-dvr.md#required-device-acceptance-for-conflict-review-not-executed-here).
+Automated results do not establish OEM alarm/notification delivery, physical remote focus or
+provider-side connection counts. Screenshots should be captured from the hardware acceptance run.
+
 ## Smart Multi-View
 
 Use the unchanged Build workflow and the required local commands:

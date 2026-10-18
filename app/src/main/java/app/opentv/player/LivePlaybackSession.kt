@@ -110,6 +110,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         releaseNonLivePlayback()
         coordinator.stopForOtherPlayback()
     }
+    val recordingConflicts = app.opentv.recording.RecordingConflictCoordinator.create(application, viewModelScope, multiView)
 
     /** Used only by the fullscreen controls or an active preview, never to discover activity. */
     val controller: PlayerController
@@ -278,12 +279,13 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
     /** Forwards activity foreground state to the live playback policy. */
     fun setForeground(foreground: Boolean) {
+        recordingConflicts.setVisible(foreground)
         if (!foreground) releaseGuidePreview()
         multiView.setForeground(foreground)
         coordinator.setForeground(foreground)
     }
     /** Forwards picture-in-picture state to the live playback policy. */
-    fun setInPip(inPip: Boolean) { multiView.setInPip(inPip); coordinator.setInPip(inPip) }
+    fun setInPip(inPip: Boolean) { recordingConflicts.setInPip(inPip); multiView.setInPip(inPip); coordinator.setInPip(inPip) }
 
     /** Releases optional playback resources in response to Android memory pressure. */
     fun onMemoryPressure(level: Int) {

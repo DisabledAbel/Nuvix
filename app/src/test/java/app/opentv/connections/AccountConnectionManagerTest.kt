@@ -300,4 +300,27 @@ class AccountConnectionManagerTest {
         assertTrue(manager.reserveForRecording(request("scheduled", purpose = ConnectionPurpose.RECORDING), approval)
             is ReservationResult.ApprovalRequired)
     }
+    @Test fun unansweredWarningCannotBlockDeadlineReclamationThroughPrimary() = runTest {
+        val manager = AccountConnectionManager.createForTest(context)
+        manager.registerSource(source()); manager.setMaximumConnections(1, 3)
+        manager.registerSource(source(2, "unrelated")); manager.setMaximumConnections(2, 1)
+        val primary = reserve(manager, request("primary", purpose = ConnectionPurpose.MULTIVIEW))
+        val secondary = reserve(manager, request("secondary", purpose = ConnectionPurpose.MULTIVIEW))
+        val preview = reserve(manager, request("preview", purpose = ConnectionPurpose.PREVIEW))
+        val unrelated = reserve(manager, request("unrelated", sourceId = 2))
+        val closed = mutableListOf<String>()
+        for (token in listOf(primary, secondary, preview, unrelated)) manager.registerOwner(token,
+            reclamationPriority = { if (token == primary) 2 else 1 }) {
+            manager.beginRelease(token); closed += token.sessionId; manager.release(token)
+        }
+        // No UI acknowledgment or unknown-capacity consent is supplied to known-capacity capture.
+        repeat(3) { index ->
+            assertTrue(manager.reserveForRecording(request("capture-$index", purpose = ConnectionPurpose.RECORDING),
+                allowInterruptLive = true) is ReservationResult.Reserved)
+        }
+        assertEquals(listOf("preview", "secondary", "primary"), closed)
+        assertEquals(ReservationState.PENDING, manager.reservationState(unrelated))
+        assertEquals(3, manager.snapshotForSource(1)!!.locallyReserved)
+    }
+
 }

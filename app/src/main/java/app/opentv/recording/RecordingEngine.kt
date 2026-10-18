@@ -166,9 +166,8 @@ class RecordingEngine(
         repo.event(id, "SCHEDULED", "Recording scheduled with configured padding")
         val armAt = scheduledStart.coerceAtLeast(System.currentTimeMillis() + 1_000L)
         RecordingScheduler.set(appContext, id, armAt)
-        // Warn the viewer just before we switch their screen to the recording (single-connection
-        // auto-switch); only meaningful when auto-switch is on.
-        if (settings.recordAutoSwitch.value) RecordingScheduler.setWarning(appContext, id, armAt)
+        // Warning review is independent of optional recording auto-navigation.
+        RecordingScheduler.setWarning(appContext, id, scheduledStart)
         id
     }
 
@@ -210,7 +209,6 @@ class RecordingEngine(
      */
     suspend fun rearmScheduled() {
         val now = System.currentTimeMillis()
-        val autoSwitch = settings.recordAutoSwitch.value
         for (rec in repo.scheduled()) {
             if (rec.scheduledEndMillis > 0 && rec.scheduledEndMillis <= now) {
                 repo.setScheduledStatus(rec.id, RecordingStatus.MISSED, "Recording window elapsed while capture was unavailable")
@@ -221,7 +219,7 @@ class RecordingEngine(
             }
             val at = if (rec.scheduledStartMillis <= now) now + 1_000L else rec.scheduledStartMillis
             RecordingScheduler.set(appContext, rec.id, at)
-            if (autoSwitch) RecordingScheduler.setWarning(appContext, rec.id, at)
+            RecordingScheduler.setWarning(appContext, rec.id, rec.scheduledStartMillis)
         }
     }
 
@@ -366,6 +364,7 @@ class RecordingEngine(
             if (repo.setScheduledWindow(adjustment.recordingId, adjustment.after.startMillis, adjustment.after.endMillis) == 1) {
                 repo.event(adjustment.recordingId, "PADDING_ADJUSTED", "$reason; minimum unlocked padding adjusted")
                 RecordingScheduler.set(appContext, adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
+                RecordingScheduler.setWarning(appContext, adjustment.recordingId, adjustment.after.startMillis)
             }
         }
     }

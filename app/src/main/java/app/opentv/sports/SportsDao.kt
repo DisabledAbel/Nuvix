@@ -26,6 +26,9 @@ data class SportsEventCard(@Embedded val event: SportsEvent, val streamCount: In
 /** Room queries and mutations for sports records. */
 @Dao
 interface SportsDao {
+    /** Bounded current evidence; callers still use streams/playable to check decisions and feeds. */
+    @Query("SELECT DISTINCT eventId FROM sports_programmes WHERE epgChannelId IN (:epgIds) AND startUtcMillis<=:now AND endUtcMillis>:now ORDER BY eventId LIMIT 20")
+    suspend fun currentEventIds(epgIds: List<String>, now: Long): List<String>
     /** Invalidation is coalesced with distinctUntilChanged; favorite edits do not reindex EPG. */
     @Query("""SELECT f.id AS feedId, f.lastSyncMillis, COUNT(p.id) AS rowCount, COALESCE(MAX(p.id),0) AS lastId
         FROM epg_feeds f LEFT JOIN programmes p ON p.feedId=f.id WHERE f.enabled=1 GROUP BY f.id""")
