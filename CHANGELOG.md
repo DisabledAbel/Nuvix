@@ -149,9 +149,9 @@ recording while it's still taping, and the whole interface now speaks 30 languag
   another channel, OpenTV moves the screen onto that recording as it begins — with a **30-second
   warning** first and a *Keep watching* button if you'd rather not. No more "why did my live stream
   just cut out?" (Recordings → Recording behaviour → *Auto-switch when recording starts*.)
-- **Clash handling with multi-provider fallback.** Book two overlapping recordings and, if more
-  than one of your providers carries that channel, OpenTV records each from a **different provider**
-  so neither is cut. On a single provider it flags the clash instead.
+- **Clash handling on the selected provider.** Recordings keep the provider selected in the
+  Guide. Overlaps are checked against that account's capacity and recording-priority policy;
+  providers are not substituted automatically.
 - **Recording padding.** Start each recording a minute early and run a few minutes past the listed
   end, so a late kick-off or an overrun isn't clipped. Adjustable per side.
 - **Series links show the next episode.** A series link now tells you exactly when it next records.

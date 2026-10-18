@@ -72,6 +72,7 @@ class AccountConnectionManager private constructor(context: Context) {
         require(request.purpose == ConnectionPurpose.RECORDING)
         val first = reserve(request, approval)
         if (first is ReservationResult.Reserved || !allowInterruptLive) return first
+        // Admission to reclamation checks recording-only usage under the allocator's lock.
         val key = allocator.beginRecordingReclaim(request.sourceId) ?: return first
         try {
             for (token in allocator.optionalReservations(key)) {
