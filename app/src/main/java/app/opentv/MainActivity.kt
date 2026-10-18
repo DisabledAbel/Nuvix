@@ -438,7 +438,7 @@ private fun NuvixNavigation(
     val interruptedMultiView by recoveryStore.recovery.collectAsState()
     var recoveryOffered by rememberSaveable { mutableStateOf(false) }
     DisposableEffect(recoveryStore) { onDispose { recoveryStore.close() } }
-    val recoveryPending = interruptedMultiView != null && multiViewState.panels.isEmpty() && multiViewPreferences.enabled &&
+    val recoveryPending = !recoveryOffered && interruptedMultiView != null && multiViewState.panels.isEmpty() && multiViewPreferences.enabled &&
         multiViewPreferences.recovery == app.opentv.multiview.MultiViewRecoveryPolicy.ASK_BEFORE_RESTORE
     SideEffect { liveSession.setRecoveryReviewPending(recoveryPending) }
     if (!recoveryOffered && recoveryPending && currentEntry != null && currentEntry?.destination?.route != Routes.MULTIVIEW &&
@@ -447,7 +447,10 @@ private fun NuvixNavigation(
             onDismissRequest = { recoveryOffered = true },
             title = { Text("Review interrupted Multi-View?") },
             text = { Text("Your previous layout is available to review. No channels will open until you confirm; provider capacity and device resources will be checked again.") },
-            confirmButton = { TextButton(onClick = { recoveryOffered = true; openMultiView() }) { Text("Review & Restore") } },
+            confirmButton = { TextButton(onClick = {
+                recoveryOffered = true
+                navController.navigate(Routes.MULTIVIEW) { launchSingleTop = true }
+            }) { Text("Review & Restore") } },
             dismissButton = { TextButton(onClick = {
                 recoveryStore.clearRecovery(); recoveryOffered = true
             }) { Text("Dismiss") } },

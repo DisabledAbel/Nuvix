@@ -11,7 +11,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import app.opentv.connections.*
 import app.opentv.core.ServiceLocator
@@ -82,6 +85,16 @@ class MultiViewRemoteUiTest {
             .performKeyInput { pressKey(Key.DirectionCenter) }
         compose.onNodeWithText("Panel Actions").assertExists()
         compose.runOnIdle { assertThat(manager.state.value.panels.map { it.channelId }).containsExactly(2L, 1L).inOrder() }
+    }
+
+    @Test fun savingAnUnresolvedLayoutExplainsPanelReadinessInsteadOfRejectingItsName() {
+        compose.onNodeWithText("Presets").performClick()
+        compose.onNodeWithText("Save Current Layout").performClick()
+        compose.onNodeWithText("Preset name").performTextInput("Match night")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.onNodeWithText("Panels must finish starting successfully or be removed before saving this layout.").assertExists()
+        val store = MultiViewPresetStore(RuntimeEnvironment.getApplication())
+        try { assertThat(store.presets.value).isEmpty() } finally { store.close() }
     }
 
     @Test fun explicitMuteIsPreservedWhileSelectingAnotherAudioPanel() {

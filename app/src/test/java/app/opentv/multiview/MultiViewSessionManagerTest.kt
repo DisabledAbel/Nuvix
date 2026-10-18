@@ -644,6 +644,33 @@ class MultiViewSessionManagerTest {
         } finally { Dispatchers.resetMain() }
     }
 
+    @Test fun recordingReclaimingOldPlayerDoesNotCancelAReplacementOnAnotherAccount() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val f = Fixture(this, maximum = 1, sourceForChannel = { if (it == 1L) 1 else 2 })
+            f.connections.register(2, 1)
+            val panel = f.addReady(1)
+            val oldToken = f.connections.owners.keys.single()
+            f.manager.replace(panel, 2)
+            runCurrent()
+            assertEquals(2, f.players.size)
+            val candidate = f.player(2)
+            f.connections.owners.getValue(oldToken).invoke()
+            runCurrent()
+            assertEquals(1, f.player(1).releases)
+            assertEquals(0, candidate.releases)
+            assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+            assertEquals(1, f.connections.snapshot(2)!!.locallyReserved)
+            candidate.ready()
+            runCurrent()
+            assertEquals(2L, f.state.panels.single().channelId)
+            assertEquals(MultiViewPanelStatus.PLAYING, f.state.panels.single().status)
+            assertTrue(f.state.panels.single().engineReady)
+            assertEquals(0, candidate.releases)
+            assertEquals(1f, candidate.currentVolume)
+        } finally { Dispatchers.resetMain() }
+    }
+
     @Test fun recordingPreemptingSeamlessCandidateKeepsTheAlreadyPlayingChannel() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

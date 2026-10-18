@@ -72,8 +72,14 @@ internal fun MultiViewPresetsDialog(manager: MultiViewSessionManager, onDismiss:
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
                         val id = editId
-                        val saved = if (id != null) store.rename(id, name)
-                        else manager.capturePresentation()?.let { store.upsert(name, it) != null } ?: false
+                        val saved = if (id != null) store.rename(id, name) else {
+                            val presentation = manager.capturePresentation()
+                            if (presentation == null) {
+                                error = "Panels must finish starting successfully or be removed before saving this layout."
+                                return@Button
+                            }
+                            store.upsert(name, presentation) != null
+                        }
                         if (saved) naming = false else error = "Use a plain name of 1–80 characters. Up to 32 presets can be saved."
                     }, enabled = name.isNotBlank()) { Text("Save") }
                     TextButton(onClick = { naming = false }) { Text("Cancel") }

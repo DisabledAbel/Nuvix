@@ -294,7 +294,7 @@ class MultiViewSessionManager(
                     connections.registerOwner(token, { if (_state.value.primaryPanelId == record.id) 2 else 1 }) {
                         withContext(Dispatchers.Main.immediate) {
                             if (owns(record, attempt)) {
-                                record.operation?.cancel()
+                                if (record.candidate == null || record.candidate === attempt) record.operation?.cancel()
                                 close(attempt)
                                 if (record.current === attempt) record.current = null
                                 if (record.candidate === attempt) record.candidate = null
