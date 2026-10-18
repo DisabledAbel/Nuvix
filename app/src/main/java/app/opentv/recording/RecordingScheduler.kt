@@ -25,7 +25,7 @@ object RecordingScheduler {
     private const val EXTRA_ID = "recordingId"
 
     /** How long before a booking starts to warn the viewer that the screen is about to switch. */
-    const val WARN_LEAD_MILLIS = 30_000L
+    const val WARN_LEAD_MILLIS = MultiViewRecordingConflictPolicy.DEFAULT_LEAD_MILLIS
 
     /** Schedules the recording start alarm at the supplied trigger time. */
     fun set(context: Context, recordingId: Long, triggerAtMillis: Long) =
@@ -35,13 +35,17 @@ object RecordingScheduler {
     fun cancel(context: Context, recordingId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pendingIntent(context, recordingId, ACTION_START))
+        cancelWarning(context, recordingId)
     }
 
-    /** Arm the "about to switch" pre-alarm [WARN_LEAD_MILLIS] before [startAtMillis]; a no-op if
-     *  that instant has already passed (the recording is due immediately). */
+    /** Replaces the padded-start warning alarm, defaulting to [WARN_LEAD_MILLIS] lead.
+     * Late warning setup fires promptly while the deadline is still future. */
     fun setWarning(context: Context, recordingId: Long, startAtMillis: Long) {
-        val at = startAtMillis - WARN_LEAD_MILLIS
-        if (at <= System.currentTimeMillis()) return
+        val now = System.currentTimeMillis()
+        cancelWarning(context, recordingId)
+        if (startAtMillis <= now) return
+        val lead = app.opentv.core.ServiceLocator.get(context).settings.recordConflictLeadMinutes.value * 60_000L
+        val at = (startAtMillis - lead).coerceAtLeast(now + 1)
         arm(context, pendingIntent(context, recordingId, ACTION_WARN), at)
     }
 
@@ -49,6 +53,7 @@ object RecordingScheduler {
     fun cancelWarning(context: Context, recordingId: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pendingIntent(context, recordingId, ACTION_WARN))
+        RecordingConflictNotifications.cancel(context, recordingId)
     }
 
     /** Registers an alarm using the available exact or fallback scheduling capability. */

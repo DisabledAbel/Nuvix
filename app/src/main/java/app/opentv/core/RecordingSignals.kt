@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * On a single-connection provider account you cannot watch one channel and record another at the
  * same time — the provider cuts one of the two streams. OpenTV's answer, when auto-switch is on, is
- * to move the live view onto the recording itself: 30 seconds before a booking starts the UI warns
+ * to move the live view onto the recording itself: before a booking starts the UI warns
  * the viewer ([imminent]), and when the capture begins the UI switches to *watching the recording
  * file* ([watch]) rather than opening a second live stream. That's one connection, no conflict, and
  * the viewer ends up on exactly what's being recorded.
@@ -25,6 +25,10 @@ import java.util.concurrent.ConcurrentHashMap
  * consumed by the nav graph, and cleared so a stale one never re-fires.
  */
 object RecordingSignals {
+    private val _review = MutableStateFlow<Long?>(null)
+    val review = _review.asStateFlow()
+    fun requestReview(id: Long) { _review.value = id }
+    fun consumeReview() { _review.value = null }
 
     /** A recording that just started capturing and the UI should switch to watching, plus when the
      *  request was made so a long-backgrounded app can ignore a stale one. */

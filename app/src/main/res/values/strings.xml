@@ -499,7 +499,7 @@
     <string name="rec_switch_now_title">Recording %1$s</string>
     <string name="rec_switch_now_text">Now recording on %1$s — tap to watch</string>
     <string name="rec_switch_soon_title">Recording soon: %1$s</string>
-    <string name="rec_switch_soon_text">Starts on %1$s in 30s — this screen will switch to it</string>
+    <string name="rec_switch_soon_text">Starts soon on %1$s — this screen will switch when capture begins</string>
     <string name="rec_switch_banner">“%1$s” records on %2$s — this screen will switch</string>
     <string name="rec_switch_keep_watching">Keep watching</string>
     <!-- Guard before opening live TV while a recording runs (single connection) -->

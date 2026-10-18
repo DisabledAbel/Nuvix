@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
  * Fires when a booked recording is due, when its "about to switch" pre-alarm lands, or after a
  * reboot. On the due alarm it starts the capture service and — if auto-switch is on — moves the
  * live view onto the recording so a single-connection account doesn't get its live stream cut. On
- * the pre-alarm it warns the viewer 30s ahead. On boot it re-arms every still-future booking, since
+ * the pre-alarm it reevaluates viewing conflicts at the configured lead time. On boot it re-arms every still-future booking, since
  * alarms don't survive a power cycle.
  */
 class RecordingAlarmReceiver : BroadcastReceiver() {
@@ -63,6 +63,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
                 val graph = ServiceLocator.get(app)
                 val rec = graph.recordingRepository.byId(id) ?: return@launch
                 if (rec.status != RecordingStatus.SCHEDULED) return@launch
+                RecordingConflictNotifications.cancel(app, id)
                 val now = System.currentTimeMillis()
                 if (rec.scheduledEndMillis > 0 && now >= rec.scheduledEndMillis) {
                     graph.recordingRepository.setScheduledStatus(id, RecordingStatus.MISSED, "Recording window expired before alarm delivery")
@@ -88,17 +89,36 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    /** 30s out: tell the viewer the screen is about to switch (banner in-app + a heads-up card). */
+    /** Revalidate the current booking/account state before notifying; never start UI in the background. */
     private fun onWarn(context: Context, id: Long) {
         val pending = goAsync()
         val app = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val graph = ServiceLocator.get(app)
-                if (!graph.settings.recordAutoSwitch.value) return@launch
                 val rec = graph.recordingRepository.byId(id) ?: return@launch
                 if (rec.status != RecordingStatus.SCHEDULED) return@launch
-                if (!isTailWatchable(rec)) return@launch
+                val now = System.currentTimeMillis()
+                if (rec.scheduledStartMillis <= now) {
+                    RecordingConflictNotifications.cancel(app, id)
+                    return@launch
+                }
+                val lead = graph.settings.recordConflictLeadMinutes.value * 60_000L
+                if (rec.scheduledStartMillis - now > lead) {
+                    RecordingScheduler.setWarning(app, id, rec.scheduledStartMillis)
+                    return@launch
+                }
+                val available = graph.sourceRepository.enabled().associateBy { it.id }
+                available.values.forEach { graph.connections.registerSource(it) }
+                val rows = (graph.recordingRepository.scheduled() + graph.recordingRepository.active()).filter { it.sourceId in available }
+                MultiViewRecordingConflictPolicy.detect(rows, graph.connections.snapshots.value, now, lead)
+                    .firstOrNull { it.recording.id == id }?.let { conflict ->
+                        if (RecordingConflictNotifications.show(app, conflict)) {
+                            graph.recordingRepository.event(id, "VIEWING_WARNING_ALARM", "Recording warning delivered; deadline fallback remains independent of notification visibility")
+                        }
+                        return@launch // This conflict replaces the optional auto-navigation warning.
+                    }
+                if (!graph.settings.recordAutoSwitch.value || !isTailWatchable(rec)) return@launch
                 RecordingSignals.warn(
                     RecordingSignals.Imminent(
                         recordingId = id,
@@ -167,7 +187,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setTimeoutAfter(RecordingScheduler.WARN_LEAD_MILLIS)
+            .setTimeoutAfter((rec.scheduledStartMillis - System.currentTimeMillis()).coerceAtLeast(1))
         safeNotify(context, WARN_NOTIFICATION_BASE + rec.id.toInt(), builder.build())
     }
 

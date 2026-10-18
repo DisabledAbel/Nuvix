@@ -138,6 +138,8 @@ class RecordingService : Service() {
             late = isLateStart(recording, now)
             graph.sourceRepository.byId(recording.sourceId)?.let { connections.registerSource(it) }
             val request = ConnectionRequest("recording:$id", generations.incrementAndGet(), recording.sourceId, ConnectionPurpose.RECORDING)
+            val beforeViewing = connections.snapshotForSource(recording.sourceId)?.reservations
+                .orEmpty().filter { it.token.purpose != ConnectionPurpose.RECORDING }.map { it.token }
             when (val reservation = connections.reserveForRecording(request, allowInterruptLive = true)) {
                 is ReservationResult.Reserved -> token = reservation.token
                 is ReservationResult.ApprovalRequired -> {
@@ -148,6 +150,9 @@ class RecordingService : Service() {
                 is ReservationResult.Denied -> { error = reservation.reason; return }
             }
             repo.event(id, "PROVIDER_SELECTED", "Authorized provider selected; account connection reserved")
+            val afterViewing = connections.snapshotForSource(recording.sourceId)?.reservations.orEmpty().map { it.token }.toSet()
+            val reclaimed = beforeViewing.filter { it !in afterViewing }
+            if (reclaimed.isNotEmpty()) repo.event(id, "VIEWING_RECLAIMED", "Unattended recording priority released ${reclaimed.size} conflicting viewing connection(s); unrelated accounts retained")
             RecordingStorage.checkHeadroom(recording.filePath,
                 RecordingStorage.MIN_FREE_BYTES * captures.size.coerceAtLeast(1))
             sink = RecordingStorage.openSink(applicationContext, graph.settings, recording.filePath)

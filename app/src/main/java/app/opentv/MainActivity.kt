@@ -6,6 +6,9 @@
  */
 package app.opentv
 
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.collect
+
 import com.disabledabel.nuvix.R
 
 import android.app.PictureInPictureParams
@@ -212,6 +215,8 @@ class MainActivity : ComponentActivity() {
         if (recId != 0L) {
             app.opentv.core.RecordingSignals.requestWatch(recId, System.currentTimeMillis())
         }
+        val reviewId = intent?.getLongExtra(EXTRA_REVIEW_RECORDING, 0L) ?: 0L
+        if (reviewId > 0) app.opentv.core.RecordingSignals.requestReview(reviewId)
     }
 
     // ---- Picture-in-picture ------------------------------------------------------------------
@@ -272,6 +277,7 @@ class MainActivity : ComponentActivity() {
 
         /** A recording auto-switch notification carries the recording to watch in this extra. */
         const val EXTRA_WATCH_RECORDING = "opentv.watch_recording"
+        const val EXTRA_REVIEW_RECORDING = "nuvix.review_recording"
     }
 }
 
@@ -385,6 +391,20 @@ private fun NuvixNavigation(
     val currentEntry by navController.currentBackStackEntryAsState()
     val multiView = liveSession.multiView
     val multiViewState by multiView.state.collectAsState()
+    val recordingWarning by liveSession.recordingConflicts.warning.collectAsState()
+    val recordingReview by app.opentv.core.RecordingSignals.review.collectAsState()
+    recordingReview?.let { id ->
+        val reviewContext = LocalContext.current
+        var recording by remember(id) { mutableStateOf<app.opentv.data.model.Recording?>(null) }
+        LaunchedEffect(id) {
+            ServiceLocator.get(reviewContext).recordingRepository.observeAll().collect { rows -> recording = rows.firstOrNull { it.id == id } }
+        }
+        AlertDialog(onDismissRequest = app.opentv.core.RecordingSignals::consumeReview,
+            title = { Text(recording?.title ?: "Recording details") },
+            text = { Text(recording?.let { "${it.channelName} · ${it.status}\nPadded start: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.scheduledStartMillis))}\nProtect Recording: ${it.protectedRecording} · Lock Padding: ${it.lockPadding}\nScheduled recordings retain their existing priority at the deadline." } ?: "This recording is no longer available.") },
+            confirmButton = { TextButton(onClick = app.opentv.core.RecordingSignals::consumeReview) { Text("Close") } })
+    }
+    if (recordingReview == null) app.opentv.ui.recordings.RecordingConflictHost(liveSession.recordingConflicts, multiView)
     var guideRequestGeneration by rememberSaveable { mutableIntStateOf(0) }
     var mainLivePresentation by rememberSaveable { mutableStateOf(LivePresentation.BROWSING) }
     var guideVisible by rememberSaveable { mutableStateOf(false) }
@@ -696,6 +716,7 @@ private fun NuvixNavigation(
             ) {
                 app.opentv.ui.multiview.MultiViewScreen(
                     manager = multiView,
+                    showApproval = recordingWarning == null,
                     onExit = {
                         multiView.stop()
                         navController.navigate(Routes.HOME) { popUpTo(Routes.HOME); launchSingleTop = true }
@@ -912,13 +933,13 @@ private fun NuvixNavigation(
 
         // Sits above the whole nav graph so a found update can prompt from any screen.
 
-        // "About to switch to a recording" banner — shows 30s before an auto-switch fires.
-        RecordingSwitchBanner()
+        // Optional auto-navigation banner shares the configured warning lead time.
+        if (recordingWarning == null) RecordingSwitchBanner()
     }
 }
 
 /**
- * A slim banner shown 30 seconds before a scheduled recording takes over the screen (single-
+ * A slim banner shown before a scheduled recording takes over the screen (single-
  * connection auto-switch). It gives the viewer a heads-up and a way out: "Keep watching" suppresses
  * the switch for that booking. It clears itself once the switch would have happened.
  */

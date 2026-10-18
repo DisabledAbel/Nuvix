@@ -54,6 +54,8 @@ data class MultiViewPanel(
 )
 data class MultiViewApproval(val channelName: String, val providerName: String, val challenge: UnknownConnectionChallenge)
 data class MultiViewDuplicate(val channelId: Long, val existingPanelId: String, val targetPanelId: String?)
+/** Exact runtime identity captured by a recording warning, invalidated by every newer tune. */
+data class MultiViewPlaybackReference(val panelId: String, val token: ReservationToken, val channelId: Long, val generation: Long)
 data class MultiViewState(
     val panels: List<MultiViewPanel> = emptyList(),
     val focusedPanelId: String? = null,
@@ -178,6 +180,44 @@ class MultiViewSessionManager(
         tune(record, channelId)
     }
 
+    fun playbackReferences(): List<MultiViewPlaybackReference> = records.values.flatMap { record ->
+        listOfNotNull(record.current, record.candidate).distinct().filterNot { it.released }.map {
+            MultiViewPlaybackReference(record.id, it.token, it.channel.channelId, record.generation)
+        }
+    }
+
+    fun isCurrent(reference: MultiViewPlaybackReference): Boolean = playbackReferences().contains(reference)
+
+    fun cancelRecordingReplacement(reference: MultiViewPlaybackReference) {
+        if (!isCurrent(reference)) return
+        val record = records[reference.panelId] ?: return
+        ++record.generation
+        record.operation?.cancel()
+        record.candidate?.takeUnless { it === record.current }?.let(::close)
+        record.candidate = null
+        showCurrent(record)
+        applyAudio()
+    }
+
+    /** Leaves the slot, layout and audio role intact when the user releases viewing for DVR. */
+    fun releaseForRecording(reference: MultiViewPlaybackReference): Boolean {
+        if (!isCurrent(reference)) return false
+        val record = records[reference.panelId] ?: return false
+        pauseRecord(record)
+        update(record.id) { it.copy(error = "Paused by you to protect a scheduled recording.") }
+        applyAudio()
+        return true
+    }
+
+    /** Conflict alternatives retain the original until a ready independent candidate commits. */
+    fun replaceForRecording(reference: MultiViewPlaybackReference, channelId: Long, stillValid: () -> Boolean): Boolean {
+        if (!isCurrent(reference) || !stillValid() || findChannel(channelId) != null) return false
+        val record = records[reference.panelId] ?: return false
+        expectedReferences.remove(record.id)
+        tune(record, channelId, preserveOriginal = true, stillValid = stillValid)
+        return true
+    }
+
     fun resolveDuplicate(choice: MultiViewDuplicateChoice) {
         val duplicate = _state.value.duplicate ?: return
         _state.value = _state.value.copy(duplicate = null)
@@ -216,7 +256,7 @@ class MultiViewSessionManager(
         }
     }
 
-    private fun tune(record: PanelRecord, channelId: Long) {
+    private fun tune(record: PanelRecord, channelId: Long, preserveOriginal: Boolean = false, stillValid: () -> Boolean = { true }) {
         record.operation?.cancel()
         record.candidate?.let { close(it) }; record.candidate = null
         if (record.current?.released == true) record.current = null
@@ -233,6 +273,8 @@ class MultiViewSessionManager(
                     val channel = resolve(channelId)
                     coroutineContext.ensureActive()
                     if (!valid(record, generation)) return@withLock
+                    if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                        "The recording warning changed or expired. Your previous channel is retained where available."))
                     val snapshot = connections.snapshot(channel.sourceId)
                     val maximum = snapshot?.effectiveMaximum
                     val activePlayers = allocatedCount()
@@ -252,12 +294,19 @@ class MultiViewSessionManager(
                     // Unknown allowance never authorizes speculative make-before-break.
                     val seamless = old != null && maximum != null && (snapshot?.locallyReserved ?: 0) < maximum &&
                         activePlayers < hardware.capability.maximumPlayers && activePlayers < 4
-                    if (!seamless) { old?.let(::close); record.current = null }
+                    if (preserveOriginal && (old == null || old.token.accountKey == snapshot?.accountKey ||
+                            activePlayers >= hardware.capability.maximumPlayers || activePlayers >= 4 ||
+                            (maximum != null && !seamless))) {
+                        throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                            "A safe replacement needs an independent account and a spare decoder. Release a secondary panel or keep watching until recording starts."))
+                    }
+                    val retainOld = seamless || preserveOriginal
+                    if (!retainOld) { old?.let(::close); record.current = null }
                     if (allocatedCount() >= minOf(4, hardware.capability.maximumPlayers)) {
                         failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
                             "This device cannot start another hardware-decoded panel. Use a smaller layout.")); return@withLock
                     }
-                    update(record.id) { if (seamless) it.copy(error = null, failureKind = null) else it.copy(channelId = channelId, channelName = channel.channelName,
+                    update(record.id) { if (retainOld) it.copy(error = null, failureKind = null) else it.copy(channelId = channelId, channelName = channel.channelName,
                         providerName = channel.providerName, sourceId = channel.sourceId, accountKey = snapshot?.accountKey,
                         status = if (seamless) it.status else MultiViewPanelStatus.STARTING,
                         engineReady = seamless, error = null, failureKind = null, repeatedBuffering = false) }
@@ -282,6 +331,8 @@ class MultiViewSessionManager(
                     pendingToken = token
                     coroutineContext.ensureActive()
                     if (!valid(record, generation)) { connections.release(token); pendingToken = null; return@withLock }
+                    if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                        "The recording warning changed or expired. Your previous channel is retained where available."))
                     val attempt = Runtime(token, channel, generation)
                     runtime = attempt
                     attempt.player = players.create(object : MultiViewPlayer.Listener {
@@ -305,14 +356,16 @@ class MultiViewSessionManager(
                             }
                         }
                     }
-                    if (!seamless) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
+                    if (!retainOld) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
                     attempt.player.start(channel)
                     val ready = withTimeoutOrNull(startupTimeoutMs) { attempt.ready.await() } == true
                     coroutineContext.ensureActive()
                     if (!valid(record, generation) || attempt.released) return@withLock
+                    if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                        "The recording warning changed or expired. Your previous channel is retained where available."))
                     if (!ready) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.NETWORK,
                         "This stream did not become ready. Retry or replace the channel; the other panels are still playing."))
-                    if (seamless) old?.let(::close)
+                    if (retainOld) old?.let(::close)
                     record.current = attempt; record.candidate = null
                     update(record.id) { it.copy(channelId = channel.channelId, channelName = channel.channelName,
                         providerName = channel.providerName, sourceId = channel.sourceId, accountKey = token.accountKey,

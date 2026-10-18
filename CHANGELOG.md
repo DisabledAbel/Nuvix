@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add configurable two-minute pre-recording Multi-View conflict review before padded starts,
+  account-aware simultaneous demand, remote-accessible actions and stable schedule-bound dismissal.
+- Offer explicit independent-account exact-guide/confirmed-Sports alternatives with fresh capacity
+  checks, request-specific Unknown consent and original-player retention until successful playback.
+- Expire stale warning actions and retain independent unattended DVR priority/reclamation, paused
+  panel slots, layout/audio roles, notifications and recording activity history.
+
 - Add lifecycle-owned Smart Multi-View with up to four live panels, shared account reservations,
   incremental decoder admission, stable panel identities and independent failed-panel actions.
 - Add balanced two/three/four-channel and focused layouts, D-pad panel selection, explicit panel

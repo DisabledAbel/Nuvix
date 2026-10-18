@@ -144,7 +144,7 @@ Leaving the app releases the wall's streams unless the selected panel is in PiP.
 offers **Resume Channels** and revalidates capacity instead of silently reconnecting.
 If recording reclamation pauses a panel, **Panel Actions → Choose Authorized Alternative**
 opens matching local broadcasts. This post-interruption choice does not delay a recording;
-interactive primary-panel conflict review before the recording deadline remains unfinished.
+pre-recording conflict review now offers the same explicit alternatives before the deadline (see below).
 
 ## Connection management and DVR foundation
 
@@ -444,10 +444,9 @@ Physical Android TV, Google TV and Fire TV acceptance below remains required. Au
 policy/UI coverage does not certify hardware decoders, uninterrupted network throughput,
 real remote focus, exact-alarm delivery or Android/vendor background execution.
 
-Interactive primary-panel conflict review with an authorized alternative-provider picker
-at a recording deadline remains an outstanding Multi-View acceptance item. Current behavior
-pauses conflicting optional viewing under the established recording-priority policy and
-explains why; it never automatically switches providers or cancels protected capture.
+Interactive pre-deadline conflict review is implemented using the existing scheduler,
+allocator and recording plan. Physical-device acceptance remains required for the warning
+dialog, notifications, replacement playback and unattended deadline behavior.
 
 Separate future DVR scope includes running duration extension, reliable-source automatic
 sports extension, external-drive free
@@ -485,3 +484,98 @@ device, including a memory-constrained model.
 | Fullscreen, secondary restoration, Guide compact transfer, Back and PiP | Same selected player where supported; no double surface attachment; primary-first checked restoration and Guide focus/audio preservation. |
 | Sports multiple confirmed broadcasts, suggestions and disabled/hidden sources | One explicit authorized choice; provider identity visible; unavailable choices never start playback. |
 | Preset preview/CRUD, missing channels, process death and Review & Restore | Preview opens no connection; credentials absent; no silent reconnection; unavailable references explained. |
+
+
+## Pre-recording Multi-View conflict review
+
+The warning defaults to **two minutes before the effective padded recording start**.
+Change **Settings → Recording → Multi-View recording warning** from 1–10 minutes.
+The scheduled window already includes start padding; it is never subtracted twice.
+If the existing DVR conflict plan must delay optional unlocked padding, review uses that
+planned start, without applying any padding changes before the existing deadline decision.
+Warnings do not depend on recording auto-navigation being enabled or on internal-file storage.
+
+The application-scoped account snapshots remain authoritative for local capacity. Pending,
+active and releasing reservations count; explicitly linked playlists share their account.
+Independent providers remain separate. The read-only projection includes accepted simultaneous
+bookings and active captures without counting a recorder twice. Sufficient confirmed capacity
+produces no dialog. Unknown allowances are labeled uncertain; an additional unknown-capacity
+recording cannot be authorized by this viewing dialog.
+
+When the Activity is visible, a global **Recording Starting Soon** dialog works over Multi-View,
+fullscreen and Guide. It shows the title, recording/viewing providers, affected panel/channel,
+local allowance, padded start, seconds remaining and unattended policy. D-pad moves between
+explicit buttons with a visible focus border; OK selects; Back means **Keep Watching Until
+Recording Starts**. **View Recording Details** expands protection/padding information without
+closing playback. Keep Watching is remembered for this recording ID and window across process
+restart; changing the booking window permits a new warning. Alarm redelivery updates the same
+identity rather than opening stacked dialogs. Canceled/deleted/started/rescheduled bookings,
+capacity changes, provider removal and newer panel generations invalidate stale actions.
+
+**Switch Primary/Secondary Panel to Another Provider** opens a disconnected chooser. Confirmed,
+currently playable Sports Hub associations are preferred. Other choices require the same exact
+provider-supplied or manually assigned guide identity from existing catalog provider variants.
+Name groups or inferred guide-name matches alone are insufficient. Hidden/disabled/deleted
+sources and full or manually linked same-account pools are excluded. The chooser also accounts
+for recording demand on candidate accounts at the warning deadline, so an idle account is not
+advertised as spare when an accepted scheduled capture will consume its capacity. Each choice shows channel,
+provider and local capacity; Unknown explains request-specific confirmation. No source is selected
+automatically. Selecting a choice rechecks discovery/authorization and uses the existing allocator
+and safe replacement engine. Unknown extra connections still require **Open once** approval.
+
+A conflict replacement retains the original player until the independently reserved candidate
+is ready, preserving the panel ID, layout, primary designation and audio role. Unrelated streams
+are retained. A failed candidate releases its own resources and leaves the old stream playing
+where available. This conservative path needs spare decoder headroom: a fully occupied device
+can require releasing a secondary panel first. It never opens a fifth decoder or exceeds a
+configured allowance. The warning remains while further affected viewing still needs capacity.
+**Release Conflicting Viewing Panel** preserves its visible paused slot and the other panels.
+
+At the deadline, review expires and pending replacement/consent work is invalidated. Nothing in
+the dialog starts, delays, cancels or postpones capture. The existing `RecordingService` calls
+`RecordingEngine.prepareDue`, applies protected/manual/series/active priority and locked-padding
+rules, then the allocator closes same-account previews, secondary panels and finally the primary
+only as needed. Existing partial recovery, storage safeguards and background capture remain.
+Recording history records warning delivery, user deferral/release/switch requests and actual
+deadline viewing reclamation. No provider credentials or stream locators enter these messages.
+
+The existing Android recording notification channel carries an expiring, stable-ID conflict
+notification when permitted; tapping it opens recording details through an explicit PendingIntent.
+A visible dialog clears its notification. Ordinary backgrounding already releases Multi-View;
+PiP may retain a conflicting panel and use notification review. No background Activity is launched.
+Android TV/Fire TV vendors, notification permission/channel settings, Doze, exact-alarm access,
+force-stop and device power can delay or prevent warnings. Foreground review also reevaluates at
+one-second intervals and on schedule/account/session changes, so missed warning alarms are not
+required for the UI to work. The independent unattended policy remains the fallback; recording
+cannot be guaranteed through denied OS execution, provider failures or a powered-off device.
+
+### Current implementation paths
+
+- Scheduler/receiver: `app/src/main/java/app/opentv/recording/RecordingScheduler.kt`,
+  `RecordingAlarmReceiver.kt`; DVR plan/capture remain `RecordingEngine.kt`,
+  `DvrConflictPolicy.kt`, `RecordingService.kt`.
+- Read-only conflict projection, session review, notifications and local acknowledgment:
+  `recording/MultiViewRecordingConflict.kt`, `RecordingConflictCoordinator.kt`,
+  `RecordingConflictNotifications.kt`, `RecordingWarningStore.kt`.
+- Broadcast discovery: `recording/RecordingConflictAlternatives.kt`, the existing
+  `data/repo/CatalogRepository.kt`, `sports/SportsRepository.kt` and `sports/SportsDao.kt`.
+- Runtime actions: `multiview/MultiViewSessionManager.kt`; retained ownership/lifecycle:
+  `player/LivePlaybackSession.kt`; global TV UI: `ui/recordings/RecordingConflictDialog.kt`
+  hosted by `MainActivity.kt`.
+- Existing provider/channel repositories, `connections/AccountConnectionManager.kt`,
+  `ConnectionAllocator.kt`, remote Compose components and GitHub Actions are reused.
+
+### Required device acceptance for conflict review (not executed here)
+
+- [ ] Android TV, Google TV and Fire TV: two/three/four streams, primary/secondary warnings,
+  large text, visible D-pad focus, OK/Back, Guide/fullscreen/PiP and notification click-through.
+- [ ] Independent and manually linked authorized accounts, unknown allowances, changed limits,
+  provider removal, several panels in one pool, and usage on other devices.
+- [ ] Alternative startup failure, insufficient decoder headroom, rapid selections and responses
+  exactly at the deadline; verify layout/audio and unrelated streams remain intact.
+- [ ] Keep Watching and absent-user deadlines: previews then secondaries then primary yield only
+  as needed; simultaneous protected/manual/series recordings preserve priority and locked padding.
+- [ ] Cancel/reschedule/change padding while open; background, screen-off, reboot/process death,
+  duplicate/inexact/late alarms, denied notification access and vendor power restrictions.
+- [ ] Capture/history evidence on internal, USB and NAS destinations; verify valid media starts
+  without any dialog acknowledgment and no protected capture is sacrificed for optional viewing.

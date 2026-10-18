@@ -45,6 +45,7 @@ fun MultiViewScreen(
     onExit: () -> Unit,
     onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier,
+    showApproval: Boolean = true,
 ) {
     val state by manager.state.collectAsState()
     val context = LocalContext.current
@@ -181,7 +182,7 @@ fun MultiViewScreen(
             }
         }, confirmButton = { TextButton(onClick = { chooseLayout = false }) { Text("Cancel") } },
     )
-    state.approval?.let { approval -> AlertDialog(
+    state.approval?.takeIf { showApproval }?.let { approval -> AlertDialog(
         onDismissRequest = { manager.answerApproval(false) }, title = { Text("Unknown Provider Allowance") },
         text = { Text("${approval.providerName} has no confirmed connection allowance. Open an additional connection for ${approval.channelName}? This approval applies only to this request. Active recordings keep their reservations.") },
         confirmButton = { Button(onClick = { manager.answerApproval(true) }) { Text("Open This Stream") } },

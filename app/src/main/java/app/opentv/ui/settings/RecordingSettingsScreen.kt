@@ -6,6 +6,8 @@
  */
 package app.opentv.ui.settings
 
+import androidx.compose.runtime.collectAsState
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -171,6 +173,12 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
 
         Spacer(Modifier.height(20.dp))
         SectionCard(stringResource(R.string.recset_behaviour_title)) {
+            val warningLead by settings.recordConflictLeadMinutes.collectAsState()
+            StepperRow(label = "Multi-View recording warning", subtitle = "Warn before the padded recording start. Recordings keep priority if unanswered.",
+                value = warningLead, unit = "min", min = 1, max = 10) {
+                settings.setRecordConflictLeadMinutes(it)
+                scope.launch { ServiceLocator.get(context).recordingEngine.rearmScheduled() }
+            }
             StepperRow(
                 label = stringResource(R.string.recset_pad_start),
                 subtitle = stringResource(R.string.recset_pad_start_desc),

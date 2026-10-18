@@ -969,4 +969,167 @@ class MultiViewSessionManagerTest {
         assertEquals(2, f.players.size)
         assertTrue(f.state.panels.all { it.status == MultiViewPanelStatus.PAUSED })
     }
+    @Test fun warningApprovedReplacementPreservesPositionAudioAndUnrelatedPlayers() = runTest {
+        val f = Fixture(this, sourceForChannel = { if (it == 3L) 2 else 1 })
+        f.connections.register(2, 1)
+        val primary = f.addReady(1); f.addReady(2)
+        f.manager.selectAudio(primary)
+        val before = f.state
+        val reference = f.manager.playbackReferences().first { it.panelId == primary }
+        assertTrue(f.manager.replaceForRecording(reference, 3) { true })
+        runCurrent()
+        assertEquals(0, f.player(1).releases)
+        assertEquals(0, f.player(2).releases)
+        f.player(3).ready(); runCurrent()
+        assertEquals(1, f.player(1).releases)
+        assertEquals(before.panels.map { it.id }, f.state.panels.map { it.id })
+        assertEquals(before.audioPanelId, f.state.audioPanelId)
+        assertEquals(before.primaryPanelId, f.state.primaryPanelId)
+        assertEquals(before.layout, f.state.layout)
+        assertEquals(0, f.player(2).releases)
+        assertEquals(1f, f.player(3).currentVolume)
+    }
+
+    @Test fun failedRecordingAlternativeRetainsOriginalAndCandidateReleasesCapacity() = runTest {
+        val f = Fixture(this, sourceForChannel = { if (it == 3L) 2 else 1 })
+        f.connections.register(2, 1)
+        val primary = f.addReady(1); f.addReady(2)
+        val reference = f.manager.playbackReferences().first { it.panelId == primary }
+        f.manager.replaceForRecording(reference, 3) { true }; runCurrent()
+        f.player(3).fail(); runCurrent()
+        assertEquals(0, f.player(1).releases)
+        assertEquals(0, f.player(2).releases)
+        assertEquals(1L, f.state.panels.first().channelId)
+        assertEquals(0, f.connections.snapshot(2)!!.locallyReserved)
+    }
+
+    @Test fun deadlineDuringAlternativeStartupNeverCommitsLateCandidate() = runTest {
+        val f = Fixture(this, sourceForChannel = { if (it == 3L) 2 else 1 })
+        f.connections.register(2, 1)
+        val primary = f.addReady(1)
+        val reference = f.manager.playbackReferences().first { it.panelId == primary }
+        var beforeDeadline = true
+        f.manager.replaceForRecording(reference, 3) { beforeDeadline }; runCurrent()
+        beforeDeadline = false
+        f.player(3).ready(); runCurrent()
+        assertEquals(0, f.player(1).releases)
+        assertEquals(1, f.player(3).releases)
+        assertEquals(1L, f.state.panels.first().channelId)
+    }
+
+    @Test fun staleWarningCannotReleaseOrRetuneNewerPanel() = runTest {
+        val f = Fixture(this)
+        val primary = f.addReady(1)
+        val stale = f.manager.playbackReferences().single()
+        f.manager.replace(primary, 2); runCurrent(); f.player(2).ready(); runCurrent()
+        assertFalse(f.manager.releaseForRecording(stale))
+        assertFalse(f.manager.replaceForRecording(stale, 3) { true })
+        assertEquals(0, f.player(2).releases)
+    }
+
+    @Test fun userReleaseLeavesPrimarySlotAndOtherAudioActive() = runTest {
+        val f = Fixture(this)
+        val primary = f.addReady(1); val secondary = f.addReady(2)
+        f.manager.selectAudio(secondary)
+        assertTrue(f.manager.releaseForRecording(f.manager.playbackReferences().first { it.panelId == primary }))
+        assertEquals(primary, f.state.primaryPanelId)
+        assertEquals(secondary, f.state.audioPanelId)
+        assertEquals(MultiViewPanelStatus.PAUSED, f.state.panels.first().status)
+        assertEquals(0, f.player(2).releases)
+        assertEquals(1f, f.player(2).currentVolume)
+    }
+
+    @Test fun unknownAlternativeRequiresConsentAndRetainsOriginalWhileWaiting() = runTest {
+        val f = Fixture(this, sourceForChannel = { if (it == 3L) 2 else 1 })
+        f.connections.register(2, null)
+        f.connections.reserve(ConnectionRequest("other-device-local", 1, 2, ConnectionPurpose.LIVE))
+        f.addReady(1)
+        val reference = f.manager.playbackReferences().single()
+        f.manager.replaceForRecording(reference, 3) { true }; runCurrent()
+        assertNotNull(f.state.approval)
+        assertEquals(0, f.player(1).releases)
+        f.manager.answerApproval(false); runCurrent()
+        assertEquals(0, f.player(1).releases)
+        assertEquals(1L, f.state.panels.first().channelId)
+    }
+
+    @Test fun coordinatorSuppressesDuplicateWarningsAndExpiresWithoutStoppingPlayers() = runTest {
+        val f = Fixture(this, maximum = 1)
+        f.addReady(1)
+        var rows = listOf(warningBooking())
+        val dismissed = mutableSetOf<String>()
+        val events = mutableListOf<String>()
+        val coordinator = app.opentv.recording.RecordingConflictCoordinator(backgroundScope, f.manager,
+            { rows }, { f.connections.allocator.snapshots.value }, { 120_000 }, dismissed::contains,
+            { dismissed.add(it); Unit }, { _, kind, _ -> events.add(kind) }, now = { testScheduler.currentTime })
+        coordinator.setVisible(true); runCurrent()
+        val first = coordinator.warning.value!!
+        coordinator.refresh(); coordinator.refresh()
+        assertEquals(1, events.count { it == "VIEWING_WARNING" })
+        coordinator.keepWatching(first.conflict.key); runCurrent(); coordinator.refresh()
+        assertNull(coordinator.warning.value)
+        assertEquals(0, f.player(1).releases)
+        rows = listOf(warningBooking().copy(scheduledStartMillis = 90_000))
+        coordinator.refresh()
+        assertNotNull(coordinator.warning.value)
+        advanceTimeBy(90_000); runCurrent(); coordinator.refresh()
+        assertNull(coordinator.warning.value)
+        assertEquals(0, f.player(1).releases)
+        assertTrue(events.contains("VIEWING_DEFERRED"))
+    }
+
+    @Test fun coordinatorCancellationBackgroundAndProviderCapacityInvalidateDialogActions() = runTest {
+        val f = Fixture(this, maximum = 1); f.addReady(1)
+        var rows = listOf(warningBooking())
+        val notifications = mutableListOf<Long>()
+        val coordinator = app.opentv.recording.RecordingConflictCoordinator(backgroundScope, f.manager,
+            { rows }, { f.connections.allocator.snapshots.value }, { 120_000 }, { false }, {}, { _, _, _ -> },
+            notification = { notifications.add(it.recording.id) }, now = { testScheduler.currentTime })
+        coordinator.setVisible(true); runCurrent()
+        val old = coordinator.warning.value!!
+        coordinator.setVisible(false); runCurrent()
+        assertNull(coordinator.warning.value)
+        assertTrue(notifications.isNotEmpty())
+        coordinator.setVisible(true); runCurrent()
+        f.connections.allocator.configure(1, AccountConnectionPolicy(2, false))
+        coordinator.refresh(); assertNull(coordinator.warning.value)
+        assertFalse(coordinator.release(old.conflict.key, old.panels.first()))
+        f.connections.allocator.configure(1, AccountConnectionPolicy(1, false)); coordinator.refresh()
+        rows = emptyList(); coordinator.refresh()
+        assertNull(coordinator.warning.value)
+        assertFalse(coordinator.release(old.conflict.key, old.panels.first()))
+        assertEquals(0, f.player(1).releases)
+    }
+
+    private fun warningBooking() = app.opentv.data.model.Recording(id = 1, channelId = 99, sourceId = 1,
+        channelName = "Record me", title = "Game", filePath = "/fake.ts", streamUrl = "https://example.invalid/capture",
+        scheduledStartMillis = 60_000, scheduledEndMillis = 600_000, status = app.opentv.data.model.RecordingStatus.SCHEDULED)
+
+    @Test fun fullDecoderCapacityRejectsConflictSwitchWithoutBreakingOriginal() = runTest {
+        val f = Fixture(this, hardwareMaximum = 2, sourceForChannel = { if (it == 3L) 2 else 1 })
+        f.connections.register(2, 1)
+        f.addReady(1); f.addReady(2)
+        f.manager.replaceForRecording(f.manager.playbackReferences().first(), 3) { true }; runCurrent()
+        assertEquals(2, f.players.size)
+        assertEquals(0, f.player(1).releases)
+        assertEquals(0, f.player(2).releases)
+        assertEquals(1L, f.state.panels.first().channelId)
+    }
+
+    @Test fun canceledWarningDuringResolutionKeepsOriginalRetryIdentity() = runTest {
+        val channel = CompletableDeferred<ResolvedMultiViewChannel>()
+        val f = Fixture(this, resolver = { if (it == 3L) channel.await() else Fixture.resolved(it) })
+        f.connections.register(2, 1)
+        f.addReady(1)
+        var allowed = true
+        f.manager.replaceForRecording(f.manager.playbackReferences().single(), 3) { allowed }; runCurrent()
+        allowed = false
+        channel.complete(Fixture.resolved(3, 2)); runCurrent()
+        assertEquals(0, f.player(1).releases)
+        assertEquals(1, f.players.size)
+        assertEquals(1L, f.state.panels.first().channelId)
+        f.manager.retry(f.state.panels.first().id); runCurrent()
+        assertEquals(1L, f.resolvedIds.last())
+    }
+
 }
