@@ -59,7 +59,11 @@ Nuvix Home on an Android TV emulator, with no provider configured.
   Choose **Add Channel** or **Panel Actions**, use D-pad to focus and OK to select audio, and
   use **Edit Layout** to rearrange panels. **Settings → Display & playback → Multi-View**
   controls focus-follow audio (150 ms by default), fullscreen restoration and presentation.
-  Presets are previewed without connecting; restoring channels always checks current capacity.
+  Presets preview the next 24 hours of DVR conflicts without connecting. Exclude panels, choose
+  authorized alternate providers, change the primary, save explicitly or load edits once.
+  Continue With Warning keeps later recording priority and warnings intact; loading rechecks
+  current capacity. Predicted local availability is never a provider-side guarantee.
+  See [upcoming DVR conflicts](docs/smart-multiview-dvr.md#upcoming-dvr-conflicts-in-preset-previews).
 - **Guide:** Open **Guide settings** to choose the layout, default filter, sorting, timeline
   density, artwork, progress and position preferences. Guide controls apply without restarting;
   D-pad and Select open programs, and Back returns to the guide. Filters use your existing

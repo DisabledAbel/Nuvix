@@ -68,6 +68,23 @@ class RecordingRepositoryTest {
         } finally { db.close() }
     }
 
+    @Test fun planningQueryIsBoundedIncludesActiveAndPreservesSchedules() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), OpenTvDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val repo = RecordingRepository(db.recordings(), db.seriesRules(), db.recordingEvents())
+            val inWindow = repo.insert(recording(RecordingStatus.SCHEDULED).copy(scheduledStartMillis = 150, scheduledEndMillis = 190))
+            val active = repo.insert(recording(RecordingStatus.RECORDING).copy(scheduledStartMillis = 1, scheduledEndMillis = 190))
+            repo.insert(recording(RecordingStatus.SCHEDULED).copy(scheduledStartMillis = 200, scheduledEndMillis = 300))
+            repo.insert(recording(RecordingStatus.SCHEDULED).copy(scheduledStartMillis = 1, scheduledEndMillis = 100))
+            repo.insert(recording(RecordingStatus.CANCELED).copy(scheduledStartMillis = 150, scheduledEndMillis = 300))
+            val before = repo.all()
+            assertEquals(setOf(inWindow, active), repo.planningWindow(100, 200).map { it.id }.toSet())
+            assertEquals(1, repo.planningWindow(100, 200, limit = 1).size)
+            assertEquals(before, repo.all())
+            assertTrue(db.recordingEvents().forRecording(inWindow).isEmpty())
+        } finally { db.close() }
+    }
+
     /** Provides the recording fixture used by the current scheduling or capture scenario. */
     private fun recording(status: RecordingStatus) = Recording(channelId = 1, sourceId = 1,
         channelName = "Test", title = "Programme", filePath = "/missing/test.ts", streamUrl = "https://example.com/live.ts", status = status)

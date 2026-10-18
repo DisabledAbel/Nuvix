@@ -21,6 +21,13 @@ recording-priority deadline fallback. Hardware acceptance remains required for r
 notification delivery, provider/decoder behavior and absent-user recording starts. See the
 [conflict review guide](smart-multiview-dvr.md#pre-recording-multi-view-conflict-review).
 
+Saved preset previews now evaluate the next 24 hours of effective recording windows with shared
+account policies, explicit provider alternatives, one-time edits and confirmation/startup
+revalidation. Continue With Warning preserves the later pre-recording review and unattended
+priority. See [preset planning](smart-multiview-dvr.md#upcoming-dvr-conflicts-in-preset-previews).
+Physical-TV validation, structured broadcast language preferences and a per-recording late-start
+setting remain outstanding; the existing fixed grace policy is unchanged.
+
 Further DVR work remains separate: explicit alternative-provider recording resolution,
 running duration changes, reliable-source sports extensions, external-storage capacity
 estimates and opt-in protection-aware retention. Existing Protect Recording, Lock Padding,

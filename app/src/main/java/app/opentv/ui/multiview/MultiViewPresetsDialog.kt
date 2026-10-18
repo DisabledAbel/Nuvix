@@ -104,79 +104,8 @@ internal fun MultiViewPresetsDialog(manager: MultiViewSessionManager, onDismiss:
     preview?.let { preset -> MultiViewPresetReviewDialog(
         manager, store, preset.presentation, "Preview ${preset.name}",
         onDismiss = { preview = null }, onRestored = { preview = null; onDismiss() },
+        preset = preset,
     ) }
-}
-
-/** Reads four catalog rows at most and local account observations; no player or token is allocated. */
-@Composable
-internal fun MultiViewPresetReviewDialog(
-    manager: MultiViewSessionManager,
-    store: MultiViewPresetStore,
-    presentation: MultiViewPresentation,
-    title: String,
-    onDismiss: () -> Unit,
-    onRestored: () -> Unit,
-) {
-    val context = LocalContext.current
-    val graph = remember(context) { ServiceLocator.get(context) }
-    val accounts by graph.connections.snapshots.collectAsState()
-    val preferences by graph.settings.multiViewPreferences.collectAsState()
-    var channels by remember(presentation) { mutableStateOf<List<MultiViewPreviewChannel>?>(null) }
-    var lookupFailed by remember(presentation) { mutableStateOf(false) }
-    LaunchedEffect(presentation) {
-        try {
-            val categories = graph.database.categories().allByKind(app.opentv.data.model.StreamKind.LIVE)
-            channels = loadMultiViewPreviewChannels(presentation, graph.database.channels()::byId,
-                graph.database.sources()::byId, visible = { channel ->
-                    app.opentv.data.repo.LocalCustomGroups.visible(channel, categories,
-                        graph.settings.hiddenCategories.value, graph.settings.hiddenUnlocked.value)
-                }, registerSource = { source -> graph.connections.registerSource(source) })
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (_: Exception) { lookupFailed = true }
-    }
-    val preview = remember(presentation, channels, accounts) { channels?.let { store.preview(presentation, it, accounts) } }
-    val available = preview?.panels.orEmpty().filter { it.available && !it.accountChanged }
-    AlertDialog(
-        onDismissRequest = onDismiss, title = { Text(title) },
-        text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (lookupFailed) item { Text("The local catalog could not be checked. No streams have been opened.") }
-                else if (preview == null) item { CircularProgressIndicator() }
-                preview?.let { checked ->
-                    items(checked.panels, key = { it.panel.panelId }) { panel ->
-                        Column {
-                            Text(panel.channelName ?: "Unavailable channel #${panel.panel.channel.channelId}", style = MaterialTheme.typography.titleMedium)
-                            Text(panel.providerName ?: "Provider #${panel.panel.channel.sourceId}", style = MaterialTheme.typography.labelMedium)
-                            if (!panel.available) Text("Unavailable — this panel will be skipped.", color = MaterialTheme.colorScheme.error)
-                            if (panel.accountChanged) Text("Provider account changed — this panel will be skipped.", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    item { HorizontalDivider(); Text("Local connection requirements", style = MaterialTheme.typography.titleMedium) }
-                    items(checked.requirements) { requirement ->
-                        val providerNames = checked.panels.filter { it.panel.channel.sourceId in requirement.sourceIds }.mapNotNull { it.providerName }.distinct().joinToString(" / ")
-                        Text("${providerNames.ifBlank { "Provider" }}: ${requirement.requestedConnections} requested; ${requirement.locallyReserved} currently reserved; allowance ${requirement.configuredMaximum ?: "unknown"}.")
-                        if (requirement.unknownAllowance) Text("Additional connections require request-specific approval.", color = MaterialTheme.colorScheme.primary)
-                        if (requirement.exceedsConfiguredAllowance) Text("The current local total exceeds the configured allowance. Playback will be revalidated and recordings retain priority.", color = MaterialTheme.colorScheme.error)
-                    }
-                    item { Text("Device decoder capacity is uncertain until streams start. The primary channel starts first; secondary channels follow progressively. No stream opens before you confirm.") }
-                }
-            }
-        },
-        confirmButton = { Button(onClick = {
-            val ids = available.map { it.panel.panelId }.toSet()
-            val panels = presentation.panels.filter { it.panelId in ids }
-            if (panels.isNotEmpty()) {
-                if (preferences.savePresentationPreferences) graph.settings.setMultiViewPreferences(preferences.copy(showLabels = presentation.showLabels))
-                manager.restorePresentation(presentation.copy(
-                    panels = panels,
-                    primaryPanelId = presentation.primaryPanelId.takeIf { it in ids } ?: panels.first().panelId,
-                    audioPanelId = presentation.audioPanelId?.takeIf { it in ids },
-                ))
-                onRestored()
-            }
-        }, enabled = available.isNotEmpty() && !lookupFailed) { Text(if (available.size == presentation.panels.size) "Restore Channels" else "Restore Available Channels") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 /** Registering account metadata is local-only and restores configured limits after a fresh launch. */

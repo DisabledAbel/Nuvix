@@ -104,6 +104,7 @@ class MultiViewSessionManager(
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val startupTimeoutMs: Long = 15_000,
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val validateAdmission: suspend (ResolvedMultiViewChannel, ReservationToken?) -> Unit = { _, _ -> },
 ) {
     private class Runtime(val token: ReservationToken, val channel: ResolvedMultiViewChannel, val generation: Long) {
         lateinit var player: MultiViewPlayer
@@ -311,6 +312,9 @@ class MultiViewSessionManager(
                         status = if (seamless) it.status else MultiViewPanelStatus.STARTING,
                         engineReady = seamless, error = null, failureKind = null, repeatedBuffering = false) }
                     val request = ConnectionRequest("$sessionId:${record.id}", generation, channel.sourceId, ConnectionPurpose.MULTIVIEW)
+                    validateAdmission(channel, old?.token)
+                    coroutineContext.ensureActive()
+                    if (!valid(record, generation)) return@withLock
                     var reserved = connections.reserve(request)
                     if (reserved is ReservationResult.ApprovalRequired) {
                         val prompt = MultiViewApproval(channel.channelName, channel.providerName, reserved.challenge)
@@ -323,12 +327,17 @@ class MultiViewSessionManager(
                         }
                         if (approval == null) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
                             "The additional connection was canceled. This account's allowance is unknown."))
+                        // A user may leave Unknown consent open across a recording deadline.
+                        validateAdmission(channel, old?.token)
+                        coroutineContext.ensureActive()
+                        if (!valid(record, generation)) return@withLock
                         reserved = connections.reserve(request, approval)
                     }
                     val token = (reserved as? ReservationResult.Reserved)?.token ?: throw MultiViewStartException(
                         MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, (reserved as? ReservationResult.Denied)?.reason
                             ?: "Account settings changed. Retry this channel."))
                     pendingToken = token
+                    require(token.accountKey == snapshot?.accountKey) { "Provider account changed. Review this channel again." }
                     coroutineContext.ensureActive()
                     if (!valid(record, generation)) { connections.release(token); pendingToken = null; return@withLock }
                     if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
@@ -708,7 +717,14 @@ class MultiViewSessionManager(
                 override fun registerOwner(token: ReservationToken, reclamationPriority: () -> Int, close: suspend () -> Unit) =
                     allocator.registerOwner(token, reclamationPriority, close)
             }, players = MultiViewPlayerFactory { AndroidMultiViewPlayer(application, graph.streamingHttpClient, it) },
-                hardware = AndroidMultiViewHardware(application), audioFocus = AndroidMultiViewAudioFocus(application), beforeStart = beforeStart)
+                hardware = AndroidMultiViewHardware(application), audioFocus = AndroidMultiViewAudioFocus(application), beforeStart = beforeStart,
+                validateAdmission = { channel, old ->
+                    val key = allocator.accountKeyForSource(channel.sourceId)
+                    val proposal = MultiViewPresentation(listOf(MultiViewSavedPanel("admission",
+                        MultiViewChannelReference(channel.channelId, channel.sourceId, key))), "admission", "admission", MultiViewLayout.GRID)
+                    val checked = MultiViewPresetInspector(graph, replacedReservations = { setOfNotNull(old?.reservationId) }).inspect(proposal)
+                    require(checked.canLoad) { "Channel availability or current recording capacity changed. Review this panel before retrying." }
+                })
             val checkpoints = MultiViewPresetStore(application)
             manager.checkpointStore = checkpoints
             manager.updatePreferences(graph.settings.multiViewPreferences.value)

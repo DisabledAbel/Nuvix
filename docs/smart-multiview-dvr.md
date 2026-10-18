@@ -579,3 +579,96 @@ cannot be guaranteed through denied OS execution, provider failures or a powered
   duplicate/inexact/late alarms, denied notification access and vendor power restrictions.
 - [ ] Capture/history evidence on internal, USB and NAS destinations; verify valid media starts
   without any dialog acknowledgment and no protected capture is sacrificed for optional viewing.
+
+## Upcoming DVR conflicts in preset previews
+
+Choose **Presets → Preview & Load** to review a proposed wall against the next **24 hours**
+of local recording requirements. The preview shows channel/provider names, layout, primary,
+current local reservations, connections retained after replacing the current wall, additional
+proposed connections, effective capture times, affected panels, Protect Recording and Lock
+Padding. A 7:00–8:00 PM programme normally captures from 6:58–8:05 PM under the existing
+2/5-minute defaults. Accepted padding changes and persisted capture extensions take precedence.
+
+- **No known conflict** means no conflict was found in the local plan within the horizon.
+- **Upcoming conflict** means a scheduled capture may need a proposed panel's capacity later.
+- **Immediate conflict** means current demand cannot support the proposal; replace or exclude
+  a panel before loading. Active/pending/releasing recording reservations remain occupied.
+- **Unknown capacity** is never unlimited. Extra streams still require the allocator's
+  request-specific approval, including when choosing an alternative.
+- **Uncertain availability** always applies to provider-side behavior and other-device usage.
+  Provider-reported limits and manually configured limits are labeled separately. Neither
+  establishes a guaranteed free provider connection, now or at a future recording deadline.
+
+Independent provider accounts are counted separately. Explicitly linked playlists share one
+account pool. A saved reference whose account changed must be replaced or excluded explicitly;
+a deleted, disabled or hidden provider/channel cannot be loaded through a stale reference.
+
+Use **Choose Another Provider** for existing exact guide identities and confirmed, playable
+Sports Hub broadcast associations. Similar names alone do not qualify. Choices exclude the
+same shared account and proposals without predicted current/future capacity. They are loaded
+from local catalog/EPG data without probing streams; the first 40 candidates are evaluated
+against a shared schedule snapshot. Language/commentary metadata is not modeled in the current
+catalog, so confirm the displayed broadcast yourself. An alternative may disappear or lose
+capacity before recording begins. **Replace Channel** permits an explicitly selected different
+broadcast without claiming it matches the original programme.
+
+**Exclude Panel** removes only a proposed panel. **Make Primary** changes startup priority.
+**Load Modified Layout Once** does not write the saved preset. **Save Changes to Preset** is
+an explicit local write; it opens no stream. **Review Recording** uses the existing recording
+details flow. The preview itself never cancels, reschedules, trims or deletes a recording.
+
+**Continue With Warning** is available for future conflicts when current playback is allowed.
+Nuvix reclaims affected previews first, then secondary viewing, then the primary if necessary
+at the deadline. The existing PR #37 pre-recording warning may appear again; preview acceptance
+never writes its durable acknowledgment or suppresses that warning. An unanswered preview or
+Unknown-capacity prompt does not gate the background recorder. All existing protected/manual/
+series priority, locked padding, partial recovery, concurrent/background capture and deletion
+settings remain authoritative.
+
+### Planning and confirmation architecture
+
+`MultiViewPresetRecordingPlanner` is a pure projection of `MultiViewRecordingConflictPolicy.plan`
+and its shared `viewingVictims` policy. It does not implement a second allocator. Safe output
+values contain names, IDs and times, never recording URLs, file locators or credentials. The
+only synthetic tokens are in-memory policy inputs; they never enter the live allocator.
+`RecordingPlanningWindow` defaults to 24 hours and is internally configurable up to seven days.
+
+`MultiViewPresetInspector` performs database/catalog/CPU work on IO. Schedule queries include
+active jobs and intersecting scheduled windows, expanding dependencies across the horizon so
+later overlapping protected bookings still influence the shared DVR plan. Each query has an
+explicit 2,001-row overflow sentinel; at most 16 dependency expansions are permitted. Overlarge
+or exceptionally chained schedules fail closed with refresh guidance instead of silently
+omitting recording demand. Alternative proposals share one bounded input snapshot. No full
+EPG refresh, stream URL resolution, Media3 player, decoder or provider connection occurs.
+
+The preview refreshes on relevant Room invalidation, account/settings changes, return to the
+foreground and a 30-second visible tick. Recomposition does not run the planner. Refresh jobs
+are cancelled when their inputs change; controller revisions reject obsolete asynchronous
+results. Closing/backgrounding invalidates in-flight confirmation. Preview edits/consent are
+not persisted across process death.
+
+Confirmation always re-reads the inputs. If the decision changed, the updated warning requires
+another explicit choice. A controller latch rejects duplicate confirmation. The existing
+session manager retains stable panel identities and increasing generations, closes the replaced
+wall, starts the primary first and admits secondaries incrementally. Each reservation remains
+atomic in the existing allocator; the preset is not one speculative batch reservation. Startup
+rechecks authorization and due recording demand after URL resolution and again after Unknown
+consent, before allocation. Recording reclamation remains independent and authoritative if the
+deadline races admission. No future capacity is held for viewing.
+
+### Remaining boundaries
+
+The current `main` model has no configurable per-recording late-start policy, running-duration
+editor, or structured channel language/commentary preference. This change preserves the existing
+five-second programme-start grace and partial-capture behavior; it does not invent new DVR rules
+or infer language from names. Persisted effective windows are honored. Device acceptance below
+is still required; synthetic tests do not establish provider capacity or TV rendering quality.
+
+- [ ] Android TV, Google TV and Fire TV: scroll a four-panel preview with D-pad/OK/Back and large text;
+  verify focus borders, recording details, provider choices, save and load-once behavior.
+- [ ] Keep a preview open through a recording start/end; cancel/reschedule/edit padding and limits;
+  link/unlink accounts, delete a provider, background/return, and repeatedly press OK.
+- [ ] Continue with a conflict 20 minutes away; confirm the later warning appears and unanswered
+  fallback captures valid bytes while unrelated accounts keep playing.
+- [ ] Unknown approvals across the deadline, disappearing alternatives, full decoder hardware,
+  external-device provider usage, network failure and process restart remain safely recoverable.

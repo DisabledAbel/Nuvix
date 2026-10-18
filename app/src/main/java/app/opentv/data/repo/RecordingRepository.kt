@@ -43,6 +43,21 @@ class RecordingRepository(
     /** Returns pending recordings in scheduled start order. */
     suspend fun scheduled(): List<Recording> = dao.scheduled()
 
+    /** Read-only bounded planning; the caller must reject an overflow rather than omit demand. */
+    suspend fun planningWindow(fromMillis: Long, untilMillis: Long, limit: Int = 2001): List<Recording> {
+        var through = untilMillis
+        // A booking crossing the horizon can lose priority to a later overlapping booking.
+        // Include that dependency component rather than run a different DVR policy at the edge.
+        repeat(16) {
+            val rows = dao.planningWindow(fromMillis, through, limit)
+            if (rows.size >= limit) return rows // Caller handles the explicit overflow row.
+            val extended = rows.maxOfOrNull { it.scheduledEndMillis.takeIf { end -> end > 0 } ?: Long.MAX_VALUE } ?: through
+            if (extended <= through) return rows
+            through = extended
+        }
+        error("Recording planning dependency limit exceeded")
+    }
+
     /** Persists a new recording and returns its local row ID. */
     suspend fun insert(recording: Recording): Long = dao.insert(recording)
     /** Persists changes to an existing recording row. */

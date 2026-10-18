@@ -450,3 +450,37 @@ Manual verification remains required; record device/OS, provider connection limi
 
 No physical TV, real-provider, decoder or licensed-score acceptance is implied by synthetic tests.
 External API adapters and Sports cloud synchronization are not configured in this implementation.
+
+
+## Upcoming DVR preset preview
+
+Run the unchanged CI entry points:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/benchmark_sports_queries.py
+bash scripts/test-supabase.sh
+```
+
+`MultiViewPresetRecordingPlannerTest` covers no recordings, upcoming/immediate conflict,
+24-hour boundaries, padded/locked/protected/manual/series windows, overlapping captures,
+shared/independent accounts, current pending/releasing reservations, replaced-wall accounting,
+unknown versus provider-reported/configured limits, cancellation/rescheduling, removed/moved
+channels, capture end release, preview privacy and a 40,000-row catalog. It also verifies that
+previewing does not change allocator state or suppress the existing pre-deadline warning.
+`MultiViewPresetPreviewControllerTest` exercises fresh confirmation reads, settings/schedule
+changes, due recordings, deletion, duplicate OK, stale generations, background invalidation,
+restart without consent, future-warning continuation and sanitized failures with fake readers.
+`MultiViewSessionManagerTest` also checks due recordings across Unknown approval and stale
+admission without allocating another fake player. Existing allocator/DVR/recovery suites remain.
+
+`MultiViewPresetReviewRemoteTest` sends D-pad/OK to real Compose actions, verifies disabled current
+conflicts and accessible recording/fallback descriptions. Store tests distinguish one-time edits
+from explicit updates. Room tests exercise bounded time/status queries and read-only scheduling.
+Existing alternative tests retain exact-guide/confirmed-Sports evidence, hidden/shared/full/unknown
+account rejection and no fuzzy-title equivalence. No real IPTV credentials are required.
+
+Follow the [preset hardware checklist](smart-multiview-dvr.md#remaining-boundaries) on Android TV,
+Google TV and Fire TV. Automated UI tests do not establish device focus contrast, frame rate,
+decoder capacity, actual provider allowances, alarm delivery or successful unattended capture.
