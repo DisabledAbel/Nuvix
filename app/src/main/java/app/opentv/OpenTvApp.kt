@@ -80,6 +80,7 @@ class OpenTvApp : Application(), ImageLoaderFactory {
         // a force-stop or app update drops their exact alarms and only a reboot is covered by the
         // boot receiver. Re-setting the same alarm is idempotent, so this quietly keeps bookings alive.
         appScope.launch { runCatching { graph.recordingEngine.rearmScheduled() } }
+        appScope.launch { runCatching { app.opentv.recording.RecordingScheduler.observeWarningPlans(this@OpenTvApp) } }
 
         // Re-arm programme reminders on every launch. Alarms are lost on a force-stop or app
         // update (not just a reboot, which the boot receiver already covers), and re-setting an

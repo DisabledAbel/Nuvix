@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Kontynuuje nagrywanie przez tyle minut po podanym czasie zakończenia, aby uniknąć ucięcia przedłużających się programów</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Automatyczne przełączanie po rozpoczęciu nagrywania</string>
-    <string name="recset_autoswitch_desc">U dostawcy z pojedynczym połączeniem ekran przełącza się na nagrywanie w momencie jego rozpoczęcia (z 30-sekundowym ostrzeżeniem), aby transmisja na żywo nie została przerwana</string>
+    <string name="recset_autoswitch_desc">U dostawcy z pojedynczym połączeniem ekran przełącza się na nagrywanie w momencie jego rozpoczęcia (ze skonfigurowanym ostrzeżeniem o nagrywaniu), aby transmisja na żywo nie została przerwana</string>
     <string name="recset_livepause">Pauzuj i przewijaj TV na żywo</string>
     <string name="recset_livepause_desc">Przechowuje kilka minut TV na żywo w pamięci, dzięki czemu można ją zatrzymać i przewinąć (funkcja eksperymentalna — zużywa więcej pamięci)</string>
     <string name="recset_storage_title">Pamięć</string>

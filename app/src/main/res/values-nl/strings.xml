@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Blijft dit aantal minuten na het vermelde einde opnemen, zodat uitloop niet wordt afgesneden</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Automatisch wisselen wanneer opname begint</string>
-    <string name="recset_autoswitch_desc">Bij een provider met één verbinding schakelt het scherm over naar een opname zodra deze begint (met een waarschuwing van 30 seconden), zodat je live stream niet wordt afgebroken</string>
+    <string name="recset_autoswitch_desc">Bij een provider met één verbinding schakelt het scherm over naar een opname zodra deze begint (met de ingestelde opnamewaarschuwing), zodat je live stream niet wordt afgebroken</string>
     <string name="recset_livepause">Live tv pauzeren en terugspoelen</string>
     <string name="recset_livepause_desc">Houdt een paar minuten live tv in het geheugen zodat je kunt pauzeren en terugspoelen (experimenteel — gebruikt meer geheugen)</string>
     <string name="recset_storage_title">Opslag</string>

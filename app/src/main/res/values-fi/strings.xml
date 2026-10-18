@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Jatka tallennusta näin monta minuuttia ilmoitetun päättymisajan jälkeen, jotta ylimenevä osa ei jää leikkautumatta pois</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Vaihda automaattisesti tallennuksen alkaessa</string>
-    <string name="recset_autoswitch_desc">Yhden yhteyden palveluntarjoajalla siirtää näytön tallennukselle sen alkaessa (30 sekunnin varoituksella), jotta live-lähetyksesi ei katkea</string>
+    <string name="recset_autoswitch_desc">Yhden yhteyden palveluntarjoajalla siirtää näytön tallennukselle sen alkaessa (määritetyn tallennusvaroituksen mukaisesti), jotta live-lähetyksesi ei katkea</string>
     <string name="recset_livepause">Tauota ja kelaa live-TV:tä</string>
     <string name="recset_livepause_desc">Pitää muutaman minuutin live-TV:tä muistissa, jotta voit tauottaa ja kelata sitä (kokeellinen — käyttää enemmän muistia)</string>
     <string name="recset_storage_title">Tallennustila</string>

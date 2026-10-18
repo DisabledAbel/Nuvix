@@ -72,9 +72,24 @@ class RecordingWarningPersistenceTest {
             scheduledStartMillis = now + 60_000, scheduledEndMillis = now + 600_000)
         val conflict = MultiViewRecordingConflictPolicy.detect(listOf(rec), ledger.snapshots.value, now).single()
         assertTrue(RecordingConflictNotifications.show(context, conflict))
+        RecordingScheduler.setWarning(context, rec.id, conflict.effectiveStartMillis)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        assertEquals(1, manager.activeNotifications.size)
         assertFalse(RecordingConflictNotifications.show(context, conflict))
         assertTrue(RecordingWarningStore(context).notified(conflict.key))
         assertNull(shadowOf(context as Application).nextStartedActivity)
         RecordingConflictNotifications.cancel(context, rec.id)
+    }
+    @Test fun changedEffectivePlanDoesNotInheritNotificationClaimFromRequestedWindow() {
+        val rec = Recording(id = 1, channelId = 9, sourceId = 1, channelName = "Sports", title = "Game",
+            streamUrl = "https://example.invalid/live", filePath = "/fake.ts", status = RecordingStatus.SCHEDULED,
+            scheduledStartMillis = 100_000, scheduledEndMillis = 900_000)
+        val account = AccountConnectionSnapshot("opaque", setOf(1), AccountConnectionPolicy(1, false), emptyList())
+        val original = MultiViewRecordingConflict(rec, account, 200_000, emptyList())
+        val changed = original.copy(effectiveStartMillis = 300_000)
+        val store = RecordingWarningStore(context)
+        store.markNotified(original.key)
+        assertFalse(store.notified(changed.key))
+        assertNotEquals(original.key, changed.key)
     }
 }

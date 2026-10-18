@@ -492,7 +492,7 @@ The warning defaults to **two minutes before the effective padded recording star
 Change **Settings → Recording → Multi-View recording warning** from 1–10 minutes.
 The scheduled window already includes start padding; it is never subtracted twice.
 If the existing DVR conflict plan must delay optional unlocked padding, review uses that
-planned start, without applying any padding changes before the existing deadline decision.
+planned start, without applying any padding changes before the existing deadline decision. Warning alarms use that same plan and rearm on booking, provider/account or lead-time changes. Replacing an alarm preserves an already delivered notification; a changed effective start has a new warning identity. Countdown ticks reuse cached recording rows, refreshed when recordings or sources change.
 Warnings do not depend on recording auto-navigation being enabled or on internal-file storage.
 
 The application-scoped account snapshots remain authoritative for local capacity. Pending,

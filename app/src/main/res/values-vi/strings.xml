@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Tiếp tục ghi thêm sau thời gian kết thúc đã liệt kê bao nhiêu phút, để không bị cắt mất phần kéo dài</string>
     <string name="recset_minutes_short">phút</string>
     <string name="recset_autoswitch">Tự động chuyển khi bắt đầu ghi hình</string>
-    <string name="recset_autoswitch_desc">Với nhà cung cấp chỉ cho một kết nối, tự động chuyển màn hình sang bản ghi khi nó bắt đầu (có cảnh báo trước 30 giây) để luồng trực tiếp của bạn không bị gián đoạn</string>
+    <string name="recset_autoswitch_desc">Với nhà cung cấp chỉ cho một kết nối, tự động chuyển màn hình sang bản ghi khi nó bắt đầu (với cảnh báo ghi hình đã cấu hình) để luồng trực tiếp của bạn không bị gián đoạn</string>
     <string name="recset_livepause">Tạm dừng &amp; tua lại truyền hình trực tiếp</string>
     <string name="recset_livepause_desc">Giữ vài phút truyền hình trực tiếp trong bộ nhớ để bạn có thể tạm dừng và tua lại (thử nghiệm — dùng nhiều bộ nhớ hơn)</string>
     <string name="recset_storage_title">Bộ nhớ</string>

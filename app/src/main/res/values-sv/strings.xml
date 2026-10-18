@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Fortsätt spela in så här många minuter efter det angivna slutet, så att förlängningar inte klipps bort</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Byt automatiskt när inspelningen börjar</string>
-    <string name="recset_autoswitch_desc">Hos en leverantör med en enda anslutning flyttas skärmen till en inspelning när den börjar (med en 30-sekunders varning), så att din livesändning inte bryts</string>
+    <string name="recset_autoswitch_desc">Hos en leverantör med en enda anslutning flyttas skärmen till en inspelning när den börjar (med den inställda inspelningsvarningen), så att din livesändning inte bryts</string>
     <string name="recset_livepause">Pausa &amp; spola tillbaka live-tv</string>
     <string name="recset_livepause_desc">Håller ett par minuter av live-tv i minnet så att du kan pausa och spola tillbaka det (experimentellt – använder mer minne)</string>
     <string name="recset_storage_title">Lagring</string>

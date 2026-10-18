@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">番組表に記載の終了時刻より、この分数だけ長く録画を続け、延長分が切れないようにします</string>
     <string name="recset_minutes_short">分</string>
     <string name="recset_autoswitch">録画開始時に自動切り替え</string>
-    <string name="recset_autoswitch_desc">同時接続数が1のプロバイダーでは、録画開始時に画面が自動的に切り替わります（30秒前に通知）。視聴中のライブ配信が途切れないようにするためです</string>
+    <string name="recset_autoswitch_desc">同時接続数が1のプロバイダーでは、録画開始時に画面が自動的に切り替わります（設定された録画通知を使用）。視聴中のライブ配信が途切れないようにするためです</string>
     <string name="recset_livepause">ライブTVの一時停止・巻き戻し</string>
     <string name="recset_livepause_desc">直近数分間のライブTVをメモリに保持し、一時停止や巻き戻しができるようにします（試験的機能——メモリ使用量が増加します）</string>
     <string name="recset_storage_title">ストレージ</string>

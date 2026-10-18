@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Seguir grabando esta cantidad de minutos después del final indicado, para que las prórrogas no se corten</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Cambiar automáticamente al iniciar una grabación</string>
-    <string name="recset_autoswitch_desc">En un proveedor de una sola conexión, cambia la pantalla a una grabación al empezar (con un aviso de 30 segundos) para que tu transmisión en vivo no se corte</string>
+    <string name="recset_autoswitch_desc">En un proveedor de una sola conexión, cambia la pantalla a una grabación al empezar (con el aviso de grabación configurado) para que tu transmisión en vivo no se corte</string>
     <string name="recset_livepause">Pausar y retroceder TV en vivo</string>
     <string name="recset_livepause_desc">Mantiene un par de minutos de TV en vivo en memoria para que puedas pausarla y retrocederla (experimental — usa más memoria)</string>
     <string name="recset_storage_title">Almacenamiento</string>

@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Continua a gravar estes minutos depois do fim indicado, para que os atrasos não sejam cortados</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Mudança automática quando a gravação começa</string>
-    <string name="recset_autoswitch_desc">Num fornecedor de ligação única, muda o ecrã para uma gravação assim que esta começa (com um aviso de 30 segundos) para que a sua transmissão em direto não seja cortada</string>
+    <string name="recset_autoswitch_desc">Num fornecedor de ligação única, muda o ecrã para uma gravação assim que esta começa (com o aviso de gravação configurado) para que a sua transmissão em direto não seja cortada</string>
     <string name="recset_livepause">Pausar e retroceder TV em direto</string>
     <string name="recset_livepause_desc">Mantém alguns minutos de TV em direto na memória para que possa pausar e retroceder (experimental — usa mais memória)</string>
     <string name="recset_storage_title">Armazenamento</string>

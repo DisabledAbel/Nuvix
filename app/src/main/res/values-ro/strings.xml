@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Continuă înregistrarea cu atâtea minute după ora de final listată, ca depășirile să nu fie tăiate</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Comută automat la începerea înregistrării</string>
-    <string name="recset_autoswitch_desc">La un furnizor cu o singură conexiune, comută ecranul pe înregistrare când începe (cu o avertizare de 30 de secunde), ca fluxul tău live să nu fie întrerupt</string>
+    <string name="recset_autoswitch_desc">La un furnizor cu o singură conexiune, comută ecranul pe înregistrare când începe (cu avertizarea de înregistrare configurată), ca fluxul tău live să nu fie întrerupt</string>
     <string name="recset_livepause">Pauză &amp; derulare înapoi la TV live</string>
     <string name="recset_livepause_desc">Păstrează câteva minute de TV live în memorie, ca să poți pune pauză și derula înapoi (experimental — folosește mai multă memorie)</string>
     <string name="recset_storage_title">Stocare</string>
