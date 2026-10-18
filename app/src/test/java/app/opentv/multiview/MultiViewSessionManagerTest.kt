@@ -833,6 +833,84 @@ class MultiViewSessionManagerTest {
         assertTrue(f.state.audioFocusGranted)
     }
 
+    @Test fun restoringSavedPanelIdsInTheSameManagerUsesFreshReservationGenerationsAndPrimaryFirst() = runTest {
+        val f = Fixture(this)
+        val first = f.addReady(1)
+        val primary = f.addReady(2)
+        f.manager.setPrimary(primary)
+        f.manager.selectAudio(first)
+        val saved = f.manager.capturePresentation()!!
+        val oldRequests = f.connections.owners.keys.associateBy { it.sessionId }
+        f.manager.restorePresentation(saved)
+        runCurrent()
+        assertEquals(2L, f.players.last().starts.single().channelId)
+        f.player(2).ready()
+        runCurrent()
+        assertEquals(1L, f.players.last().starts.single().channelId)
+        f.player(1).ready()
+        runCurrent()
+        assertEquals(listOf(first, primary), f.state.panels.map { it.id })
+        assertEquals(primary, f.state.primaryPanelId)
+        assertEquals(first, f.state.audioPanelId)
+        assertTrue(f.state.panels.all { it.status == MultiViewPanelStatus.PLAYING })
+        assertEquals(2, f.connections.snapshot(1)!!.locallyReserved)
+        for (token in f.connections.owners.keys) assertTrue(token.generation > oldRequests.getValue(token.sessionId).generation)
+    }
+
+    @Test fun restoredMissingChannelFailsIndependentlyWhileAvailableSecondaryStillStarts() = runTest {
+        val f = Fixture(this, resolver = { id ->
+            if (id == 99L) error("missing private URL")
+            Fixture.resolved(id)
+        })
+        val saved = MultiViewPresentation(listOf(
+            MultiViewSavedPanel("missing", MultiViewChannelReference(99, 1)),
+            MultiViewSavedPanel("available", MultiViewChannelReference(1, 1)),
+        ), "missing", "available", MultiViewLayout.TWO)
+        f.manager.restorePresentation(saved)
+        runCurrent()
+        f.player(1).ready()
+        runCurrent()
+        assertEquals(MultiViewPanelStatus.FAILED, f.panel(99).status)
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(1).status)
+        assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+        assertFalse(f.state.toString().contains("private URL"))
+    }
+
+    @Test fun savedProviderAccountChangesAreRejectedBeforeOpeningAPlayer() = runTest {
+        val f = Fixture(this)
+        f.manager.restorePresentation(MultiViewPresentation(listOf(
+            MultiViewSavedPanel("primary", MultiViewChannelReference(1, 77)),
+        ), "primary", "primary", MultiViewLayout.TWO))
+        runCurrent()
+        assertTrue(f.players.isEmpty())
+        assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+        assertEquals(MultiViewPanelStatus.FAILED, f.panel(1).status)
+    }
+
+    @Test fun guideFullscreenSelectionReplacesSelectedPanelAndRestoresTheOtherPanelAfterChecks() = runTest {
+        val f = Fixture(this)
+        val selected = f.addReady(1)
+        val secondary = f.addReady(2)
+        f.manager.watchFullscreen(3)
+        runCurrent()
+        f.player(3).ready()
+        runCurrent()
+        assertEquals(selected, f.state.fullscreenPanelId)
+        assertEquals(3L, f.state.panels.single { it.id == selected }.channelId)
+        assertEquals(1, f.player(1).releases)
+        assertEquals(1, f.player(2).releases)
+        assertEquals(0, f.player(3).releases)
+        assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+        f.manager.leaveFullscreen(true)
+        runCurrent()
+        f.player(2).ready()
+        runCurrent()
+        assertEquals(listOf(selected, secondary), f.state.panels.map { it.id })
+        assertEquals(listOf(3L, 2L), f.state.panels.map { it.channelId })
+        assertEquals(1, f.player(3).starts.size)
+        assertEquals(2, f.connections.snapshot(1)!!.locallyReserved)
+    }
+
     @Test fun pictureInPictureRetainsOnlySelectedPlayerWhenActivityStops() = runTest {
         val f = Fixture(this)
         f.addReady(1)
