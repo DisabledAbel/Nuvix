@@ -14,6 +14,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 data class RecordingConflictWarning(val conflict: MultiViewRecordingConflict, val panels: List<MultiViewPlaybackReference>, val nowMillis: Long)
@@ -41,6 +43,13 @@ class RecordingConflictCoordinator(
     private var revision = 0L
     private val pendingSwitches = mutableMapOf<String, MultiViewPlaybackReference>()
     private var ticker: Job? = null
+    private var cachedRows: List<Recording>? = null
+
+    /** Schedule/source invalidation discards rows; countdown and capacity changes reuse them. */
+    suspend fun invalidateRows() {
+        cachedRows = null
+        refresh()
+    }
 
     /** Idle/single-channel sessions own no repeating task; only visible or PiP walls need ticks. */
     private fun updateTicker() {
@@ -65,8 +74,9 @@ class RecordingConflictCoordinator(
             return
         }
         try {
-            val rows = recordings()
+            val rows = cachedRows ?: recordings()
             if (generation != revision) return
+            cachedRows = rows
             val references = multiView.playbackReferences()
             val primary = references.firstOrNull { it.panelId == multiView.state.value.primaryPanelId }?.token?.sessionId
             val conflicts = MultiViewRecordingConflictPolicy.detect(rows, accounts(), now(), leadMillis(), primary)
@@ -105,7 +115,7 @@ class RecordingConflictCoordinator(
     }
 
     suspend fun release(key: String, reference: MultiViewPlaybackReference): Boolean {
-        refresh()
+        invalidateRows()
         if (!valid(key, reference)) return false
         val id = _warning.value!!.conflict.recording.id
         if (!multiView.releaseForRecording(reference)) return false
@@ -115,11 +125,11 @@ class RecordingConflictCoordinator(
     }
 
     suspend fun switch(key: String, reference: MultiViewPlaybackReference, channelId: Long): Boolean {
-        refresh()
+        invalidateRows()
         if (!valid(key, reference)) return false
         val id = _warning.value!!.conflict.recording.id
         val accepted = multiView.replaceForRecording(reference, channelId) {
-            visible && !inPip && currentConflicts.any { it.key == key && now() < it.effectiveStartMillis } && !dismissed(key)
+            cachedRows != null && visible && !inPip && currentConflicts.any { it.key == key && now() < it.effectiveStartMillis } && !dismissed(key)
         }
         if (accepted) {
             multiView.playbackReferences().firstOrNull { it.token == reference.token }?.let { pendingSwitches[key] = it }
@@ -150,9 +160,10 @@ class RecordingConflictCoordinator(
                 }, event = graph.recordingRepository::event,
                 notification = { RecordingConflictNotifications.show(context, it) },
                 cancelNotification = { RecordingConflictNotifications.cancel(context, it) })
-            scope.launch { graph.recordingRepository.observeAll().collect { coordinator.refresh() } }
+            scope.launch { graph.recordingRepository.observeAll().map { rows -> rows.map { it.copy(sizeBytes = 0) } }
+                .distinctUntilChanged().collect { coordinator.invalidateRows() } }
             scope.launch { graph.connections.snapshots.collect { coordinator.refresh() } }
-            scope.launch { graph.sourceRepository.observeAll().collect { coordinator.refresh() } }
+            scope.launch { graph.sourceRepository.observeAll().collect { coordinator.invalidateRows() } }
             scope.launch { graph.settings.recordConflictLeadMinutes.collect { coordinator.refresh() } }
             scope.launch { multiView.state.collect { coordinator.refresh() } }
             return coordinator

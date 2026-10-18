@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Pokračovat v nahrávání o tento počet minut po uvedeném konci, aby se přesahující část neoříznula</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Automaticky přepnout při zahájení nahrávání</string>
-    <string name="recset_autoswitch_desc">U poskytovatele s jediným připojením přepne obrazovku na nahrávání v okamžiku jeho zahájení (s 30sekundovým upozorněním), aby se nepřerušilo živé vysílání</string>
+    <string name="recset_autoswitch_desc">U poskytovatele s jediným připojením přepne obrazovku na nahrávání v okamžiku jeho zahájení (s nastaveným upozorněním na nahrávání), aby se nepřerušilo živé vysílání</string>
     <string name="recset_livepause">Pozastavit a přetáčet živé vysílání</string>
     <string name="recset_livepause_desc">Uchová v paměti pár minut živého vysílání, abyste jej mohli pozastavit a přetočit (experimentální — spotřebovává více paměti)</string>
     <string name="recset_storage_title">Úložiště</string>

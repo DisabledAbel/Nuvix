@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Nimmt so viele Minuten nach dem angegebenen Ende weiter auf, damit Überziehungen nicht abgeschnitten werden</string>
     <string name="recset_minutes_short">Min</string>
     <string name="recset_autoswitch">Automatischer Wechsel bei Aufnahmebeginn</string>
-    <string name="recset_autoswitch_desc">Wechselt bei einem Anbieter mit nur einer Verbindung den Bildschirm zu einer startenden Aufnahme (mit 30 Sekunden Vorwarnung), damit dein Live-Stream nicht abbricht</string>
+    <string name="recset_autoswitch_desc">Wechselt bei einem Anbieter mit nur einer Verbindung den Bildschirm zu einer startenden Aufnahme (mit der eingestellten Aufnahmevorwarnung), damit dein Live-Stream nicht abbricht</string>
     <string name="recset_livepause">Live-TV pausieren &amp; zurückspulen</string>
     <string name="recset_livepause_desc">Behält ein paar Minuten Live-TV im Speicher, damit du pausieren und zurückspulen kannst (experimentell — benötigt mehr Arbeitsspeicher)</string>
     <string name="recset_storage_title">Speicher</string>

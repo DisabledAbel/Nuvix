@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Продължава записа толкова минути след обявения край, за да не се отреже удължаването</string>
     <string name="recset_minutes_short">мин</string>
     <string name="recset_autoswitch">Автоматично превключване при започване на запис</string>
-    <string name="recset_autoswitch_desc">При доставчик с една връзка премества екрана към записа при започването му (с 30-секундно предупреждение), за да не прекъсне излъчването ви на живо</string>
+    <string name="recset_autoswitch_desc">При доставчик с една връзка премества екрана към записа при започването му (с настроеното предупреждение за запис), за да не прекъсне излъчването ви на живо</string>
     <string name="recset_livepause">Пауза &amp; превъртане на телевизия на живо</string>
     <string name="recset_livepause_desc">Задържа няколко минути телевизия на живо в паметта, за да можете да я поставяте на пауза и превъртате (експериментално — използва повече памет)</string>
     <string name="recset_storage_title">Памет</string>

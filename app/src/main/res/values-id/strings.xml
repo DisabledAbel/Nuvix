@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Terus merekam sekian menit setelah akhir yang tercantum, agar kelebihan waktu tidak terpotong</string>
     <string name="recset_minutes_short">mnt</string>
     <string name="recset_autoswitch">Alih otomatis saat rekaman dimulai</string>
-    <string name="recset_autoswitch_desc">Pada penyedia dengan koneksi tunggal, alihkan layar ke rekaman saat mulai (dengan peringatan 30 detik) agar siaran langsung Anda tidak terputus</string>
+    <string name="recset_autoswitch_desc">Pada penyedia dengan koneksi tunggal, alihkan layar ke rekaman saat mulai (dengan peringatan rekaman yang dikonfigurasi) agar siaran langsung Anda tidak terputus</string>
     <string name="recset_livepause">Jeda &amp; mundur TV langsung</string>
     <string name="recset_livepause_desc">Menyimpan beberapa menit TV langsung di memori agar Anda dapat menjeda dan memutar mundur (eksperimental — menggunakan lebih banyak memori)</string>
     <string name="recset_storage_title">Penyimpanan</string>

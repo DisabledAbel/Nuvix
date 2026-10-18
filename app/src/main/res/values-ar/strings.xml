@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">متابعة التسجيل لهذا العدد من الدقائق بعد وقت الانتهاء المُدرج حتى لا يُقتطع أي تجاوز في الوقت</string>
     <string name="recset_minutes_short">د</string>
     <string name="recset_autoswitch">التبديل التلقائي عند بدء التسجيل</string>
-    <string name="recset_autoswitch_desc">مع مزوّد يتيح اتصالًا واحدًا فقط، ينتقل العرض إلى التسجيل عند بدئه (مع تحذير قبل 30 ثانية) حتى لا ينقطع بثك المباشر</string>
+    <string name="recset_autoswitch_desc">مع مزوّد يتيح اتصالًا واحدًا فقط، ينتقل العرض إلى التسجيل عند بدئه (مع تنبيه التسجيل المضبوط) حتى لا ينقطع بثك المباشر</string>
     <string name="recset_livepause">إيقاف مؤقت وإرجاع البث المباشر</string>
     <string name="recset_livepause_desc">يحتفظ ببضع دقائق من البث المباشر في الذاكرة لتتمكن من إيقافه مؤقتًا وإرجاعه (تجريبي — يستخدم ذاكرة أكبر)</string>
     <string name="recset_storage_title">التخزين</string>

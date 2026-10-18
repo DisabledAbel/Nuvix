@@ -16,13 +16,21 @@ data class MultiViewRecordingConflict(
     val effectiveStartMillis: Long,
     val victims: List<ReservationToken>,
 ) {
-    val key get() = recording.warningKey()
+    val key get() = "${recording.warningKey()}:$effectiveStartMillis"
     val unknownAllowance get() = account.effectiveMaximum == null
 }
 
 /** Read-only projection of the existing DVR plan and allocator; it never reserves or trims. */
 object MultiViewRecordingConflictPolicy {
     const val DEFAULT_LEAD_MILLIS = 120_000L
+
+    /** Shared read-only plan for alarm timing and visible conflict detection. */
+    fun plan(recordings: List<Recording>, accounts: List<AccountConnectionSnapshot>, now: Long): DvrConflictPlan {
+        val bySource = accounts.flatMap { account -> account.sourceIds.map { it to account } }.toMap()
+        return DvrConflictPolicy.resolve(recordings, now,
+            { bySource[it]?.accountKey ?: "unavailable:$it" },
+            { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
+    }
 
     fun detect(
         recordings: List<Recording>,
@@ -32,9 +40,7 @@ object MultiViewRecordingConflictPolicy {
         primarySessionId: String? = null,
     ): List<MultiViewRecordingConflict> {
         val bySource = accounts.flatMap { account -> account.sourceIds.map { it to account } }.toMap()
-        val plan = DvrConflictPolicy.resolve(recordings, now,
-            { bySource[it]?.accountKey ?: "unavailable:$it" },
-            { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
+        val plan = plan(recordings, accounts, now)
         return recordings.filter { it.status == RecordingStatus.SCHEDULED && it.id !in plan.rejectedIds }
             .sortedWith(compareBy<Recording> { plan.windows[it.id]?.startMillis }.then(DvrConflictPolicy.priority))
             .mapNotNull { rec ->

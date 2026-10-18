@@ -1070,7 +1070,7 @@ class MultiViewSessionManagerTest {
         assertNull(coordinator.warning.value)
         assertEquals(0, f.player(1).releases)
         rows = listOf(warningBooking().copy(scheduledStartMillis = 90_000))
-        coordinator.refresh()
+        coordinator.invalidateRows()
         assertNotNull(coordinator.warning.value)
         advanceTimeBy(90_000); runCurrent(); coordinator.refresh()
         assertNull(coordinator.warning.value)
@@ -1095,7 +1095,7 @@ class MultiViewSessionManagerTest {
         coordinator.refresh(); assertNull(coordinator.warning.value)
         assertFalse(coordinator.release(old.conflict.key, old.panels.first()))
         f.connections.allocator.configure(1, AccountConnectionPolicy(1, false)); coordinator.refresh()
-        rows = emptyList(); coordinator.refresh()
+        rows = emptyList(); coordinator.invalidateRows()
         assertNull(coordinator.warning.value)
         assertFalse(coordinator.release(old.conflict.key, old.panels.first()))
         assertEquals(0, f.player(1).releases)
@@ -1130,6 +1130,27 @@ class MultiViewSessionManagerTest {
         assertEquals(1L, f.state.panels.first().channelId)
         f.manager.retry(f.state.panels.first().id); runCurrent()
         assertEquals(1L, f.resolvedIds.last())
+    }
+
+    @Test fun coordinatorCountdownAndCapacityUseCachedRowsUntilExplicitInvalidation() = runTest {
+        val f = Fixture(this, maximum = 1); f.addReady(1)
+        var rows = listOf(warningBooking())
+        var reads = 0
+        val coordinator = app.opentv.recording.RecordingConflictCoordinator(backgroundScope, f.manager,
+            { reads++; rows }, { f.connections.allocator.snapshots.value }, { 120_000 }, { false }, {}, { _, _, _ -> },
+            now = { testScheduler.currentTime })
+        coordinator.setVisible(true); runCurrent()
+        assertEquals(1, reads)
+        val originalTime = coordinator.warning.value!!.nowMillis
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(1, reads)
+        assertTrue(coordinator.warning.value!!.nowMillis > originalTime)
+        f.connections.allocator.configure(1, AccountConnectionPolicy(2, false)); coordinator.refresh()
+        assertNull(coordinator.warning.value)
+        assertEquals(1, reads)
+        rows = emptyList(); coordinator.invalidateRows()
+        assertEquals(2, reads)
+        assertNull(coordinator.warning.value)
     }
 
 }

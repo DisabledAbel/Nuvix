@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Fortsett opptaket dette antall minutter etter oppført sluttid, slik at overskridelser ikke blir kuttet</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Bytt automatisk når opptak starter</string>
-    <string name="recset_autoswitch_desc">Hos en leverandør med kun én tilkobling flyttes skjermen til et opptak når det starter (med et 30-sekunders varsel), slik at direktesendingen din ikke brytes</string>
+    <string name="recset_autoswitch_desc">Hos en leverandør med kun én tilkobling flyttes skjermen til et opptak når det starter (med det konfigurerte opptaksvarselet), slik at direktesendingen din ikke brytes</string>
     <string name="recset_livepause">Pause og spol tilbake direktesending</string>
     <string name="recset_livepause_desc">Holder et par minutter med direktesending i minnet slik at du kan pause og spole tilbake den (eksperimentelt — bruker mer minne)</string>
     <string name="recset_storage_title">Lagring</string>

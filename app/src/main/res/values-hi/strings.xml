@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">सूचीबद्ध अंत के बाद इतने मिनट तक रिकॉर्डिंग जारी रखें, ताकि ओवररन कट न हो</string>
     <string name="recset_minutes_short">मिनट</string>
     <string name="recset_autoswitch">रिकॉर्डिंग शुरू होने पर ऑटो-स्विच करें</string>
-    <string name="recset_autoswitch_desc">सिंगल-कनेक्शन प्रदाता पर, रिकॉर्डिंग शुरू होते ही स्क्रीन को उस पर ले जाएं (30 सेकंड की चेतावनी के साथ) ताकि आपका लाइव स्ट्रीम कट न हो</string>
+    <string name="recset_autoswitch_desc">सिंगल-कनेक्शन प्रदाता पर, रिकॉर्डिंग शुरू होते ही स्क्रीन को उस पर ले जाएं (कॉन्फ़िगर की गई रिकॉर्डिंग चेतावनी के साथ) ताकि आपका लाइव स्ट्रीम कट न हो</string>
     <string name="recset_livepause">लाइव टीवी पॉज़ &amp; रिवाइंड करें</string>
     <string name="recset_livepause_desc">लाइव टीवी को पॉज़ और रिवाइंड करने के लिए कुछ मिनट मेमोरी में रखें (प्रायोगिक — ज़्यादा मेमोरी इस्तेमाल करता है)</string>
     <string name="recset_storage_title">स्टोरेज</string>

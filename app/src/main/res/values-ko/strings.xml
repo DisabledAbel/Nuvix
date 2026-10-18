@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">편성표에 표시된 종료 시간 이후에도 이 분만큼 계속 녹화하여 방송이 연장되어도 잘리지 않게 합니다</string>
     <string name="recset_minutes_short">분</string>
     <string name="recset_autoswitch">녹화 시작 시 자동 전환</string>
-    <string name="recset_autoswitch_desc">동시 접속이 1개인 공급자의 경우, 녹화가 시작되면 화면이 자동으로 전환됩니다(30초 전 알림). 시청 중인 실시간 스트림이 끊기지 않도록 하기 위함입니다</string>
+    <string name="recset_autoswitch_desc">동시 접속이 1개인 공급자의 경우, 녹화가 시작되면 화면이 자동으로 전환됩니다(설정된 녹화 알림 사용). 시청 중인 실시간 스트림이 끊기지 않도록 하기 위함입니다</string>
     <string name="recset_livepause">실시간 TV 일시정지 및 되감기</string>
     <string name="recset_livepause_desc">최근 몇 분간의 실시간 방송을 메모리에 저장하여 일시정지 및 되감기가 가능하게 합니다(실험적 기능 - 메모리 사용량이 늘어납니다)</string>
     <string name="recset_storage_title">저장 공간</string>

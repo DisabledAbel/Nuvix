@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">ضبط را به‌اندازه همین چند دقیقه پس از زمان پایان اعلام‌شده ادامه می‌دهد تا تأخیرها قطع نشوند</string>
     <string name="recset_minutes_short">دقیقه</string>
     <string name="recset_autoswitch">تعویض خودکار هنگام شروع ضبط</string>
-    <string name="recset_autoswitch_desc">در ارائه‌دهندگان تک‌اتصالی، با شروع ضبط، صفحه را به آن منتقل می‌کند (با ۳۰ ثانیه هشدار قبلی) تا پخش زنده شما قطع نشود</string>
+    <string name="recset_autoswitch_desc">در ارائه‌دهندگان تک‌اتصالی، با شروع ضبط، صفحه را به آن منتقل می‌کند (با هشدار ضبط تنظیم‌شده) تا پخش زنده شما قطع نشود</string>
     <string name="recset_livepause">توقف موقت و عقب بردن پخش زنده</string>
     <string name="recset_livepause_desc">چند دقیقه از پخش زنده را در حافظه نگه می‌دارد تا بتوانید آن را متوقف یا عقب ببرید (آزمایشی — حافظه بیشتری مصرف می‌کند)</string>
     <string name="recset_storage_title">حافظه</string>

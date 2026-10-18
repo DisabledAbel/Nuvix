@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Fortsæt optagelsen så mange minutter efter det angivne sluttidspunkt, så overskridelser ikke bliver klippet væk</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Skift automatisk, når optagelsen starter</string>
-    <string name="recset_autoswitch_desc">Hos en udbyder med én forbindelse skifter skærmen til en optagelse, når den starter (med en advarsel 30 sekunder før), så din livestream ikke bliver afbrudt</string>
+    <string name="recset_autoswitch_desc">Hos en udbyder med én forbindelse skifter skærmen til en optagelse, når den starter (med den indstillede optageadvarsel), så din livestream ikke bliver afbrudt</string>
     <string name="recset_livepause">Sæt live-tv på pause &amp; spol tilbage</string>
     <string name="recset_livepause_desc">Gemmer et par minutters live-tv i hukommelsen, så du kan sætte på pause og spole tilbage (eksperimentelt – bruger mere hukommelse)</string>
     <string name="recset_storage_title">Lagerplads</string>

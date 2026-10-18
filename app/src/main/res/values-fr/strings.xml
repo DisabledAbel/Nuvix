@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Continue l\'enregistrement ce nombre de minutes après l\'heure de fin indiquée, pour ne pas couper les dépassements</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Bascule automatique au début de l\'enregistrement</string>
-    <string name="recset_autoswitch_desc">Avec un fournisseur à connexion unique, bascule l\'écran sur un enregistrement dès son démarrage (avec un avertissement de 30 secondes) afin que votre flux en direct ne soit pas coupé</string>
+    <string name="recset_autoswitch_desc">Avec un fournisseur à connexion unique, bascule l\'écran sur un enregistrement dès son démarrage (avec l\'avertissement d\'enregistrement configuré) afin que votre flux en direct ne soit pas coupé</string>
     <string name="recset_livepause">Pause et retour arrière en direct</string>
     <string name="recset_livepause_desc">Conserve quelques minutes de TV en direct en mémoire afin de pouvoir la mettre en pause et la rembobiner (expérimental — utilise plus de mémoire)</string>
     <string name="recset_storage_title">Stockage</string>

@@ -167,7 +167,7 @@ class RecordingEngine(
         val armAt = scheduledStart.coerceAtLeast(System.currentTimeMillis() + 1_000L)
         RecordingScheduler.set(appContext, id, armAt)
         // Warning review is independent of optional recording auto-navigation.
-        RecordingScheduler.setWarning(appContext, id, scheduledStart)
+        RecordingScheduler.rearmWarnings(appContext)
         id
     }
 
@@ -219,8 +219,8 @@ class RecordingEngine(
             }
             val at = if (rec.scheduledStartMillis <= now) now + 1_000L else rec.scheduledStartMillis
             RecordingScheduler.set(appContext, rec.id, at)
-            RecordingScheduler.setWarning(appContext, rec.id, rec.scheduledStartMillis)
         }
+        RecordingScheduler.rearmWarnings(appContext)
     }
 
     /** Cancel a scheduled recording: disarm the alarm (and its pre-warning) and drop the row. */
@@ -230,6 +230,7 @@ class RecordingEngine(
         if (repo.cancelScheduled(recordingId)) {
             repo.event(recordingId, "CANCELED", "Scheduled recording canceled by user")
         }
+        RecordingScheduler.rearmWarnings(appContext)
     }
 
     /**
@@ -364,9 +365,9 @@ class RecordingEngine(
             if (repo.setScheduledWindow(adjustment.recordingId, adjustment.after.startMillis, adjustment.after.endMillis) == 1) {
                 repo.event(adjustment.recordingId, "PADDING_ADJUSTED", "$reason; minimum unlocked padding adjusted")
                 RecordingScheduler.set(appContext, adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
-                RecordingScheduler.setWarning(appContext, adjustment.recordingId, adjustment.after.startMillis)
             }
         }
+        RecordingScheduler.rearmWarnings(appContext)
     }
 
     /** Resolve known recording-account contention at the deadline, never infer unknown capacity. */

@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Ennyi perccel a megadott befejezési idő után is folytatja a felvételt, hogy a csúszások ne maradjanak le</string>
     <string name="recset_minutes_short">perc</string>
     <string name="recset_autoswitch">Automatikus váltás a felvétel indulásakor</string>
-    <string name="recset_autoswitch_desc">Egykapcsolatos szolgáltatónál a képernyő automatikusan átvált a felvételre annak indulásakor (30 másodperces figyelmeztetéssel), hogy az élő adása ne szakadjon meg</string>
+    <string name="recset_autoswitch_desc">Egykapcsolatos szolgáltatónál a képernyő automatikusan átvált a felvételre annak indulásakor (a beállított felvételi figyelmeztetéssel), hogy az élő adása ne szakadjon meg</string>
     <string name="recset_livepause">Élő adás szüneteltetése &amp; visszatekerése</string>
     <string name="recset_livepause_desc">Néhány perc élő adást tárol a memóriában, hogy szüneteltetni és visszatekerni lehessen (kísérleti — több memóriát használ)</string>
     <string name="recset_storage_title">Tárhely</string>

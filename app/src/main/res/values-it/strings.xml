@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Continua a registrare per questo numero di minuti dopo l\'orario di fine indicato, per non tagliare eventuali ritardi</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Cambio automatico all\'avvio della registrazione</string>
-    <string name="recset_autoswitch_desc">Con un provider a connessione singola, sposta lo schermo su una registrazione non appena inizia (con un avviso di 30 secondi) in modo che il tuo stream in diretta non venga interrotto</string>
+    <string name="recset_autoswitch_desc">Con un provider a connessione singola, sposta lo schermo su una registrazione non appena inizia (con l\'avviso di registrazione configurato) in modo che il tuo stream in diretta non venga interrotto</string>
     <string name="recset_livepause">Pausa e riavvolgimento della TV in diretta</string>
     <string name="recset_livepause_desc">Mantiene in memoria un paio di minuti di TV in diretta per permetterti di metterla in pausa e riavvolgerla (sperimentale — usa più memoria)</string>
     <string name="recset_storage_title">Archiviazione</string>

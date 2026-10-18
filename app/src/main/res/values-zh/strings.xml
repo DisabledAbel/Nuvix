@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">在节目单标注的结束时间之后继续录制这么多分钟，以免超时的部分被截断</string>
     <string name="recset_minutes_short">分钟</string>
     <string name="recset_autoswitch">录制开始时自动切换</string>
-    <string name="recset_autoswitch_desc">对于单连接提供商，录制开始时会自动切换画面（提前 30 秒提示），以免中断你正在观看的直播</string>
+    <string name="recset_autoswitch_desc">对于单连接提供商，录制开始时会自动切换画面（按配置的录制提醒通知），以免中断你正在观看的直播</string>
     <string name="recset_livepause">暂停并回退直播电视</string>
     <string name="recset_livepause_desc">在内存中保留几分钟的直播内容，以便暂停和回退（实验性功能——会占用更多内存）</string>
     <string name="recset_storage_title">存储</string>

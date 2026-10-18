@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Yayın süresi aşımlarının kesilmemesi için listelenen bitişten bu kadar dakika sonrasına kadar kayda devam et</string>
     <string name="recset_minutes_short">dk</string>
     <string name="recset_autoswitch">Kayıt başladığında otomatik geçiş</string>
-    <string name="recset_autoswitch_desc">Tek bağlantılı bir sağlayıcıda, canlı yayınınızın kesilmemesi için kayıt başladığında ekranı kayda geçirir (30 saniyelik bir uyarıyla)</string>
+    <string name="recset_autoswitch_desc">Tek bağlantılı bir sağlayıcıda, canlı yayınınızın kesilmemesi için kayıt başladığında ekranı kayda geçirir (yapılandırılmış kayıt uyarısıyla)</string>
     <string name="recset_livepause">Canlı yayını duraklat ve geri sar</string>
     <string name="recset_livepause_desc">Duraklatıp geri sarabilmeniz için canlı yayının birkaç dakikasını bellekte tutar (deneysel — daha fazla bellek kullanır)</string>
     <string name="recset_storage_title">Depolama</string>

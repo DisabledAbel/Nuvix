@@ -246,7 +246,7 @@
     <string name="recset_pad_end_desc">Nastavi snimanje ovoliko minuta nakon navedenog kraja, kako produljenja ne bi bila odsječena</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Automatski prijeđi kad snimanje počne</string>
-    <string name="recset_autoswitch_desc">Kod pružatelja usluge s jednom vezom, prebacuje zaslon na snimanje čim počne (uz upozorenje 30 sekundi ranije) kako se vaš prijenos uživo ne bi prekinuo</string>
+    <string name="recset_autoswitch_desc">Kod pružatelja usluge s jednom vezom, prebacuje zaslon na snimanje čim počne (uz postavljeno upozorenje za snimanje) kako se vaš prijenos uživo ne bi prekinuo</string>
     <string name="recset_livepause">Pauza i premotavanje TV-a uživo</string>
     <string name="recset_livepause_desc">Zadržava nekoliko minuta TV-a uživo u memoriji kako biste ga mogli pauzirati i premotati (eksperimentalno — koristi više memorije)</string>
     <string name="recset_storage_title">Pohrana</string>

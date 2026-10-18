@@ -401,7 +401,7 @@ private fun NuvixNavigation(
         }
         AlertDialog(onDismissRequest = app.opentv.core.RecordingSignals::consumeReview,
             title = { Text(recording?.title ?: "Recording details") },
-            text = { Text(recording?.let { "${it.channelName} · ${it.status}\nPadded start: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.scheduledStartMillis))}\nProtect Recording: ${it.protectedRecording} · Lock Padding: ${it.lockPadding}\nScheduled recordings retain their existing priority at the deadline." } ?: "This recording is no longer available.") },
+            text = { Text(recording?.let { "${it.channelName} · ${it.status}\nRequested padded start: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.scheduledStartMillis))}\nThe effective start may change under recording conflict policy.\nProtect Recording: ${it.protectedRecording} · Lock Padding: ${it.lockPadding}\nScheduled recordings retain their existing priority at the deadline." } ?: "This recording is no longer available.") },
             confirmButton = { TextButton(onClick = app.opentv.core.RecordingSignals::consumeReview) { Text("Close") } })
     }
     if (recordingReview == null) app.opentv.ui.recordings.RecordingConflictHost(liveSession.recordingConflicts, multiView)

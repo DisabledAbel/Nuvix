@@ -286,7 +286,7 @@
     <string name="recset_pad_end_desc">Keep recording this many minutes after the listed end, so overruns aren\'t cut</string>
     <string name="recset_minutes_short">min</string>
     <string name="recset_autoswitch">Auto-switch when recording starts</string>
-    <string name="recset_autoswitch_desc">On a single-connection provider, move the screen onto a recording as it starts (with a 30-second warning) so your live stream isn\'t cut off</string>
+    <string name="recset_autoswitch_desc">On a single-connection provider, move the screen onto a recording as it starts (with the configured recording warning) so your live stream isn\'t cut off</string>
     <string name="recset_livepause">Pause &amp; rewind live TV</string>
     <string name="recset_livepause_desc">Hold a couple of minutes of live TV in memory so you can pause and rewind it (experimental — uses more memory)</string>
     <string name="recset_pw_show" tools:ignore="MissingTranslation">Show password</string>

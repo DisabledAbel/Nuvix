@@ -99,18 +99,19 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
                 val rec = graph.recordingRepository.byId(id) ?: return@launch
                 if (rec.status != RecordingStatus.SCHEDULED) return@launch
                 val now = System.currentTimeMillis()
-                if (rec.scheduledStartMillis <= now) {
-                    RecordingConflictNotifications.cancel(app, id)
-                    return@launch
-                }
-                val lead = graph.settings.recordConflictLeadMinutes.value * 60_000L
-                if (rec.scheduledStartMillis - now > lead) {
-                    RecordingScheduler.setWarning(app, id, rec.scheduledStartMillis)
-                    return@launch
-                }
                 val available = graph.sourceRepository.enabled().associateBy { it.id }
                 available.values.forEach { graph.connections.registerSource(it) }
                 val rows = (graph.recordingRepository.scheduled() + graph.recordingRepository.active()).filter { it.sourceId in available }
+                val start = MultiViewRecordingConflictPolicy.plan(rows, graph.connections.snapshots.value, now).windows[id]?.startMillis
+                if (start == null || start <= now) {
+                    RecordingScheduler.cancelWarning(app, id)
+                    return@launch
+                }
+                val lead = graph.settings.recordConflictLeadMinutes.value * 60_000L
+                if (start - now > lead) {
+                    RecordingScheduler.setWarning(app, id, start)
+                    return@launch
+                }
                 MultiViewRecordingConflictPolicy.detect(rows, graph.connections.snapshots.value, now, lead)
                     .firstOrNull { it.recording.id == id }?.let { conflict ->
                         if (RecordingConflictNotifications.show(app, conflict)) {
@@ -124,10 +125,10 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
                         recordingId = id,
                         title = rec.title,
                         channelName = rec.channelName,
-                        startAtMillis = rec.scheduledStartMillis,
+                        startAtMillis = start,
                     ),
                 )
-                notifyWarn(app, rec)
+                notifyWarn(app, rec, start)
             } finally {
                 pending.finish()
             }
@@ -178,7 +179,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
     }
 
     /** Posts an imminent recording warning when notifications are allowed. */
-    private fun notifyWarn(context: Context, rec: Recording) {
+    private fun notifyWarn(context: Context, rec: Recording, startAtMillis: Long) {
         createChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.rec_switch_soon_title, rec.title))
@@ -187,7 +188,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setTimeoutAfter((rec.scheduledStartMillis - System.currentTimeMillis()).coerceAtLeast(1))
+            .setTimeoutAfter((startAtMillis - System.currentTimeMillis()).coerceAtLeast(1))
         safeNotify(context, WARN_NOTIFICATION_BASE + rec.id.toInt(), builder.build())
     }
 
