@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import app.opentv.ui.home.SportsAction
+import app.opentv.ui.home.SportsBroadcastChooser
 import app.opentv.ui.home.SportsGameCard
 import app.opentv.ui.home.SportsStreamCard
 import org.junit.Assert.*
@@ -46,7 +47,7 @@ class SportsRemoteUiTest {
         compose.setContent { MaterialTheme {
             SportsStreamCard(sportsStream(), false, { tunes++ }, {}, {}, {}, {}, {})
         } }
-        val watch = compose.onNodeWithText("Watch / Switch to Sports channel 1")
+        val watch = compose.onNodeWithText("Watch Fullscreen")
         watch.performSemanticsAction(SemanticsActions.RequestFocus)
         compose.runOnIdle { assertEquals(0, tunes) }
         watch.performKeyInput { pressKey(Key.DirectionCenter) }
@@ -59,13 +60,48 @@ class SportsRemoteUiTest {
     @Test fun suggestedStreamsCannotBeOpenedUntilConfirmedAndQualityIsExplicitlyUnverified() {
         var confirms = 0; var tunes = 0
         val stream = sportsStream(sportsChannel().copy(qualityLabel = "4K"), MatchConfidence.POSSIBLE)
-        compose.setContent { MaterialTheme { SportsStreamCard(stream, false, { tunes++ }, {}, { confirms++ }, {}, {}, {}) } }
-        compose.onNodeWithText("Watch / Switch to Sports channel 1").assertDoesNotExist()
+        compose.setContent { MaterialTheme { SportsStreamCard(stream, false, { tunes++ }, {}, { confirms++ }, {}, {}, {},
+            onAddToMultiView = { tunes++ }, onReplaceMultiViewPanel = { tunes++ }) } }
+        compose.onNodeWithText("Watch Fullscreen").assertDoesNotExist()
+        compose.onNodeWithText("Add Broadcast to Multi-View").assertDoesNotExist()
+        compose.onNodeWithText("Replace Multi-View Panel").assertDoesNotExist()
         compose.onNodeWithText("Provider quality label (unverified): 4K").assertIsDisplayed()
         val confirm = compose.onNodeWithText("Confirm match")
         confirm.performSemanticsAction(SemanticsActions.RequestFocus)
         confirm.performKeyInput { pressKey(Key.DirectionCenter) }
         compose.runOnIdle { assertEquals(1, confirms); assertEquals(0, tunes) }
+    }
+    @Test fun multiViewActionsRequireExplicitSelectionAndSuggestionsExposeNoPlaybackAction() {
+        var adds = 0; var replacements = 0
+        compose.setContent { MaterialTheme {
+            SportsStreamCard(sportsStream(), false, {}, {}, {}, {}, {}, {},
+                onAddToMultiView = { adds++ }, onReplaceMultiViewPanel = { replacements++ })
+        } }
+        val add = compose.onNodeWithText("Add Broadcast to Multi-View")
+        add.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.runOnIdle { assertEquals(0, adds); assertEquals(0, replacements) }
+        add.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(1, adds); assertEquals(0, replacements) }
+        val replace = compose.onNodeWithText("Replace Multi-View Panel")
+        replace.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus)
+        replace.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(1, adds); assertEquals(1, replacements) }
+    }
+    @Test fun broadcastChooserShowsProvidersAndChoosesOnlyOneConfirmedBroadcast() {
+        val first = sportsStream()
+        val second = sportsStream(sportsChannel(2, 2))
+        val suggestion = sportsStream(sportsChannel(3, 3), MatchConfidence.POSSIBLE)
+        val choices = mutableListOf<SportsStream>()
+        compose.setContent { MaterialTheme {
+            SportsBroadcastChooser(listOf(first, second, suggestion), onChoose = { choices += it }, onCancel = {})
+        } }
+        compose.onNodeWithText("Provider 1 · Sports channel 1 · Confirmed").assertIsDisplayed()
+        val providerTwo = compose.onNodeWithText("Provider 2 · Sports channel 2 · Confirmed")
+        providerTwo.performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.runOnIdle { assertTrue(choices.isEmpty()) }
+        compose.onNodeWithText("Provider 3 · Sports channel 3 · Confirmed").assertDoesNotExist()
+        providerTwo.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(listOf(second), choices) }
     }
     @Test fun returningGameCardRequestsFocusWithoutOpeningPlayback() {
         var opens = 0

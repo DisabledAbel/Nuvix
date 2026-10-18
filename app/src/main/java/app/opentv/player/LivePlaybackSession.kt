@@ -103,11 +103,24 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     val paused = coordinator.paused
     val state = coordinator.state
 
+    /** The retained owner enforces mutual exclusion with single-channel/VOD playback. */
+    val multiView = app.opentv.multiview.MultiViewSessionManager.create(application, viewModelScope) {
+        releaseGuidePreview()
+        releaseNonLivePlayback()
+        coordinator.stopForOtherPlayback()
+    }
+
     /** Used only by the fullscreen controls or an active preview, never to discover activity. */
     val controller: PlayerController
         get() = (coordinator.ensureEngine() as ControllerEngine).controller
 
     init {
+        // Establish this synchronously, before the first Guide composition can register a preview.
+        val recoveryStore = app.opentv.multiview.MultiViewPresetStore(application)
+        val pendingRecovery = try { recoveryStore.peekRecovery() != null } finally { recoveryStore.close() }
+        val multiViewPreferences = graph.settings.multiViewPreferences.value
+        setRecoveryReviewPending(pendingRecovery && multiViewPreferences.enabled &&
+            multiViewPreferences.recovery == app.opentv.multiview.MultiViewRecoveryPolicy.ASK_BEFORE_RESTORE)
         viewModelScope.launch {
             combine(graph.settings.persistentLivePlayback, graph.settings.continueAudioWhileBrowsing) { persistent, audio -> persistent to audio }
                 .collect { (persistent, audio) -> coordinator.updatePreferences(persistent, audio) }
@@ -185,10 +198,16 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         approvalResponse?.complete(if (allow) connections.approve(prompt.challenge) else null)
     }
 
+    /** No optional stream may start behind a pending interrupted-session review. */
+    fun setRecoveryReviewPending(pending: Boolean) {
+        if (pending) releaseGuidePreview()
+        coordinator.setOptionalPreviewSuppressed(pending)
+    }
+
     // The optional highlighted-channel preview registers only its application-context controller.
     // This closes it synchronously for notification/startup tunes, before Compose can dispose it.
     fun registerGuidePreview(controller: PlayerController, onReleased: () -> Unit = {}) {
-        if (active.value || guidePreviewSuppressed.value) {
+        if (active.value || multiView.state.value.panels.isNotEmpty() || guidePreviewSuppressed.value) {
             controller.release()
             onReleased()
         } else {
@@ -210,6 +229,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
 
     /** Dedicated VOD/recording screens retain their implementation but relinquish synchronously. */
     fun registerNonLivePlayback(controller: PlayerController) {
+        multiView.stop()
         releaseGuidePreview()
         coordinator.stopForOtherPlayback()
         if (nonLivePlayback !== controller) releaseNonLivePlayback()
@@ -224,14 +244,14 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         nonLivePlayback = null
     }
 
-    fun openChannel(id: Long) { releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id) }
-    fun tune(channel: Channel) { releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel) }
+    fun openChannel(id: Long) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id) }
+    fun tune(channel: Channel) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel) }
     fun clearDiagnostics() {
         implementation?.controller?.diagnostics?.clear()
         nonLivePlayback?.diagnostics?.clear()
     }
     fun retry() = coordinator.retry()
-    fun stop() { releaseGuidePreview(); coordinator.stopForOtherPlayback() }
+    fun stop() { multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
     /** Capture admission closes only viewing sessions whose account capacity is needed. */
     fun recordChannel(channel: Channel, programme: Programme? = null) {
         viewModelScope.launch { graph.recordingEngine.startChannel(channel, programme) }
@@ -243,9 +263,10 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
     fun setForeground(foreground: Boolean) {
         if (!foreground) releaseGuidePreview()
+        multiView.setForeground(foreground)
         coordinator.setForeground(foreground)
     }
-    fun setInPip(inPip: Boolean) = coordinator.setInPip(inPip)
+    fun setInPip(inPip: Boolean) { multiView.setInPip(inPip); coordinator.setInPip(inPip) }
 
     fun onMemoryPressure(level: Int) {
         // RUNNING_LOW/CRITICAL concern the foreground; UI_HIDDEN alone is routine backgrounding.
@@ -253,10 +274,12 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
             level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
         if (critical) releaseGuidePreview()
+        if (critical) multiView.onMemoryPressure()
         coordinator.onMemoryPressure(critical)
     }
 
     override fun onCleared() {
+        multiView.release()
         releaseGuidePreview()
         releaseNonLivePlayback()
         coordinator.destroy()

@@ -166,6 +166,38 @@ class AccountConnectionManagerTest {
         assertEquals(ReservationState.PENDING, manager.reservationState(live))
     }
 
+    @Test fun recordingsReclaimPreviewThenCurrentSecondaryAndPreserveUnrelatedAccounts() = runTest {
+        val manager = AccountConnectionManager.createForTest(context)
+        manager.registerSource(source())
+        manager.registerSource(source(2, "independent-account"))
+        manager.setMaximumConnections(1, 3)
+        manager.setMaximumConnections(2, 1)
+        val first = reserve(manager, request("first", purpose = ConnectionPurpose.MULTIVIEW))
+        val second = reserve(manager, request("second", purpose = ConnectionPurpose.MULTIVIEW))
+        val preview = reserve(manager, request("preview", purpose = ConnectionPurpose.PREVIEW))
+        val unrelated = reserve(manager, request("unrelated", sourceId = 2))
+        var primary = "first"
+        val closed = mutableListOf<String>()
+        for (token in listOf(first, second, preview, unrelated)) {
+            manager.registerOwner(token, reclamationPriority = { if (token.sessionId == primary) 2 else 1 }) {
+                closed += token.sessionId
+                manager.beginRelease(token)
+                manager.release(token)
+            }
+        }
+        assertTrue(manager.reserveForRecording(request("recording-1", purpose = ConnectionPurpose.RECORDING),
+            allowInterruptLive = true) is ReservationResult.Reserved)
+        assertEquals(listOf("preview"), closed)
+        // Changing the primary after registration must change the live reclamation order.
+        primary = "second"
+        assertTrue(manager.reserveForRecording(request("recording-2", purpose = ConnectionPurpose.RECORDING),
+            allowInterruptLive = true) is ReservationResult.Reserved)
+        assertEquals(listOf("preview", "first"), closed)
+        assertEquals(ReservationState.PENDING, manager.reservationState(second))
+        assertEquals(ReservationState.PENDING, manager.reservationState(unrelated))
+        assertEquals(3, manager.snapshotForSource(1)!!.locallyReserved)
+    }
+
     @Test fun exhaustedRecordingLimitPreservesOptionalViewersOnLinkedPlaylists() = runTest {
         assertRecordingOnlyCapacityPreservesViewers(1)
     }

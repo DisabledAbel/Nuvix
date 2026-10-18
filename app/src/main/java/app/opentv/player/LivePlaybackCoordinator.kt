@@ -68,6 +68,8 @@ internal class LivePlaybackCoordinator(
     private val _engineReady = MutableStateFlow(false)
     val engineReady = _engineReady.asStateFlow()
     private val _guidePreviewSuppressed = MutableStateFlow(false)
+    private var policyPreviewSuppressed = false
+    private var optionalPreviewSuppressed = false
     val guidePreviewSuppressed = _guidePreviewSuppressed.asStateFlow()
     private var resolving = false
     private var resolutionFailed = false
@@ -111,7 +113,7 @@ internal class LivePlaybackCoordinator(
 
     private fun request(id: Long, rememberPrevious: Boolean, channel: suspend () -> Channel?) {
         if (destroyed || requestedId == id) return
-        _guidePreviewSuppressed.value = false
+        setPolicyPreviewSuppressed(false)
         if (_active.value && !resolutionFailed && playingChannelId == id && _state.value !is PlayerController.State.Error) {
             // Returning to the current channel cancels an obsolete in-flight different selection.
             if (requestedId != null) {
@@ -228,7 +230,7 @@ internal class LivePlaybackCoordinator(
     /** Release only this optional live decoder; recordings have entirely separate ownership. */
     fun onMemoryPressure(critical: Boolean) {
         if (critical && presentation != LivePresentation.FULLSCREEN && presentation != LivePresentation.PIP && !inPip) {
-            _guidePreviewSuppressed.value = true
+            setPolicyPreviewSuppressed(true)
             stop()
         }
     }
@@ -238,9 +240,20 @@ internal class LivePlaybackCoordinator(
         if (_currentChannel.value?.sourceId == sourceId) stopForOtherPlayback()
     }
 
+    /** Recovery review is an additional gate; clearing it cannot undo recording/memory policy. */
+    fun setOptionalPreviewSuppressed(suppressed: Boolean) {
+        optionalPreviewSuppressed = suppressed
+        _guidePreviewSuppressed.value = policyPreviewSuppressed || optionalPreviewSuppressed
+    }
+
+    private fun setPolicyPreviewSuppressed(suppressed: Boolean) {
+        policyPreviewSuppressed = suppressed
+        _guidePreviewSuppressed.value = policyPreviewSuppressed || optionalPreviewSuppressed
+    }
+
     fun stopForOtherPlayback() {
         // An outgoing guide must not replace the relinquished stream with its optional preview.
-        _guidePreviewSuppressed.value = true
+        setPolicyPreviewSuppressed(true)
         stop()
     }
 

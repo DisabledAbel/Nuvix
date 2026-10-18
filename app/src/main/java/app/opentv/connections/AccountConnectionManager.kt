@@ -22,6 +22,7 @@ class AccountConnectionManager private constructor(context: Context) {
     private val accountAliases = readAliases()
     private val policies = readPolicies()
     private val owners = mutableMapOf<String, suspend () -> Unit>()
+    private val reclamationPriorities = mutableMapOf<String, () -> Int>()
     val snapshots: StateFlow<List<AccountConnectionSnapshot>> = allocator.snapshots
 
     /** Exact configured account identity; no fuzzy host/playlist matching is performed. */
@@ -53,11 +54,24 @@ class AccountConnectionManager private constructor(context: Context) {
         return allocator.fail(token, knownConnectionLimit)
     }
 
-    @Synchronized fun registerOwner(token: ReservationToken, close: suspend () -> Unit) {
-        if (allocator.reservationState(token) in setOf(ReservationState.PENDING, ReservationState.ACTIVE)) owners[token.reservationId] = close
+    @Synchronized fun registerOwner(
+        token: ReservationToken,
+        reclamationPriority: () -> Int = { 1 },
+        close: suspend () -> Unit,
+    ) {
+        if (allocator.reservationState(token) in setOf(ReservationState.PENDING, ReservationState.ACTIVE)) {
+            owners[token.reservationId] = close
+            reclamationPriorities[token.reservationId] = reclamationPriority
+        }
     }
-    @Synchronized fun unregisterOwner(token: ReservationToken) { owners.remove(token.reservationId) }
+    @Synchronized fun unregisterOwner(token: ReservationToken) {
+        owners.remove(token.reservationId)
+        reclamationPriorities.remove(token.reservationId)
+    }
     @Synchronized private fun owner(token: ReservationToken): (suspend () -> Unit)? = owners[token.reservationId]
+    @Synchronized private fun reclamationPriority(token: ReservationToken): Int =
+        if (token.purpose == ConnectionPurpose.PREVIEW) Int.MIN_VALUE
+        else reclamationPriorities[token.reservationId]?.invoke() ?: 1
 
     /**
      * Recording preference may close optional consumers, never other recordings. Owners must
@@ -75,7 +89,7 @@ class AccountConnectionManager private constructor(context: Context) {
         // Admission to reclamation checks recording-only usage under the allocator's lock.
         val key = allocator.beginRecordingReclaim(request.sourceId) ?: return first
         try {
-            for (token in allocator.optionalReservations(key)) {
+            for (token in allocator.optionalReservations(key).sortedBy(::reclamationPriority)) {
                 val close = owner(token) ?: continue
                 try { close() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { continue }
                 val retried = reserve(request)

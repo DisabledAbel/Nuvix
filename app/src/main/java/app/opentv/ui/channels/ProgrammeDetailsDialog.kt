@@ -46,6 +46,8 @@ fun ProgrammeDetailsDialog(
     onPlayCatchup: (String, String, String, String) -> Unit,
     onRecordingScheduled: () -> Unit = {},
     onDismiss: () -> Unit,
+    onAddToMultiView: ((Channel) -> Unit)? = null,
+    onReplaceMultiViewPanel: ((Channel) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val graph = remember { ServiceLocator.get(context) }
@@ -101,6 +103,20 @@ fun ProgrammeDetailsDialog(
             ProgrammeDetailsMetadata(programme, channel, actions.status, showArtwork)
             if (actions.canWatchNow) RecordActionRow(stringResource(R.string.guide_details_watch_now), primary = true, enabled = !actionPending) {
                 submit { check(freshActions(channel).canWatchNow); onWatch(channel) }
+            }
+            if (actions.canViewChannel && onAddToMultiView != null) RecordActionRow("Add channel to Multi-View", enabled = !actionPending) {
+                submit {
+                    check(freshActions(channel).canViewChannel)
+                    onReleasePreview()
+                    onAddToMultiView(channel)
+                }
+            }
+            if (actions.canViewChannel && onReplaceMultiViewPanel != null) RecordActionRow("Replace Selected Panel", enabled = !actionPending) {
+                submit {
+                    check(freshActions(channel).canViewChannel)
+                    onReleasePreview()
+                    onReplaceMultiViewPanel(channel)
+                }
             }
             if (multiSource || recordingOptions.size > 1) {
                 Text(stringResource(if (multiSource) R.string.rec_record_from else R.string.rec_quality_label),

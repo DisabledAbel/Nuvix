@@ -2,12 +2,26 @@
 
 ## Unreleased
 
+- Add lifecycle-owned Smart Multi-View with up to four live panels, shared account reservations,
+  incremental decoder admission, stable panel identities and independent failed-panel actions.
+- Add balanced two/three/four-channel and focused layouts, D-pad panel selection, explicit panel
+  controls, Edit Layout, duplicate choices and resource-aware channel replacement.
+- Coordinate one Android audio-focus owner with cancelable 150 ms focus-follow selection or
+  OK-only audio; keep Guide navigation independent of the selected audio panel.
+- Add compact Guide browsing and explicit Sports Hub broadcast actions, reusing authorized local
+  catalog associations and provider choice. Enter fullscreen with the selected player and review
+  secondary restoration against current provider and hardware availability.
+- Add credential-free local preset CRUD, disconnected resource previews, interrupted-session
+  review and local Multi-View settings. Restore primary first and never reconnect after a crash
+  without confirmation. Physical-TV playback, PiP, audio focus and decoder acceptance remain
+  separate from deterministic policy and UI tests.
+
 - Add one account-aware local connection allocator for retained live playback, optional Guide
   preview and the existing recording service, with explicit shared-account links, local/provider
   allowance controls and one-request consent for additional unknown-capacity connections.
 - Preserve exclusive live surfaces and use safe connection replacement; do not infer subscription
-  limits from generic errors or claim capacity on other devices is known. Multi-View panels,
-  layouts, audio switching and presets remain outstanding in this draft foundation.
+  limits from generic errors or claim capacity on other devices is known. Multi-View reuses
+  the same allocator and keeps DVR capture ownership independent of visible playback.
 - Add independent Protect Recording/Lock Padding controls, scheduled padding overrides,
   account-aware conflict review, deterministic deadline fallback and readable recording history.
   Use two-minute early/five-minute late defaults without replacing existing stored preferences.

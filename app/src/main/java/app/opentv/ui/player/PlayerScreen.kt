@@ -128,6 +128,7 @@ import java.util.Locale
 fun PlayerScreen(
     liveSession: LivePlaybackSession,
     onBack: () -> Unit,
+    onOpenMultiView: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -494,6 +495,10 @@ fun PlayerScreen(
                 }
 
                 Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    if (onOpenMultiView != null && settings.multiViewPreferences.collectAsState().value.enabled) {
+                        BarChip(Icons.Filled.AspectRatio, "Multi-View", false, onClick = onOpenMultiView)
+                        Spacer(Modifier.width(10.dp))
+                    }
                     if (diagnosticsEnabled) {
                         BarChip(Icons.Filled.Info, "Stream Information", false) {
                             panel = Panel.NONE; channelListVisible = false; diagnosticsVisible = true; interaction++

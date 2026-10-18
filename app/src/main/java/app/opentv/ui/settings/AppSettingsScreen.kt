@@ -6,6 +6,7 @@
  */
 package app.opentv.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +59,12 @@ import app.opentv.data.work.SyncWorker
  */
 @Composable
 fun AppSettingsScreen(onBack: () -> Unit, onClearDiagnostics: () -> Unit = {}) {
+    var showMultiView by rememberSaveable { mutableStateOf(false) }
+    if (showMultiView) {
+        BackHandler { showMultiView = false }
+        MultiViewSettingsScreen(onBack = { showMultiView = false })
+        return
+    }
     val context = LocalContext.current
     val settings = remember { AppSettings.get(context) }
     val themeMode by settings.themeMode.collectAsState()
@@ -232,6 +240,12 @@ fun AppSettingsScreen(onBack: () -> Unit, onClearDiagnostics: () -> Unit = {}) {
             )
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        SettingsSection("Multi-View") {
+            Text("Watch two to four live channels with one audio source.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { showMultiView = true }) { Text("Multi-View settings") }
+        }
         Spacer(Modifier.height(16.dp))
 
         SettingsSection("Playback Diagnostics") {

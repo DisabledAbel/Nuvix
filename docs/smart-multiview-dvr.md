@@ -5,10 +5,150 @@ work. Device-dependent behavior must be verified on actual Android TV, Google TV
 Fire TV hardware. A local reservation is Nuvix's allocation decision; it cannot establish
 how many streams another device is using or change a provider subscription.
 
-## Draft foundation
+## Multi-View playback
 
-The current change extends the existing live owner, Guide preview and recording service.
-It does not provide a Multi-View screen. The full-feature list below remains outstanding.
+Open **Multi-View** in the main navigation or from live playback, Guide or a confirmed
+Sports broadcast. Entering hands ownership away from the retained single-channel session
+before opening Multi-View; it does not leave a hidden fifth viewer. **Exit Multi-View**
+closes its streams. Existing single-channel persistent playback remains available.
+
+Use **Add Channel** to browse All Channels, Favorites, Recent, Custom Groups or Providers.
+No provider connection opens while browsing. The picker uses the existing local catalog;
+channels must still resolve and pass account/resource checks when selected. A channel already
+playing offers **Focus Existing Panel**, **Replace Selected Panel** and **Cancel** rather
+than opening a duplicate stream.
+
+| Layout | Presentation |
+| --- | --- |
+| Two channels | Two equal side-by-side panels. |
+| Three channels | Large primary panel beside two stacked panels. |
+| Four channels | Four panels in a 2×2 grid. |
+| Focused | Large primary panel beside up to three smaller panels. |
+
+**Layout → Balanced** chooses the two/three/four arrangement from the current panel count;
+**Focused** uses the larger primary arrangement. Video uses fit-to-panel aspect ratio,
+with letterboxing as needed. Layout changes, focus and rearrangement retain each panel's
+identity and player. **Panel Actions → Make Primary Panel** chooses the large panel.
+**Edit Layout** makes D-pad moves rearrange the focused panel; **Done** returns to normal
+navigation. Channel/provider labels and an active-audio indicator identify each panel.
+
+### Remote and audio controls
+
+D-pad selects a panel. **Follow Focus** waits 150 ms by default before selecting its audio;
+a newer focus change cancels the pending change. **Press OK to Switch Audio** moves visual
+focus without changing audio until OK is pressed. **Panel Actions** is an explicit toolbar
+action; Menu/F2 also opens it, so a remote long press is never required. The actions include
+**Listen to This Panel**, **Watch Fullscreen**, **Replace Channel**, **Retry Playback**,
+**Make Primary Panel** and **Remove Panel**.
+
+Only one panel has nonzero volume. The wall requests one Android audio-focus lease;
+individual Media3 players do not request competing focus. Focus loss mutes the wall.
+Audio changes keep other video streams playing and do not resolve or retune channels.
+Guide information navigation never changes panel focus or the chosen audio source.
+**Mute / Unmute** preserves the wall's mute choice when audio ownership changes.
+
+Open **Settings → Display & playback → Multi-View** for these local preferences:
+
+| Preference | Default |
+| --- | --- |
+| Multi-View Enabled | On |
+| Audio Switching | Follow Focus |
+| Audio Focus Delay | 150 ms; 0/150/300/500 ms choices |
+| Fullscreen Restoration | Ask First |
+| Buffering Alternative Suggestions | On |
+| Compact Guide Multi-View | On |
+| Channel and Provider Labels | On |
+| Save Presentation Preferences | On |
+| Recovery After Unexpected Exit | Ask Before Restore |
+
+Provider connection limits remain in each provider's **Connection Management** settings.
+Multi-View settings and presets are local; they add no hosted database dependency.
+
+### Guide and Sports Hub
+
+Open **Guide** from the Multi-View toolbar to keep the same panels compactly above the
+Guide. **Focus Multi-View** returns panel control explicitly; Guide D-pad navigation leaves
+selected audio alone. Opening the compact presentation transfers existing surface leases;
+it does not allocate another player or tune a highlighted row. Disabling compact Guide
+presentation hides the wall while leaving the session policy in charge of playback.
+Guide channel/program actions offer **Add to Multi-View**, **Replace Selected Panel** and
+**Watch Fullscreen**. Returning from Guide keeps the prior panel arrangement; the existing
+Guide position preferences remain in effect. A surface-attachment failure displays a
+safe fallback rather than allocating a duplicate player.
+
+Sports game details offer **Add Game to Multi-View**, which opens an explicit chooser of
+confirmed available broadcasts and their providers. Each eligible broadcast also offers
+**Add Broadcast to Multi-View**, **Replace Multi-View Panel** and **Watch Fullscreen**.
+Only the selected broadcast is dispatched. Actions revalidate the existing enabled-source,
+channel-visibility and current confirmed-association rules; unconfirmed suggestions do not
+open streams. Existing favorite teams/leagues and match corrections remain authoritative.
+No paid sports API or additional sports feed is introduced.
+
+### Presets, fullscreen and recovery
+
+**Presets** supports named save, rename, replace and delete. Preview lists intended channels,
+providers, local account requirements, unavailable references and unknown allowances without
+opening streams. Confirming restoration resolves current channels and checks reservations
+again, restores the primary first and opens secondary panels progressively. An unanswered
+unknown-limit request never authorizes another stream.
+
+Preset records use a versioned local SharedPreferences document containing stable channel,
+source, opaque account and panel references, arrangement, primary/audio selections, layout
+and label presentation. They contain no stream URLs, tokens, passwords, players, active
+reservations or surfaces. The initial document migration is additive and leaves Room schema
+14 and the encrypted provider database unchanged. Malformed/future documents are retained
+read-only rather than overwritten.
+
+**Watch Fullscreen** keeps the selected player's identity and surface ownership where
+supported and releases secondary resources according to session policy. Back uses
+**Fullscreen Restoration**: Ask First (default), Restore After Checks, or Keep One Channel.
+Restoration always rechecks resources and restores secondary streams incrementally.
+PiP uses one selected live panel; returning requires the same restoration policy.
+
+An interrupted session offers **Review & Restore** on a later launch. Review is disconnected
+and safe presentation references are the only persisted state. No prior connection is
+reopened before explicit confirmation. Recovery can be disabled; it never silently restores
+after process death. Explicitly saved presets and presentation preferences survive exit.
+
+### Provider, hardware and failure boundaries
+
+Every panel uses the PR #35 application-scoped account allocator. Independent accounts
+retain independent capacity, explicitly linked sources share allowance, and recordings
+remain protected. Additional connections on an Unknown account require consent for that
+specific request. Previewing a preset or channel list needs no consent because it opens no
+connection. Local reservations cannot establish usage on another device.
+
+Replacement uses make-before-break only with confirmed spare account capacity and decoder
+headroom. Otherwise it resolves the candidate before safe break-before-make. It never
+briefly exceeds the local configured account allowance. A failed replacement or allocation
+affects its own panel; unrelated working panels remain. Stale generations cannot release a
+replacement player or reservation. Layout-only operations never reconnect.
+
+Hardware admission is conservative: MediaCodec reports and device memory estimate a limit
+of at most four players, and streams start one at a time. Decoder aliases are not added
+together as independent hardware. Multi-View uses hardware video decoding, bounded buffers
+and a 1080p selection ceiling; unsupported codecs/profiles or high-resolution-only streams
+may fail rather than forcing software decoding. A runtime decoder failure reduces further
+admission and offers a smaller layout while preserving working panels. Reported instance
+counts do not certify simultaneous playback on a TV.
+
+A failed panel stays visible with Retry, Replace and Remove actions. Retries are bounded.
+Three completed stalls of at least two seconds within two minutes can offer authorized
+alternatives, with a one-minute suggestion cooldown. Initial startup and short stalls do
+not count. A user must choose any provider change. Network, stream, unsupported-format and decoder failures remain
+distinct; generic HTTP failures do not prove a subscription limit rejection. Diagnostics
+retain the existing sanitized, bounded, memory-only contract.
+
+Leaving the app releases the wall's streams unless the selected panel is in PiP. Returning
+offers **Resume Channels** and revalidates capacity instead of silently reconnecting.
+If recording reclamation pauses a panel, **Panel Actions → Choose Authorized Alternative**
+opens matching local broadcasts. This post-interruption choice does not delay a recording;
+interactive primary-panel conflict review before the recording deadline remains unfinished.
+
+## Connection management and DVR foundation
+
+The merged PR #35 foundation extends the existing live owner, Guide preview and recording
+service. Multi-View reuses it rather than introducing another recorder or connection pool.
 
 `AccountConnectionManager` owns one application-scoped `ConnectionAllocator`. Pending,
 Active and Releasing reservations all count against the account limit. Releasing the same
@@ -44,7 +184,8 @@ Actual single-channel changes use safe break-before-make: resolve the candidate,
 known unavailable allocation where possible, then close the old decoder before opening its
 replacement. Unknown capacity still prompts if another same-account reservation remains.
 Fullscreen/preview/PiP presentation changes keep the existing live player. Seamless
-make-before-break switching is not implemented in this foundation.
+make-before-break is additionally available for Multi-View replacement when both account and
+hardware headroom are confirmed.
 
 Account policies and manual associations persist locally as opaque account digests,
 digest-to-digest aliases and numeric settings. They do not contain raw credentials, URLs or active player state,
@@ -74,7 +215,7 @@ In **Recordings**, open **Recording options** on a booking or captured item:
   guarantee capture through denied capacity, storage failure or power loss.
 - Before capture begins, bookings with known programme airtime allow start padding from
   0–30 minutes and end padding from 0–60 minutes. Legacy rows without airtime keep their
-  existing windows. Active captures cannot change their committed end time in this draft.
+  existing windows. Active captures cannot change their committed end time.
 
 **Review recording conflicts** shows account-aware conflicts and proposed minimum optional
 padding adjustments. **Apply padding adjustments** explicitly accepts the current plan.
@@ -138,7 +279,10 @@ granted `USE_EXACT_ALARM` permission is no longer declared.
 
 ## Architecture inspected before implementation
 
-The baseline was `main` at `88aeb3a2056dc07cf1d15ab2155fca79daaccf19`.
+The Multi-View completion work starts from merged PR #35 on `main` at
+`fef3d8db1d7f1620665893a520a26ca7614b34e7`. The following original foundation
+assessment is retained for context; its pre-PR #35 baseline was `main` at
+`88aeb3a2056dc07cf1d15ab2155fca79daaccf19`.
 The repository's issue/open-PR inventory returned no open items during this review.
 Relevant prior work includes [persistent live playback #27](https://github.com/DisabledAbel/Nuvix/pull/27)
 and [passive playback diagnostics #32](https://github.com/DisabledAbel/Nuvix/pull/32);
@@ -212,10 +356,11 @@ same application-scoped allocator. A new recording may displace optional same-ac
 viewing by the documented priority policy; it must leave unrelated accounts running.
 Releasing a viewer does not authorize reopening it later.
 
-Multi-View should retain the existing live player as its primary session and allocate at
-most three secondary players. Each player has one surface lease. Moving, focusing,
-resizing, choosing audio and entering fullscreen do not resolve another URL or create
-another connection. Codec capability reports are advisory; allocation failures must
+Entering Multi-View releases the single-channel live owner before resolving its initial
+primary; this entry can retune, but never retains a hidden extra session. The manager
+allocates at most four players including any replacement candidate. Each player has one
+surface lease. Moving, focusing, resizing, choosing audio and entering fullscreen within
+Multi-View do not resolve another URL or create another connection. Codec capability reports are advisory; allocation failures must
 release only the failed decoder and leave existing panels intact.
 
 Use one Android audio-focus owner. Audio-follow-focus is a cancelable 150 ms delayed
@@ -286,43 +431,33 @@ delivery and Android background-start behavior require hardware verification. Un
 checks are performed, describe supported policy and tested boundaries without certifying
 a TV model or promising uninterrupted unattended recording.
 
-### Full feature acceptance still required
+### Implemented scope and remaining acceptance
 
-This foundation is not the complete Smart Multi-View feature. Keep the pull request a draft
-until its outstanding criteria are implemented and validated. In particular:
+The Multi-View implementation covers session admission, bounded players, layouts and remote
+controls, delayed audio ownership, replacement/duplicates, Guide/Sports actions, local
+presets, fullscreen and reviewed recovery. It reuses protected recording priority,
+secondary-view displacement and the existing independent recording service. Runtime
+reservations and unknown-limit approvals never survive process death.
 
-- A bounded Multi-View session manager with working two-, three- and four-channel playback,
-  hardware allocation fallback and independent failed-panel actions.
-- All four layouts, add/remove/replace/reorder controls, dedicated editing mode, duplicate
-  channel choices, visible remote focus and audio indicators.
-- Canceled 150 ms focus-follow audio changes, OK-only audio, one audio-focus owner and
-  selected audio retained through Guide navigation.
-- Smart make-before-break switching only with authorized account and decoder headroom;
-  safe break-before-make fallback and retention of the old stream when technically possible.
-- Fullscreen handoff without unnecessary retuning, configurable secondary restoration,
-  default Ask first and primary-first resource-checked restoration.
-- Compact Guide Multi-View, explicit Focus Multi-View action and restored Guide focus/scroll.
-- Sports Hub Add to Multi-View from one confirmed authorized broadcast with explicit
-  provider choice; existing favorites and association confidence preserved.
-- Credential-free saved presets with disconnected preview, stable channel references,
-  arrangement/audio/presentation preferences and final capacity revalidation.
-- Review & Restore after interruption, with no silent reconnection of prior sessions.
-- Meaningful repeated-stall detection, authorized alternative suggestions, cooldowns,
-  bounded retries and accurate network/server/provider-limit/decoder classifications.
-- Complete authorized alternative-provider choice and detailed per-conflict resolution
-  beyond the current padding review/confirmation and deterministic deadline fallback.
-- Recording displacement of optional previews and secondary views, primary conflict
-  disclosure and explicit restoration policy without silently reopening displaced streams.
-- Live recording duration extension and safe running-window updates; bounded automatic
-  sports extension only when a reliable permitted live-status source is available.
-- Storage headroom and simultaneous-output estimates for each supported destination,
-  removed-drive recovery, safe finalization and explicitly enabled protection-aware retention.
-- Complete remaining settings surfaces, accessibility/localization, migration coverage and the full
-  deterministic connection/Multi-View/DVR regression matrix requested for the final feature.
+Physical Android TV, Google TV and Fire TV acceptance below remains required. Automated
+policy/UI coverage does not certify hardware decoders, uninterrupted network throughput,
+real remote focus, exact-alarm delivery or Android/vendor background execution.
 
-Shared ingest remains unsupported unless a future format/DRM/provider review establishes
-that it is safe. No recording can be guaranteed through power loss, force-stop or denied
-platform execution. No hosted database dependency is needed for this local feature.
+Interactive primary-panel conflict review with an authorized alternative-provider picker
+at a recording deadline remains an outstanding Multi-View acceptance item. Current behavior
+pauses conflicting optional viewing under the established recording-priority policy and
+explains why; it never automatically switches providers or cancels protected capture.
+
+Separate future DVR scope includes running duration extension, reliable-source automatic
+sports extension, external-drive free
+space/whole-program size estimates, removed-drive hardware recovery and opt-in
+protection-aware retention. Existing recording padding review and deadline fallback stay
+in place; active locked padding is never silently trimmed. No automatic retention/deletion
+job is introduced.
+
+Shared viewing/capture ingest remains unsupported: these consumers reserve separately.
+No recording can be guaranteed through power loss, force-stop or denied platform execution.
+No hosted database dependency is needed for this local feature.
 
 ### Hardware checklist
 
@@ -343,4 +478,9 @@ device, including a memory-constrained model.
 | Internal, SAF USB and SMB capture; remove drive/network | No overwrite, no silent deletion, bounded storage failure, recoverable bytes retained and accurate Partial/Failed state. |
 | Kill process or interrupt network during capture | Recovery reconciles real file size and does not report incomplete capture as Completed. |
 | Protected/manual/series conflict and locked padding | Deterministic priority, visible adjustment/reason, locked padding preserved and unattended fallback reaches a decision. |
-| Future Multi-View decoder, remote, audio and surface scenarios | Working panels survive a failed extra allocation; one audible owner; no fifth stream or surface attached to two views. |
+| Two/three/four streams; unsupported codec/profile; mixed resolutions; repeated extra allocation | Working panels survive failed hardware admission; bounded decoder count and honest smaller-layout advice. |
+| Follow Focus at 150 ms, rapid focus, OK-only, system focus loss/gain and mute | One audible owner, cancelable pending switches, no retune, preserved user mute and no focus-loss bypass. |
+| Add/replace/duplicate/rearrange/remove with constrained/Unknown/shared accounts | No temporary configured overage, request-specific approval, stable identities and unrelated playback preserved. |
+| Fullscreen, secondary restoration, Guide compact transfer, Back and PiP | Same selected player where supported; no double surface attachment; primary-first checked restoration and Guide focus/audio preservation. |
+| Sports multiple confirmed broadcasts, suggestions and disabled/hidden sources | One explicit authorized choice; provider identity visible; unavailable choices never start playback. |
+| Preset preview/CRUD, missing channels, process death and Review & Restore | Preview opens no connection; credentials absent; no silent reconnection; unavailable references explained. |
