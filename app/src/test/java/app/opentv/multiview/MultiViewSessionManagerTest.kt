@@ -110,6 +110,7 @@ class MultiViewSessionManagerTest {
         hardwareMaximum: Int = 4,
         val sourceForChannel: (Long) -> Long = { 1 },
         resolver: (suspend (Long) -> ResolvedMultiViewChannel)? = null,
+        validateAdmission: suspend (ResolvedMultiViewChannel, ReservationToken?) -> Unit = { _, _ -> },
     ) {
         val connections = FakeConnections().apply { register(1, maximum) }
         val hardware = FakeHardware(hardwareMaximum)
@@ -149,6 +150,7 @@ class MultiViewSessionManagerTest {
             newId = { "panel-${++nextPanelId}" },
             startupTimeoutMs = 1_000,
             nowMs = { scope.testScheduler.currentTime },
+            validateAdmission = validateAdmission,
         )
         val state get() = manager.state.value
         fun panel(channelId: Long) = state.panels.single { it.channelId == channelId }
@@ -188,6 +190,35 @@ class MultiViewSessionManagerTest {
         runCurrent()
         assertTrue(f.players.all { it.releases == 1 })
         assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+    }
+
+    @Test fun recordingStartingDuringUnknownApprovalRevalidatesBeforeAnySecondPlayer() = runTest {
+        var recordingDue = false
+        var checks = 0
+        val fixture = Fixture(this, maximum = null, validateAdmission = { _, _ ->
+            checks++
+            check(!recordingDue) { "Recording now needs this account" }
+        })
+        fixture.manager.add(1); runCurrent()
+        fixture.player(1).ready(); runCurrent()
+        fixture.manager.add(2); runCurrent()
+        assertNotNull(fixture.state.approval)
+        recordingDue = true
+        fixture.manager.answerApproval(true); runCurrent()
+        assertEquals(1, fixture.players.size)
+        assertEquals(1, fixture.connections.allocator.snapshots.value.sumOf { it.locallyReserved })
+        assertEquals(3, checks)
+        fixture.manager.release()
+    }
+
+    @Test fun staleGenerationDuringAdmissionCannotAllocatePlayer() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val fixture = Fixture(this, validateAdmission = { _, _ -> gate.await() })
+        fixture.manager.add(1); runCurrent()
+        fixture.manager.stop(); gate.complete(Unit); runCurrent()
+        assertTrue(fixture.players.isEmpty())
+        assertEquals(0, fixture.connections.allocator.snapshots.value.sumOf { it.locallyReserved })
+        fixture.manager.release()
     }
 
     @Test fun twoChannelsStartIncrementallyWithIndependentReservations() = runTest { assertStartup(2) }

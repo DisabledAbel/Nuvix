@@ -32,6 +32,22 @@ object MultiViewRecordingConflictPolicy {
             { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
     }
 
+    /** Same preview → secondary → primary order as recording reclamation. No reservations mutate. */
+    fun viewingVictims(
+        account: AccountConnectionSnapshot,
+        recordingDemand: Int,
+        primarySessionId: String? = null,
+    ): List<ReservationToken> {
+        val optional = account.reservations.map { it.token }.filter { it.purpose != ConnectionPurpose.RECORDING }
+            .sortedWith(compareBy<ReservationToken> {
+                when { it.purpose == ConnectionPurpose.PREVIEW -> 0; it.sessionId == primarySessionId -> 2; else -> 1 }
+            }.thenBy { it.sessionId })
+        // Closing viewers cannot authorize a second unattended recording on an unknown pool.
+        val needed = account.effectiveMaximum?.let { optional.size + recordingDemand - it }
+            ?: if (recordingDemand == 1) optional.size else 0
+        return optional.take(needed.coerceAtLeast(0))
+    }
+
     fun detect(
         recordings: List<Recording>,
         accounts: List<AccountConnectionSnapshot>,
@@ -51,15 +67,7 @@ object MultiViewRecordingConflictPolicy {
                     bySource[other.sourceId]?.accountKey == account.accountKey &&
                         plan.windows[other.id]?.let { start >= it.startMillis && start < it.endMillis } == true
                 }.coerceAtLeast(account.reservations.count { it.token.purpose == ConnectionPurpose.RECORDING })
-                val optional = account.reservations.map { it.token }.filter { it.purpose != ConnectionPurpose.RECORDING }
-                    .sortedWith(compareBy<ReservationToken> {
-                        when { it.purpose == ConnectionPurpose.PREVIEW -> 0; it.sessionId == primarySessionId -> 2; else -> 1 }
-                    }.thenBy { it.sessionId })
-                // An unknown pool admits one unattended connection only. Closing viewers cannot
-                // authorize a second recorder, so do not promise that it would resolve that case.
-                val needed = account.effectiveMaximum?.let { optional.size + demand - it }
-                    ?: if (demand == 1) optional.size else 0
-                val victims = optional.take(needed.coerceAtLeast(0))
+                val victims = viewingVictims(account, demand, primarySessionId)
                 if (victims.none { it.purpose == ConnectionPurpose.MULTIVIEW }) null
                 else MultiViewRecordingConflict(rec, account, start, victims)
             }

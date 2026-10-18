@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Preview saved Multi-View presets against the next 24 hours of effective DVR windows, including
+  padded/locked/protected capture, overlapping jobs and independent or shared account capacity.
+- Add one-time panel exclusion/replacement/primary edits, explicit preset saving, trusted provider
+  alternatives, current/upcoming/unknown-capacity explanations and Continue With Warning.
+- Revalidate confirmation and per-stream startup (including after Unknown consent); retain atomic
+  allocation, stable generations, primary-first startup and independent pre-recording warnings.
+- Keep preview catalog-only, bound schedule reads, reject stale/duplicate actions and expose
+  remote-accessible focus-bordered actions. Provider-side future availability remains uncertain.
+
 - Add configurable two-minute pre-recording Multi-View conflict review before padded starts,
   account-aware simultaneous demand, remote-accessible actions and stable schedule-bound dismissal.
 - Offer explicit independent-account exact-guide/confirmed-Sports alternatives with fresh capacity

@@ -46,6 +46,16 @@ class MultiViewPresetStoreTest {
         assertThat(source.presets.value).containsExactly(saved)
     }
 
+    @Test fun `preview edits are one time until explicit save replaces preset`() {
+        val source = store()
+        val saved = source.upsert("Sports", presentation())!!
+        val modified = saved.presentation.withoutPanel("panel-secondary")
+        assertThat(store().find(saved.id)?.presentation).isEqualTo(saved.presentation)
+        source.upsert(saved.name, modified, saved.id)
+        assertThat(store().find(saved.id)?.presentation).isEqualTo(modified)
+        assertThat(store().presets.value).hasSize(1)
+    }
+
     @Test fun `rename replace and delete preserve the requested preset identity`() {
         val source = store()
         val first = source.upsert("First", presentation())!!

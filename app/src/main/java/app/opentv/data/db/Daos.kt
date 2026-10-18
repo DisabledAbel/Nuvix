@@ -903,6 +903,14 @@ interface RecordingDao {
     @Query("SELECT * FROM recordings WHERE status = 'SCHEDULED' ORDER BY scheduledStartMillis")
     suspend fun scheduled(): List<Recording>
 
+    /** Bounded read-only preset planning; one overflow row prevents silent truncation. */
+    @Query("""SELECT * FROM recordings WHERE
+        status IN ('PREPARING', 'RECORDING', 'FINALIZING') OR
+        (status = 'SCHEDULED' AND scheduledStartMillis < :untilMillis
+        AND (scheduledEndMillis = 0 OR scheduledEndMillis > :fromMillis))
+        ORDER BY scheduledStartMillis, id LIMIT :limit""")
+    suspend fun planningWindow(fromMillis: Long, untilMillis: Long, limit: Int): List<Recording>
+
     /** Returns the recording row with the supplied local ID, or null if absent. */
     @Query("SELECT * FROM recordings WHERE id = :id")
     suspend fun byId(id: Long): Recording?

@@ -33,6 +33,7 @@ internal fun MultiViewChannelPicker(
     onSelect: (Channel) -> Unit,
     onOpenGuide: () -> Unit,
     alternativeFor: Long? = null,
+    selectionHint: String = "No stream opens until selected",
 ) {
     val context = LocalContext.current
     val graph = remember(context) { ServiceLocator.get(context) }
@@ -127,7 +128,7 @@ internal fun MultiViewChannelPicker(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${choices.size} channels · No stream opens until selected", style = MaterialTheme.typography.labelMedium)
+                    Text("${choices.size} channels · $selectionHint", style = MaterialTheme.typography.labelMedium)
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                 }
             }

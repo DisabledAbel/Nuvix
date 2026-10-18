@@ -41,7 +41,8 @@ internal suspend fun eligibleRecordingAlternatives(
 
 /** Conservative matching reuses catalog variants and Sports Hub's authorization at click time. */
 class RecordingConflictAlternatives(private val graph: ServiceLocator.Graph) {
-    suspend fun choices(channelId: Long, conflictingAccount: String, at: Long, deadline: Long = at): List<RecordingConflictAlternative> {
+    suspend fun choices(channelId: Long, conflictingAccount: String, at: Long, deadline: Long = at,
+        planningUntil: Long? = null, ignoredReservations: Set<String> = emptySet()): List<RecordingConflictAlternative> {
         val current = graph.catalogRepository.channel(channelId) ?: return emptyList()
         val candidates = linkedMapOf<Long, Pair<Channel, Boolean>>()
         // A groupKey is normalized from names and is not sufficient broadcast identity.
@@ -58,7 +59,9 @@ class RecordingConflictAlternatives(private val graph: ServiceLocator.Graph) {
         }
         val sources = graph.sourceRepository.enabled().associateBy { it.id }
         sources.values.forEach { graph.connections.registerSource(it) }
-        val recordings = (graph.recordingRepository.scheduled() + graph.recordingRepository.active()).filter { it.sourceId in sources }
+        val rows = if (planningUntil == null) graph.recordingRepository.scheduled() + graph.recordingRepository.active()
+            else graph.recordingRepository.planningWindow(at, planningUntil).also { check(it.size <= 2000) }
+        val recordings = rows.filter { it.sourceId in sources }
         val plan = DvrConflictPolicy.resolve(recordings, at,
             { graph.connections.accountKeyForSource(it) ?: "unavailable:$it" },
             { key -> graph.connections.snapshots.value.firstOrNull { it.accountKey == key }?.effectiveMaximum })
@@ -71,7 +74,9 @@ class RecordingConflictAlternatives(private val graph: ServiceLocator.Graph) {
             provider = provider@{ sourceId ->
             val source = sources[sourceId] ?: return@provider null
             graph.connections.registerSource(source)
-            graph.connections.snapshotForSource(source.id)?.let { source.name to it }
+            graph.connections.snapshotForSource(source.id)?.let { account ->
+                source.name to account.copy(reservations = account.reservations.filterNot { it.token.reservationId in ignoredReservations })
+            }
         }, scheduledDemand = { scheduledByAccount[graph.connections.accountKeyForSource(it)] ?: 0 })
     }
 }
