@@ -72,6 +72,17 @@ class RecordingRepository(
     /** Claims an active recording for finalization and reports whether the claim succeeded. */
     suspend fun beginFinalizing(id: Long) = dao.beginFinalizing(id)
 
+    /** Atomically claims only the latest elapsed deadline. */
+    suspend fun claimDurationDeadline(id: Long, revision: Long, now: Long): Boolean =
+        dao.claimDurationDeadline(id, revision, now) == 1
+
+    suspend fun commitDuration(id: Long, revision: Long, end: Long, original: Long, now: Long,
+        stop: Boolean, demand: List<Recording>, kind: String): Boolean =
+        dao.commitDuration(id, revision, end, original, now, stop, demand, kind)
+
+    suspend fun commitScheduledProvider(id: Long, sourceId: Long, url: String, agent: String,
+        demand: List<Recording>, now: Long): Boolean = dao.commitScheduledProvider(id, sourceId, url, agent, demand, now)
+
     /** Changes an unlocked pending recording's capture window. */
     suspend fun setScheduledWindow(id: Long, startMillis: Long, endMillis: Long) =
         dao.setScheduledWindow(id, startMillis, endMillis)

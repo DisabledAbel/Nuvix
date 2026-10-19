@@ -25,6 +25,11 @@ import java.util.concurrent.ConcurrentHashMap
  * consumed by the nav graph, and cleared so a stale one never re-fires.
  */
 object RecordingSignals {
+    private val _duration = MutableStateFlow<Long?>(null)
+    val duration = _duration.asStateFlow()
+    fun requestDuration(id: Long) { _duration.value = id }
+    fun consumeDuration() { _duration.value = null }
+
     private val _review = MutableStateFlow<Long?>(null)
     val review = _review.asStateFlow()
     fun requestReview(id: Long) { _review.value = id }

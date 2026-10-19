@@ -137,9 +137,8 @@ fun ProgrammeDetailsDialog(
             }
             when {
                 actions.status == GuideProgrammeStatus.AIRING && recordingThis != null ->
-                    RecordActionRow(stringResource(R.string.rec_stop_recording), primary = true, enabled = !actionPending) {
-                        graph.recordingEngine.stop(recordingThis.id)
-                        success(context.getString(R.string.guide_details_stopping_recording))
+                    RecordActionRow("Recording Duration", primary = true, enabled = !actionPending) {
+                        app.opentv.core.RecordingSignals.requestDuration(recordingThis.id)
                         onDismiss()
                     }
                 recordingActions.canRecordNow -> RecordActionRow(stringResource(R.string.rec_record_now), primary = true, enabled = !actionPending) {

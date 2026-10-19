@@ -56,7 +56,7 @@ class RecordingMigrationTest {
         helper.writableDatabase
         helper.close()
         val migrated = Room.databaseBuilder(context, OpenTvDatabase::class.java, name)
-            .addMigrations(OpenTvDatabase.MIGRATION_13_14).allowMainThreadQueries().build()
+            .addMigrations(OpenTvDatabase.MIGRATION_13_14, OpenTvDatabase.MIGRATION_14_15).allowMainThreadQueries().build()
         try {
             val recording = migrated.recordings().byId(7)!!
             assertThat(recording.filePath).isEqualTo("/recordings/keep.ts")

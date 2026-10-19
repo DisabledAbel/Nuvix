@@ -61,6 +61,7 @@ class RecordingService : Service() {
         @Volatile var call: Call? = null
         @Volatile var userStopped = false
         @Volatile var stopReason: String? = null
+        @Volatile var deadlineReached: Boolean = false
         lateinit var job: Job
     }
 
@@ -120,6 +121,7 @@ class RecordingService : Service() {
         var token: ReservationToken? = null
         var late = false
         var programmeEnd = 0L
+        var deadlineWatcher: Job? = null
         val connections = AccountConnectionManager.get(applicationContext)
         try {
             repo.failInterrupted()
@@ -162,8 +164,27 @@ class RecordingService : Service() {
                 if (actual != recording.filePath) repo.setFilePath(id, actual)
             }
             RecordingLiveState.markActive(id, actualPath)
+            // This job owns no socket or reservation. An edit only changes the durable row.
+            // Claiming FINALIZING and editing the deadline serialize in SQLite.
+            deadlineWatcher = scope.launch {
+                try { RecordingDeadlineWatcher(
+                    read = { repo.byId(id) },
+                    claim = { revision, at -> repo.claimDurationDeadline(id, revision, at) },
+                    elapsed = {
+                        capture.deadlineReached = true
+                        capture.call?.cancel()
+                        capture.job.cancel()
+                    },
+                ).run() } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    capture.stopReason = "Recording deadline could not be verified; available content preserved"
+                    capture.call?.cancel()
+                    capture.job.cancel()
+                }
+            }
             val result = RecordingCapture(graph.streamingHttpClient).copy(
-                recording.streamUrl, recording.userAgent, sink.output, recording.scheduledEndMillis,
+                recording.streamUrl, recording.userAgent, sink.output, 0,
                 onCall = { call -> capture.call = call; if (!capture.job.isActive) call?.cancel() },
                 onProgress = { bytes ->
                     total = bytes
@@ -183,15 +204,16 @@ class RecordingService : Service() {
             total = result.bytes
             error = result.error
         } catch (_: CancellationException) {
-            error = capture.stopReason ?: if (capture.userStopped && programmeEnd > System.currentTimeMillis())
+            error = capture.stopReason ?: if ((capture.userStopped || capture.deadlineReached) && programmeEnd > System.currentTimeMillis())
                 "Recording stopped before the programme finished"
-            else if (!capture.userStopped) "Recording service interrupted" else null
+            else if (!capture.userStopped && !capture.deadlineReached) "Recording service interrupted" else null
         } catch (_: Exception) {
             // Never persist exception text: network/SAF/SMB exceptions may include secrets.
             error = "Recording could not continue; check provider access and recording storage"
             Log.w(TAG, "Recording $id could not continue")
         } finally {
             withContext(NonCancellable) {
+                deadlineWatcher?.cancel()
                 if (claimed) runCatching { repo.beginFinalizing(id) }
                 capture.call?.cancel()
                 capture.call = null
@@ -217,9 +239,16 @@ class RecordingService : Service() {
     /** Requests capture termination for the specified recording. */
     private fun stopCapture(id: Long) {
         val capture = captures[id] ?: return
-        capture.userStopped = true
-        capture.call?.cancel()
-        capture.job.cancel()
+        scope.launch {
+            if (captures[id] !== capture) return@launch
+            val repo = ServiceLocator.get(applicationContext).recordingRepository
+            runCatching {
+                if (repo.beginFinalizing(id) == 1) repo.event(id, "STOPPED_MANUALLY", "User stopped recording; captured content preserved")
+            }
+            capture.userStopped = true
+            capture.call?.cancel()
+            capture.job.cancel()
+        }
     }
 
     /** Completion also runs for a lazy coroutine canceled before its body was dispatched. */
@@ -368,7 +397,9 @@ class RecordingService : Service() {
 
         /** Stops a recording selected by account-capacity conflict policy. */
         suspend fun stopForConflict(recordingId: Long) {
-            val capture = runningService?.captures?.get(recordingId) ?: return
+            val service = runningService ?: return
+            val capture = service.captures[recordingId] ?: return
+            runCatching { ServiceLocator.get(service.applicationContext).recordingRepository.beginFinalizing(recordingId) }
             capture.stopReason = "Higher-priority recording required this account's capacity"
             capture.call?.cancel()
             capture.job.cancel()

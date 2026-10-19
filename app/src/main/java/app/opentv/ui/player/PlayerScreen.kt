@@ -218,7 +218,7 @@ fun PlayerScreen(
     fun toggleRecord() {
         val active = activeRecordings.firstOrNull { it.channelId == currentId }
         if (active != null) {
-            graph.recordingEngine.stop(active.id)
+            app.opentv.core.RecordingSignals.requestDuration(active.id)
         } else {
             val channel = variants.firstOrNull { it.id == currentId } ?: return
             liveSession.recordChannel(channel)
@@ -549,7 +549,7 @@ fun PlayerScreen(
                     val recordingThis = activeRecordings.any { it.channelId == currentId }
                     BarChip(
                         icon = Icons.Filled.FiberManualRecord,
-                        label = if (recordingThis) stringResource(R.string.common_stop) else stringResource(R.string.player_record),
+                        label = if (recordingThis) "Recording Duration" else stringResource(R.string.player_record),
                         selected = recordingThis,
                         iconTint = Color(0xFFE53935),
                     ) { toggleRecord() }

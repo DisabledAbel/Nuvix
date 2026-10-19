@@ -107,6 +107,49 @@ class RecordingCaptureTest {
     }
 
     /** Creates synthetic transport-stream bytes for deterministic recording capture assertions. */
+    /** A live deadline revision never replaces the already-open transport or output. */
+    @Test fun extensionKeepsSameHttpRequestAndGrowingOutputPastOldEnd() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(1))))
+        server.start()
+        try {
+            var row = app.opentv.data.model.Recording(id = 1, channelId = 1, sourceId = 1,
+                channelName = "Game", title = "Game", filePath = "/fake.ts", streamUrl = server.url("/live.ts").toString(),
+                status = app.opentv.data.model.RecordingStatus.RECORDING, scheduledEndMillis = 1_000)
+            var now = 900L
+            val wrote = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            var captureCall: okhttp3.Call? = null
+            val output = object : ByteArrayOutputStream() {
+                override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                    super.write(bytes, offset, length)
+                    // Commit while this response is still open, then cross the obsolete end.
+                    row = row.copy(scheduledEndMillis = 301_000, durationRevision = 1)
+                    now = 1_001
+                    assertEquals(1, server.requestCount)
+                    assertFalse(captureCall!!.isCanceled())
+                    wrote.countDown()
+                    check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                }
+            }
+            val copy = launch(Dispatchers.IO) {
+                RecordingCapture(OkHttpClient()).copy(row.streamUrl, "Nuvix", output, 0,
+                    onCall = { if (it != null) captureCall = it }, onProgress = {}, checkStorage = {})
+            }
+            // Polling has an injectable deterministic clock/wait, just like the service's watcher.
+            withContext(Dispatchers.IO) {
+                check(wrote.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            }
+            RecordingDeadlineWatcher(read = { row }, claim = { rev, at ->
+                rev == row.durationRevision && row.scheduledEndMillis <= at
+            }, elapsed = { captureCall?.cancel(); copy.cancel(); release.countDown() }, now = { now },
+                wait = { now = 301_000 }).run()
+            copy.join()
+            assertArrayEquals(transportBytes(1), output.toByteArray())
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
     private fun transportBytes(marker: Int) = ByteArray(188 * 3) { offset -> if (offset % 188 == 0) 0x47 else marker.toByte() }
 
     /** Checks: already Expired Window Never Opens Http Connection. */

@@ -475,6 +475,11 @@ data class Recording(
     @ColumnInfo(defaultValue = "0") val programmeEndMillis: Long = 0,
     @ColumnInfo(defaultValue = "2") val padStartMinutes: Int = 2,
     @ColumnInfo(defaultValue = "5") val padEndMinutes: Int = 5,
+    /** Frozen pre-edit end, including this booking's padding; zero before editing, -1 for originally unbounded. */
+    @ColumnInfo(defaultValue = "0") val originalEndMillis: Long = 0,
+    @ColumnInfo(defaultValue = "0") val durationRevision: Long = 0,
+    @ColumnInfo(defaultValue = "0") val manualExtensionMillis: Long = 0,
+    @ColumnInfo(defaultValue = "0") val durationModifiedAtMillis: Long = 0,
     /** Preference in unavoidable conflicts and exclusion from any future automatic retention. */
     @ColumnInfo(defaultValue = "0") val protectedRecording: Boolean = false,
     /** Independent of protection: automatic conflict resolution may not trim this padding. */

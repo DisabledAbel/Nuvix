@@ -46,6 +46,7 @@ fun MultiViewScreen(
     onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier,
     showApproval: Boolean = true,
+    activeRecordings: List<app.opentv.data.model.Recording> = emptyList(),
 ) {
     val state by manager.state.collectAsState()
     val context = LocalContext.current
@@ -81,6 +82,9 @@ fun MultiViewScreen(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
+            activeRecordings.filter { it.status == app.opentv.data.model.RecordingStatus.RECORDING }.forEach { recording ->
+                OutlinedButton(onClick = { app.opentv.core.RecordingSignals.requestDuration(recording.id) }) { Text("Recording Duration: ${recording.title}") }
+            }
             Text(if (editing) "Edit Layout" else "Multi-View", style = MaterialTheme.typography.titleLarge)
             if (editing) {
                 Button(onClick = { editing = false }, modifier = Modifier.testTag("multiview-done")) { Text("Done") }

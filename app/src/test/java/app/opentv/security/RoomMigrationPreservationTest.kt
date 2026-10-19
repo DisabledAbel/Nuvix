@@ -79,7 +79,7 @@ class RoomMigrationPreservationTest {
             .build()
         try {
             val database = upgraded.openHelper.writableDatabase
-            assertThat(database.version).isEqualTo(14)
+            assertThat(database.version).isEqualTo(15)
             database.query("SELECT username,password,liveFormat,macAddress FROM sources WHERE id=7").use {
                 assertThat(it.moveToFirst()).isTrue()
                 assertThat(it.getString(0)).isEqualTo("local-user")
