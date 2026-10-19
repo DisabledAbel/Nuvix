@@ -339,3 +339,18 @@ First public release.
 - Favourites, categories, search
 - In-app self-update for sideloaded installs
 - Single APK for Android TV, Fire TV, phones and tablets
+
+
+## Active DVR duration controls
+
+Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
+additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
+Room updates and a live deadline watcher preserve the existing capture connection and file.
+Conflict review reuses DVR priority and independent-provider alternatives for scheduled bookings;
+protection, locked padding, two/five-minute defaults and Multi-View admission remain authoritative.
+See [duration behavior, architecture and device checklist](docs/recording-duration.md).
+
+Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
+transport continuity, conflict/preset projection and Compose remote action semantics. Physical
+Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
+USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.

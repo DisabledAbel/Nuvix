@@ -392,6 +392,8 @@ private fun NuvixNavigation(
     val multiView = liveSession.multiView
     val multiViewState by multiView.state.collectAsState()
     val recordingWarning by liveSession.recordingConflicts.warning.collectAsState()
+    val durationRecording by app.opentv.core.RecordingSignals.duration.collectAsState()
+    durationRecording?.let { id -> app.opentv.ui.recordings.RecordingDurationDialog(id, app.opentv.core.RecordingSignals::consumeDuration) }
     val recordingReview by app.opentv.core.RecordingSignals.review.collectAsState()
     recordingReview?.let { id ->
         val reviewContext = LocalContext.current
@@ -402,6 +404,10 @@ private fun NuvixNavigation(
         AlertDialog(onDismissRequest = app.opentv.core.RecordingSignals::consumeReview,
             title = { Text(recording?.title ?: "Recording details") },
             text = { Text(recording?.let { "${it.channelName} · ${it.status}\nRequested padded start: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.scheduledStartMillis))}\nThe effective start may change under recording conflict policy.\nProtect Recording: ${it.protectedRecording} · Lock Padding: ${it.lockPadding}\nScheduled recordings retain their existing priority at the deadline." } ?: "This recording is no longer available.") },
+            dismissButton = { if (recording?.status == app.opentv.data.model.RecordingStatus.RECORDING) TextButton(onClick = {
+                app.opentv.core.RecordingSignals.consumeReview()
+                app.opentv.core.RecordingSignals.requestDuration(id)
+            }) { Text("Recording Duration") } },
             confirmButton = { TextButton(onClick = app.opentv.core.RecordingSignals::consumeReview) { Text("Close") } })
     }
     if (recordingReview == null) app.opentv.ui.recordings.RecordingConflictHost(liveSession.recordingConflicts, multiView)
@@ -714,8 +720,12 @@ private fun NuvixNavigation(
                 popEnterTransition = { androidx.compose.animation.EnterTransition.None },
                 popExitTransition = { androidx.compose.animation.ExitTransition.None },
             ) {
+                val recordingContext = LocalContext.current
+                val recordingGraph = remember(recordingContext) { ServiceLocator.get(recordingContext) }
+                val activeRecordings by recordingGraph.recordingRepository.observeActive().collectAsState(initial = emptyList())
                 app.opentv.ui.multiview.MultiViewScreen(
                     manager = multiView,
+                    activeRecordings = activeRecordings,
                     showApproval = recordingWarning == null,
                     onExit = {
                         multiView.stop()

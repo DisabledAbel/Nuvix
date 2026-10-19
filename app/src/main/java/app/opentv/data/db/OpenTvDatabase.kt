@@ -90,7 +90,7 @@ class Converters {
         SportsEvent::class, SportsProgramme::class, SportsDecision::class, SportsFavorite::class,
         SportsPreferred::class, SportsFeedState::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
@@ -377,6 +377,15 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Duration metadata is additive; no recording window or file is rewritten. */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("originalEndMillis", "durationRevision", "manualExtensionMillis", "durationModifiedAtMillis").forEach {
+                    db.execSQL("ALTER TABLE recordings ADD COLUMN $it INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
         /** Builds the encrypted database with all supported schema migrations registered. */
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
@@ -389,7 +398,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14,
+                    MIGRATION_13_14, MIGRATION_14_15,
                 )
                 .build()
     }

@@ -484,3 +484,25 @@ account rejection and no fuzzy-title equivalence. No real IPTV credentials are r
 Follow the [preset hardware checklist](smart-multiview-dvr.md#remaining-boundaries) on Android TV,
 Google TV and Fire TV. Automated UI tests do not establish device focus contrast, frame rate,
 decoder capacity, actual provider allowances, alarm delivery or successful unattended capture.
+
+
+## Active DVR duration controls
+
+Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
+additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
+Room updates and a live deadline watcher preserve the existing capture connection and file.
+Conflict review reuses DVR priority and independent-provider alternatives for scheduled bookings;
+protection, locked padding, two/five-minute defaults and Multi-View admission remain authoritative.
+See [duration behavior, architecture and device checklist](recording-duration.md).
+
+Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
+transport continuity, conflict/preset projection and Compose remote action semantics. Physical
+Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
+USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.
+
+Duration-specific suites: `RecordingDurationTest`, `RecordingDurationPersistenceTest`,
+`RecordingDurationEngineTest`, `RecordingDurationConflictTest`, `RecordingDurationRemoteTest`
+and `RecordingCaptureTest`. Run with the existing full Gradle commands above. The engine uses
+an injected clock and recording stop/rearm hooks with an isolated Room database and fake provider
+HTTP interceptor. No IPTV credentials or networked provider is required. Existing v12/v13 and
+v6 migration tests now migrate through v15 and continue validating all prior data.

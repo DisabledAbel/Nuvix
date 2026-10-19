@@ -216,7 +216,7 @@ In **Recordings**, open **Recording options** on a booking or captured item:
   guarantee capture through denied capacity, storage failure or power loss.
 - Before capture begins, bookings with known programme airtime allow start padding from
   0–30 minutes and end padding from 0–60 minutes. Legacy rows without airtime keep their
-  existing windows. Active captures cannot change their committed end time.
+  existing windows. Active captures use the explicit Recording Duration editor to change their end.
 
 **Review recording conflicts** shows account-aware conflicts and proposed minimum optional
 padding adjustments. **Apply padding adjustments** explicitly accepts the current plan.
@@ -448,7 +448,7 @@ Interactive pre-deadline conflict review is implemented using the existing sched
 allocator and recording plan. Physical-device acceptance remains required for the warning
 dialog, notifications, replacement playback and unattended deadline behavior.
 
-Separate future DVR scope includes running duration extension, reliable-source automatic
+Separate future DVR scope includes reliable-source automatic
 sports extension, external-drive free
 space/whole-program size estimates, removed-drive hardware recovery and opt-in
 protection-aware retention. Existing recording padding review and deadline fallback stay
@@ -658,8 +658,8 @@ deadline races admission. No future capacity is held for viewing.
 
 ### Remaining boundaries
 
-The current `main` model has no configurable per-recording late-start policy, running-duration
-editor, or structured channel language/commentary preference. This change preserves the existing
+The current `main` model has no configurable per-recording late-start policy
+or structured channel language/commentary preference. The active duration editor is documented below. This change preserves the existing
 five-second programme-start grace and partial-capture behavior; it does not invent new DVR rules
 or infer language from names. Persisted effective windows are honored. Device acceptance below
 is still required; synthetic tests do not establish provider capacity or TV rendering quality.
@@ -672,3 +672,18 @@ is still required; synthetic tests do not establish provider capacity or TV rend
   fallback captures valid bytes while unrelated accounts keep playing.
 - [ ] Unknown approvals across the deadline, disappearing alternatives, full decoder hardware,
   external-device provider usage, network failure and process restart remain safely recoverable.
+
+
+## Active DVR duration controls
+
+Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
+additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
+Room updates and a live deadline watcher preserve the existing capture connection and file.
+Conflict review reuses DVR priority and independent-provider alternatives for scheduled bookings;
+protection, locked padding, two/five-minute defaults and Multi-View admission remain authoritative.
+See [duration behavior, architecture and device checklist](recording-duration.md).
+
+Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
+transport continuity, conflict/preset projection and Compose remote action semantics. Physical
+Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
+USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.

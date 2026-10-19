@@ -29,7 +29,7 @@ Physical-TV validation, structured broadcast language preferences and a per-reco
 setting remain outstanding; the existing fixed grace policy is unchanged.
 
 Further DVR work remains separate: explicit alternative-provider recording resolution,
-running duration changes, reliable-source sports extensions, external-storage capacity
+reliable-source sports extensions, external-storage capacity
 estimates and opt-in protection-aware retention. Existing Protect Recording, Lock Padding,
 two/five-minute defaults, partial recovery and recording-priority policy remain intact.
 
@@ -69,3 +69,18 @@ handling and source-specific update integration; none is enabled by this change.
 is real remote/focus restoration and large-catalog performance on low-memory TVs, with authorized
 multi-provider playback and recording conflicts. Sports cloud sync remains a separate opt-in protocol
 extension for a future change; no provider data or local correction identifiers are exported.
+
+
+## Active DVR duration controls
+
+Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
+additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
+Room updates and a live deadline watcher preserve the existing capture connection and file.
+Conflict review reuses DVR priority and independent-provider alternatives for scheduled bookings;
+protection, locked padding, two/five-minute defaults and Multi-View admission remain authoritative.
+See [duration behavior, architecture and device checklist](recording-duration.md).
+
+Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
+transport continuity, conflict/preset projection and Compose remote action semantics. Physical
+Android TV/Google TV/Fire TV validation remains required, including native date/time pickers,
+USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.

@@ -960,6 +960,59 @@ interface RecordingDao {
     @Query("UPDATE recordings SET status = 'FINALIZING' WHERE id = :id AND status IN ('PREPARING', 'RECORDING')")
     suspend fun beginFinalizing(id: Long): Int
 
+    /** Deadline callbacks must win the same database race as user edits before closing I/O. */
+    @Query("""UPDATE recordings SET status = 'FINALIZING' WHERE id = :id
+        AND status IN ('PREPARING', 'RECORDING') AND durationRevision = :revision
+        AND scheduledEndMillis > 0 AND scheduledEndMillis <= :now""")
+    suspend fun claimDurationDeadline(id: Long, revision: Long, now: Long): Int
+
+    /** Compare-and-set prevents repeated OK and stale editor confirmations applying twice. */
+    @Query("""UPDATE recordings SET scheduledEndMillis = :end, originalEndMillis = :original,
+        manualExtensionMillis = CASE WHEN :original > 0 THEN :extension ELSE
+            manualExtensionMillis + :end - CASE WHEN scheduledEndMillis > 0 THEN scheduledEndMillis ELSE :now END END,
+        durationRevision = durationRevision + 1,
+        durationModifiedAtMillis = :now, status = :status
+        WHERE id = :id AND durationRevision = :revision AND status = 'RECORDING'""")
+    suspend fun setDuration(id: Long, revision: Long, end: Long, original: Long, extension: Long,
+        now: Long, status: RecordingStatus): Int
+
+    @Insert
+    suspend fun insertDurationEvent(event: app.opentv.data.model.RecordingEvent): Long
+
+    /** Revalidate demand and persist both the change and its history in one Room transaction. */
+    @Transaction
+    suspend fun commitDuration(id: Long, revision: Long, end: Long, original: Long, now: Long,
+        stop: Boolean, demand: List<Recording>, kind: String): Boolean {
+        val latest = (active() + scheduled()).map { it.copy(sizeBytes = 0) }.sortedBy { it.id }
+        if (latest != demand) return false
+        if (setDuration(id, revision, end, original, end - original, now,
+                if (stop) RecordingStatus.FINALIZING else RecordingStatus.RECORDING) != 1) return false
+        if (kind == "CONFLICTING_EXTENSION_CONFIRMED") {
+            insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = id, atMillis = now,
+                kind = "CONFLICT_DETECTED", message = "Extension affects scheduled recording demand"))
+            insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = id, atMillis = now,
+                kind = "RECORDING_EXTENDED", message = "User extended recording with priority warning"))
+        }
+        insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = id, atMillis = now,
+            kind = kind, message = "User changed recording end to $end (UTC epoch milliseconds)"))
+        return true
+    }
+
+    /** Provider changes are allowed only for an explicitly reviewed, not-yet-started booking. */
+    @Query("""UPDATE recordings SET sourceId = :sourceId, streamUrl = :url, userAgent = :agent
+        WHERE id = :id AND status = 'SCHEDULED'""")
+    suspend fun setScheduledProvider(id: Long, sourceId: Long, url: String, agent: String): Int
+
+    @Transaction
+    suspend fun commitScheduledProvider(id: Long, sourceId: Long, url: String, agent: String,
+        demand: List<Recording>, now: Long): Boolean {
+        if ((active() + scheduled()).map { it.copy(sizeBytes = 0) }.sortedBy { it.id } != demand) return false
+        if (setScheduledProvider(id, sourceId, url, agent) != 1) return false
+        insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = id, atMillis = now,
+            kind = "PROVIDER_ALTERNATIVE_CONFIRMED", message = "User selected an authorized independent provider for this scheduled recording"))
+        return true
+    }
+
     /** Updates recording protection and padding-lock flags independently. */
     @Query("UPDATE recordings SET protectedRecording = :protectedRecording, lockPadding = :lockPadding WHERE id = :id")
     suspend fun setProtection(id: Long, protectedRecording: Boolean, lockPadding: Boolean)

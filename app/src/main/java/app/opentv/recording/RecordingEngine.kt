@@ -35,6 +35,10 @@ class RecordingEngine(
     private val settings: AppSettings,
     private val channelDao: ChannelDao,
     private val epgRepository: EpgRepository,
+    private val durationConnections: AccountConnectionManager = AccountConnectionManager.get(appContext),
+    private val durationClock: () -> Long = System::currentTimeMillis,
+    private val durationChanged: suspend () -> Unit = { RecordingScheduler.rearmWarnings(appContext) },
+    private val durationStop: (Long) -> Unit = { RecordingService.stop(appContext, it) },
 ) {
 
     /** Start recording [channel] now. [programme], when given, names and time-bounds the capture. */
@@ -344,6 +348,140 @@ class RecordingEngine(
             recording.programmeStartMillis - startPad * 60_000L, recording.programmeEndMillis + endPad * 60_000L)
         repo.event(recordingId, "PREFERENCES", "User updated recording protection or padding preferences")
         if (recording.status == RecordingStatus.SCHEDULED) rearmScheduled()
+    } }
+
+    /** Read-only review: no streams, reservations, padding or other recordings are modified. */
+    suspend fun previewDuration(id: Long, choice: DurationChoice): DurationReview {
+        val now = durationClock()
+        val demand = (repo.active() + repo.scheduled()).map { it.copy(sizeBytes = 0) }.sortedBy { it.id }
+        val row = repo.byId(id) ?: error("Recording is no longer available.")
+        val end = RecordingDuration.proposedEnd(row, choice, now)
+        val manager = durationConnections
+        val missing = demand.map { it.sourceId }.distinct().filter { sourceId ->
+            val source = sources.byId(sourceId)
+            if (source != null && source.enabled) { manager.registerSource(source); false } else true
+        }
+        val accounts = manager.snapshots.value
+        val keys = accounts.flatMap { a -> a.sourceIds.map { it to a.accountKey } }.toMap()
+        fun plan(rows: List<Recording>) = DvrConflictPolicy.resolve(rows, now,
+            { keys[it] ?: "unregistered:$it" }, { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
+        val before = plan(demand)
+        val after = plan(demand.map { if (it.id == id) it.copy(scheduledEndMillis = end) else it })
+        var affectedIds = (after.rejectedIds - before.rejectedIds) + after.adjustments.filter { a ->
+            before.adjustments.none { it == a }
+        }.map { it.recordingId }
+        val account = accounts.firstOrNull { row.sourceId in it.sourceIds }
+        if (id in after.rejectedIds && end > row.scheduledEndMillis) affectedIds = affectedIds + demand.filter {
+            it.id != id && keys[it.sourceId] == keys[row.sourceId] &&
+                it.scheduledStartMillis < end && (it.scheduledEndMillis <= 0 || it.scheduledEndMillis > maxOf(now, row.scheduledEndMillis))
+        }.map { it.id }
+        affectedIds = affectedIds - id
+        val warnings = mutableListOf<String>()
+        if (end <= now) warnings += DurationReview.STOP_WARNING
+        if (row.programmeEndMillis > end) warnings += "This ends before the scheduled program finishes; captured content will be preserved."
+        if (row.lockPadding && end != row.scheduledEndMillis) warnings += "You are explicitly editing the end while Lock Padding stays enabled."
+        if (affectedIds.isNotEmpty()) warnings += "Recording priority may trim unlocked scheduled padding or prevent a lower-priority recording. Review the affected programs."
+        if (account?.effectiveMaximum == null) warnings += "Account allowance is unknown. This edit keeps the existing reservation; future additional connections still require approval."
+        val viewing = account?.reservations.orEmpty().count { it.token.purpose != app.opentv.connections.ConnectionPurpose.RECORDING }
+        if (viewing > 0) warnings += "${viewing} viewing connection(s) share this account. Future DVR priority may reclaim affected panels at the recording deadline."
+        val additional = RecordingDuration.estimatedBytes(row, (end - row.scheduledEndMillis).takeIf { row.scheduledEndMillis > 0 } ?: (end - now), now)
+        var storageBlocked = false
+        if (end > (row.scheduledEndMillis.takeIf { it > 0 } ?: now)) {
+            val local = !RecordingStorage.isContent(row.filePath) && !RecordingStorage.isUsbPlaceholder(row.filePath) && !row.filePath.startsWith("smb://")
+            if (local) {
+                val parent = java.io.File(row.filePath).parentFile
+                val free = parent?.usableSpace ?: 0
+                val concurrent = repo.active().filter { it.id != id }.sumOf {
+                    RecordingDuration.estimatedBytes(it, (it.scheduledEndMillis.takeIf { t -> t > 0 } ?: end) - now, now)
+                }
+                storageBlocked = parent?.isDirectory != true || free < RecordingStorage.MIN_FREE_BYTES
+                val remaining = RecordingDuration.estimatedBytes(row, end - now, now)
+                if (free.toDouble() < remaining.toDouble() + concurrent + RecordingStorage.MIN_FREE_BYTES)
+                    warnings += "Available storage may be insufficient for this recording and concurrent captures. Estimates cannot guarantee capacity."
+            } else warnings += "Free space cannot be verified for this external destination. Writes remain monitored; removal or full storage preserves usable partial content."
+        }
+        val longer = end > (row.scheduledEndMillis.takeIf { it > 0 } ?: now)
+        val blocked = longer && (storageBlocked || row.sourceId in missing || id in after.rejectedIds)
+        if (storageBlocked) warnings += "Recording storage is unavailable or below minimum headroom."
+        if (row.sourceId in missing) warnings += "The recording provider is removed or disabled."
+        if (id in after.rejectedIds) warnings += "This end conflicts with a higher-priority recording. Adjust the extension or review that booking."
+        return DurationReview(row.copy(sizeBytes = 0), choice, end, demand,
+            demand.filter { it.id in affectedIds }, sources.byId(row.sourceId)?.name ?: "Recording provider",
+            account?.effectiveMaximum,
+            accounts.sortedBy { it.accountKey }.map { a -> "${a.accountKey}:${a.sourceIds.sorted()}:${a.effectiveMaximum}:${a.reservations.map { it.token }.sortedBy { it.reservationId }}" },
+            warnings, blocked, additional)
+    }
+
+    /** Confirmation rechecks current demand, then commits against deadline/finalization races. */
+    suspend fun applyDuration(review: DurationReview, confirmStop: Boolean): String? = bookingLock.withLock { dueLock.withLock {
+        val fresh = try { previewDuration(review.recording.id,
+            if (review.choice is DurationChoice.Add) DurationChoice.EndAt(review.proposedEndMillis) else review.choice)
+        } catch (_: IllegalArgumentException) {
+            repo.event(review.recording.id, "EXTENSION_REJECTED", "Recording no longer accepts the reviewed end")
+            return@withLock "Recording changed or finalized. Refresh before editing."
+        }
+        // Stop is anchored at confirmation; all other choices retain the preview's exact end.
+        val same = fresh.recording == review.recording && fresh.demand == review.demand &&
+            fresh.policySignature == review.policySignature && fresh.affected == review.affected && fresh.warnings == review.warnings
+        if (!same || (review.choice != DurationChoice.Stop && fresh.proposedEndMillis != review.proposedEndMillis))
+            return@withLock "Recording or account demand changed. Review again."
+        if (fresh.blocked) { repo.event(review.recording.id, "EXTENSION_REJECTED", "Duration edit rejected by current capacity or storage checks"); return@withLock "Change is unavailable. Review the current warnings." }
+        if (fresh.needsStopConfirmation && !confirmStop) return@withLock "Explicit stop confirmation is required."
+        val now = durationClock()
+        val end = fresh.proposedEndMillis
+        val stop = end <= now || fresh.choice == DurationChoice.Stop
+        val kind = when {
+            stop -> "STOPPED_MANUALLY"
+            review.choice == DurationChoice.Restore -> "DURATION_RESTORED"
+            end < fresh.recording.scheduledEndMillis -> "RECORDING_SHORTENED"
+            fresh.affected.isNotEmpty() -> "CONFLICTING_EXTENSION_CONFIRMED"
+            else -> "RECORDING_EXTENDED"
+        }
+        if (!repo.commitDuration(fresh.recording.id, fresh.recording.durationRevision, end,
+                RecordingDuration.originalEnd(fresh.recording).takeIf { it > 0 } ?: -1, now, stop, fresh.demand, kind))
+            return@withLock "Recording changed or finalized. Refresh before editing."
+        if (stop) durationStop(fresh.recording.id)
+        durationChanged()
+        null
+    } }
+
+    /** Reuses exact-guide/verified-Sports matching and never substitutes an active capture. */
+    suspend fun durationAlternatives(id: Long): List<RecordingConflictAlternative> {
+        val row = repo.byId(id) ?: return emptyList()
+        if (row.status != RecordingStatus.SCHEDULED) return emptyList()
+        val manager = durationConnections
+        sources.byId(row.sourceId)?.let { manager.registerSource(it) }
+        val account = manager.accountKeyForSource(row.sourceId) ?: return emptyList()
+        return RecordingConflictAlternatives(app.opentv.core.ServiceLocator.get(appContext))
+            .choices(row.channelId, account, durationClock(), row.scheduledStartMillis)
+            .filter {
+                val source = sources.byId(it.channel.sourceId)
+                source?.enabled == true && source.kind != SourceKind.STALKER &&
+                    it.channel.streamUrl.toHttpUrlOrNull() != null &&
+                    manager.snapshotForSource(it.channel.sourceId)?.effectiveMaximum != null
+            }
+    }
+
+    /** Explicit scheduled-provider choice is checked over the full interval before persistence. */
+    suspend fun applyDurationAlternative(id: Long, channelId: Long): Boolean = bookingLock.withLock { dueLock.withLock {
+        val choice = durationAlternatives(id).firstOrNull { it.channel.id == channelId } ?: return@withLock false
+        val source = sources.byId(choice.channel.sourceId)?.takeIf { it.enabled } ?: return@withLock false
+        val demand = (repo.active() + repo.scheduled()).map { it.copy(sizeBytes = 0) }.sortedBy { it.id }
+        val row = demand.firstOrNull { it.id == id && it.status == RecordingStatus.SCHEDULED } ?: return@withLock false
+        val manager = durationConnections
+        val accounts = manager.snapshots.value
+        val keys = accounts.flatMap { a -> a.sourceIds.map { it to a.accountKey } }.toMap()
+        val changed = row.copy(sourceId = source.id)
+        val plan = DvrConflictPolicy.resolve(demand.map { if (it.id == id) changed else it }, durationClock(),
+            { keys[it] ?: "unavailable:$it" }, { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
+        val before = DvrConflictPolicy.resolve(demand, durationClock(),
+            { keys[it] ?: "unavailable:$it" }, { key -> accounts.firstOrNull { it.accountKey == key }?.effectiveMaximum })
+        if (id in plan.rejectedIds || plan.windows[id] != DvrConflictPolicy.requestedWindow(changed, durationClock()) ||
+            (plan.rejectedIds - before.rejectedIds).isNotEmpty() || plan.adjustments.any { it !in before.adjustments }) return@withLock false
+        val applied = repo.commitScheduledProvider(id, source.id, recordUrlFor(choice.channel.streamUrl, source.kind),
+            source.userAgent, demand, durationClock())
+        if (applied) durationChanged()
+        applied
     } }
 
     /** Builds an account-aware conflict preview for scheduled recordings. */

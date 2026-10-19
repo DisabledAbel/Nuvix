@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
@@ -243,7 +244,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                             showProfiles = showProfiles,
                             clashes = rec.id in clashingIds,
                             onPlay = { onPlay(rec) },
-                            onStop = { viewModel.stop(rec.id) },
+                            onStop = { app.opentv.core.RecordingSignals.requestDuration(rec.id) },
                             onRetry = { viewModel.retry(rec) },
                             onDelete = { viewModel.delete(rec) },
                             onSettings = { editing = rec },
@@ -259,7 +260,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                             profileNames = profileNames,
                             showProfiles = showProfiles,
                             onPlay = { onPlay(rec) },
-                            onStop = { viewModel.stop(rec.id) },
+                            onStop = { app.opentv.core.RecordingSignals.requestDuration(rec.id) },
                             onRetry = { viewModel.retry(rec) },
                             onDelete = { viewModel.delete(rec) },
                             onSettings = { editing = rec },
@@ -493,6 +494,10 @@ private fun RecordingRow(
         }
         if (watchableLive) {
             ActionButton(Icons.Filled.PlayArrow, stringResource(R.string.rec_watch_live), onPlay)
+            Spacer(Modifier.width(8.dp))
+        }
+        if (recording.status == RecordingStatus.RECORDING) {
+            ActionButton(Icons.Filled.Schedule, "Recording Duration") { app.opentv.core.RecordingSignals.requestDuration(recording.id) }
             Spacer(Modifier.width(8.dp))
         }
         if (recording.status == RecordingStatus.RECORDING || recording.status == RecordingStatus.PREPARING) {
