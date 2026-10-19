@@ -60,7 +60,10 @@ class MultiViewPresetPreviewController(
         mutable.value = mutable.value.copy(busy = true, message = null)
         try {
             val fresh = inspect(proposal)
-            if (generation != revision) return false
+            if (generation != revision) {
+                mutable.value = mutable.value.copy(message = "Availability or recording requirements changed. Review the updated plan and choose again.")
+                return false
+            }
             if (!shown.sameDecision(fresh)) {
                 mutable.value = MultiViewPresetReviewState(fresh, message = "Availability or recording requirements changed. Review the updated plan and choose again.")
                 return false

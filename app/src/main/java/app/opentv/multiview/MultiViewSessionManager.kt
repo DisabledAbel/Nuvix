@@ -337,7 +337,8 @@ class MultiViewSessionManager(
                         MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, (reserved as? ReservationResult.Denied)?.reason
                             ?: "Account settings changed. Retry this channel."))
                     pendingToken = token
-                    require(token.accountKey == snapshot?.accountKey) { "Provider account changed. Review this channel again." }
+                    if (token.accountKey != snapshot?.accountKey) throw MultiViewStartException(
+                        MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, "Provider account changed. Review this channel again."))
                     coroutineContext.ensureActive()
                     if (!valid(record, generation)) { connections.release(token); pendingToken = null; return@withLock }
                     if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
@@ -723,7 +724,8 @@ class MultiViewSessionManager(
                     val proposal = MultiViewPresentation(listOf(MultiViewSavedPanel("admission",
                         MultiViewChannelReference(channel.channelId, channel.sourceId, key))), "admission", "admission", MultiViewLayout.GRID)
                     val checked = MultiViewPresetInspector(graph, replacedReservations = { setOfNotNull(old?.reservationId) }).inspect(proposal)
-                    require(checked.canLoad) { "Channel availability or current recording capacity changed. Review this panel before retrying." }
+                    if (!checked.canLoad) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                        "Channel availability or current recording capacity changed. Review this panel before retrying."))
                 })
             val checkpoints = MultiViewPresetStore(application)
             manager.checkpointStore = checkpoints
