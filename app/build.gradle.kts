@@ -106,7 +106,7 @@ ksp {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -133,7 +133,7 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.datasource.okhttp)
 
-    implementation("net.zetetic:sqlcipher-android:4.12.0")
+    implementation("net.zetetic:sqlcipher-android:4.19.1")
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
@@ -152,7 +152,7 @@ dependencies {
 
     // SMB/CIFS client for recording to a NAS (Synology etc.) and playing those recordings
     // back in-app over the network. Pure-Java SMB2/3, no native bits.
-    implementation("com.hierynomus:smbj:0.12.2")
+    implementation("com.hierynomus:smbj:0.15.0")
 
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("androidx.test.espresso:espresso-core:3.6.1")
