@@ -85,6 +85,8 @@ class MultiViewPresetPreviewControllerTest {
         val pending = launch { controller.confirm(proposal) }; runCurrent()
         controller.invalidate(); gate.complete(Unit); pending.join()
         assertEquals(0, loads); assertNull(controller.state.value.inspection)
+        assertEquals("Availability or recording requirements changed. Review the updated plan and choose again.", controller.state.value.message)
+        assertFalse(controller.state.value.busy)
     }
     @Test fun restartingPreviewHasNoImplicitPlaybackOrStoredConsent() = runTest {
         val controller = MultiViewPresetPreviewController({ inspection() }, { fail("No playback without preview and confirmation") })

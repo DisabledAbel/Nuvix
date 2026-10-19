@@ -211,6 +211,17 @@ class MultiViewSessionManagerTest {
         fixture.manager.release()
     }
 
+    @Test fun accountChangedDuringAdmissionShowsReviewMessageAndReleasesReservation() = runTest {
+        lateinit var fixture: Fixture
+        fixture = Fixture(this, validateAdmission = { _, _ -> fixture.connections.register(1, account = "changed-account") })
+        fixture.manager.add(1); runCurrent()
+        assertTrue(fixture.players.isEmpty())
+        assertEquals("Provider account changed. Review this channel again.", fixture.panel(1).error)
+        assertEquals(MultiViewFailureKind.PROVIDER_LIMIT, fixture.panel(1).failureKind)
+        assertEquals(0, fixture.connections.allocator.snapshots.value.sumOf { it.locallyReserved })
+        fixture.manager.release()
+    }
+
     @Test fun staleGenerationDuringAdmissionCannotAllocatePlayer() = runTest {
         val gate = CompletableDeferred<Unit>()
         val fixture = Fixture(this, validateAdmission = { _, _ -> gate.await() })

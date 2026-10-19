@@ -69,7 +69,7 @@ Ordinary backgrounding releases Multi-View players/reservations and leaves pause
 for explicit review/resume. Memory pressure pauses secondary panels. Process death restores
 no runtime lease: safe local presentation state offers Review & Restore without connecting.
 Preset preview also opens no stream. Saved/recovery layouts now show effective upcoming DVR
-windows over 24 hours and allow one-time panel/source/primary edits. Confirmation re-reads the
+windows within the next 24 hours and allow one-time panel/source/primary edits. Confirmation re-reads the
 catalog and schedule; each stream revalidates again after an Unknown prompt. Future warnings do
 not reserve capacity or suppress the deadline coordinator. See the [Multi-View guide](smart-multiview-dvr.md#multi-view-playback)
 for controls, settings, Sports/Guide actions, presets and compatibility limits.

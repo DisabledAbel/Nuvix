@@ -26,6 +26,9 @@ import app.opentv.recording.RecordingConflictAlternatives
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
@@ -84,7 +87,7 @@ internal fun MultiViewPresetReviewDialog(
     var foreground by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     var databaseRevision by remember { mutableLongStateOf(0) }
     DisposableEffect(graph, controller, lifecycle) {
-        val observer = object : InvalidationTracker.Observer("recordings", "sources", "channels", "categories", "sports_events", "sports_programmes", "sports_decisions") {
+        val observer = object : InvalidationTracker.Observer("sources", "channels", "categories", "sports_events", "sports_programmes", "sports_decisions") {
             override fun onInvalidated(tables: Set<String>) { scope.launch {
                 controller.invalidate(); databaseRevision++
             } }
@@ -100,6 +103,11 @@ internal fun MultiViewPresetReviewDialog(
             graph.database.invalidationTracker.removeObserver(observer)
             lifecycle.removeObserver(lifecycleObserver)
         }
+    }
+    LaunchedEffect(graph, controller) {
+        // Captured-byte progress cannot change the recording plan.
+        graph.recordingRepository.observeAll().map { rows -> rows.map { it.copy(sizeBytes = 0) } }
+            .distinctUntilChanged().collect { controller.invalidate(); databaseRevision++ }
     }
     LaunchedEffect(proposal, accounts, hidden, unlocked, databaseRevision, foreground) {
         controller.invalidate()

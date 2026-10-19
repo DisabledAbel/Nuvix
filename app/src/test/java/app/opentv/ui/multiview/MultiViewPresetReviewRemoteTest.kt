@@ -39,7 +39,8 @@ class MultiViewPresetReviewRemoteTest {
         for ((label, action) in listOf("Replace Channel: Live Sports" to "replace", "Choose Another Provider: Live Sports" to "provider",
             "Exclude Panel: Live Sports" to "exclude", "Review Recording: NHL Game" to "review", "Save Changes to Preset" to "save",
             "Continue With Warning — Load Modified Layout Once" to "load")) {
-            compose.onNodeWithText(label).performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus)
+            compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
+            compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.RequestFocus)
                 .performKeyInput { pressKey(Key.DirectionCenter) }
             compose.runOnIdle { assertEquals(action, actions.last()) }
         }
@@ -47,14 +48,20 @@ class MultiViewPresetReviewRemoteTest {
     }
     @Test fun currentCapacityConflictDisablesLoadingButEditingRemainsAvailable() {
         show(blocked = true)
-        compose.onNodeWithText("Continue With Warning — Load Modified Layout Once").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Exclude Panel: Live Sports").performScrollTo().assertIsEnabled()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Continue With Warning — Load Modified Layout Once"))
+        compose.onNodeWithText("Continue With Warning — Load Modified Layout Once").assertIsNotEnabled()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Exclude Panel: Live Sports"))
+        compose.onNodeWithText("Exclude Panel: Live Sports").assertIsEnabled()
     }
     @Test fun warningsExposeRecordingTimeProtectionAndFallbackAsAccessibleText() {
         show()
-        compose.onNodeWithText("Upcoming Recording Conflict").performScrollTo().assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Upcoming Recording Conflict"))
+        compose.onNodeWithText("Upcoming Recording Conflict").assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("needs account capacity at", substring = true))
         compose.onNodeWithText("needs account capacity at", substring = true).assertExists()
-        compose.onNodeWithText("Protect Recording: On", substring = true).performScrollTo().assertExists()
-        compose.onNodeWithText("acknowledging this preview does not dismiss it", substring = true).performScrollTo().assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Protect Recording: On", substring = true))
+        compose.onNodeWithText("Protect Recording: On", substring = true).assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("acknowledging this preview does not dismiss it", substring = true))
+        compose.onNodeWithText("acknowledging this preview does not dismiss it", substring = true).assertExists()
     }
 }
