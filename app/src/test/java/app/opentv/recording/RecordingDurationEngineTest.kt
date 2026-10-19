@@ -125,6 +125,17 @@ class RecordingDurationEngineTest {
         assertNull(engine.applyDuration(restore, false))
         assertEquals(0, db.recordings().byId(1)!!.manualExtensionMillis)
     }
+    @Test fun extendingConflictTrimmedRecordingPersistsItsEffectiveEndForRestore() = runBlocking {
+        db.recordings().update(row().copy(scheduledEndMillis = 750_000, padEndMinutes = 5))
+        assertNull(engine.applyDuration(engine.previewDuration(1, DurationChoice.Add(5)), false))
+        val extended = db.recordings().byId(1)!!
+        assertEquals(1_050_000, extended.scheduledEndMillis)
+        assertEquals(750_000, extended.originalEndMillis)
+        assertEquals(300_000, extended.manualExtensionMillis)
+        assertNull(engine.applyDuration(engine.previewDuration(1, DurationChoice.Restore), false))
+        assertEquals(750_000, db.recordings().byId(1)!!.scheduledEndMillis)
+        assertEquals(0, db.recordings().byId(1)!!.manualExtensionMillis)
+    }
     @Test fun unavailableLocalStorageBlocksExtensionButAllowsShortening() = runBlocking {
         db.recordings().update(row().copy(filePath = "/missing-parent-for-test/subdirectory/recording.ts"))
         assertTrue(engine.previewDuration(1, DurationChoice.Add(5)).blocked)

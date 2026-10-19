@@ -82,5 +82,5 @@ See [duration behavior, architecture and device checklist](recording-duration.md
 
 Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
 transport continuity, conflict/preset projection and Compose remote action semantics. Physical
-Android TV/Google TV/Fire TV validation remains required, including native date/time pickers,
+Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
 USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.

@@ -3,6 +3,7 @@ package app.opentv.recording
 
 import app.opentv.data.model.Recording
 import app.opentv.data.model.RecordingStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /** Polling uses durable UTC ends; stale callbacks must claim their revision before touching I/O. */
@@ -15,10 +16,18 @@ internal class RecordingDeadlineWatcher(
 ) {
     suspend fun run() {
         while (true) {
-            val row = read() ?: return
-            if (row.status !in setOf(RecordingStatus.PREPARING, RecordingStatus.RECORDING)) return
-            val at = now()
-            if (row.scheduledEndMillis > 0 && row.scheduledEndMillis <= at && claim(row.durationRevision, at)) {
+            val deadlineReached = try {
+                val row = read() ?: return
+                if (row.status !in setOf(RecordingStatus.PREPARING, RecordingStatus.RECORDING)) return
+                val at = now()
+                row.scheduledEndMillis > 0 && row.scheduledEndMillis <= at && claim(row.durationRevision, at)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A transient database failure must not interrupt the capture or reuse a stale row.
+                false
+            }
+            if (deadlineReached) {
                 elapsed()
                 return
             }

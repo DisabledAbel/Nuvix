@@ -17,7 +17,6 @@ object RecordingDuration {
     val increments = listOf(5, 10, 15, 30, 60)
     fun originalEnd(row: Recording): Long = when {
         row.originalEndMillis != 0L -> row.originalEndMillis
-        row.programmeEndMillis > 0 -> checkedAdd(row.programmeEndMillis, row.padEndMinutes * 60_000L)
         else -> row.scheduledEndMillis
     }
     fun proposedEnd(row: Recording, choice: DurationChoice, now: Long): Long {

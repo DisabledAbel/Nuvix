@@ -181,6 +181,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     val conflicts by viewModel.conflicts.collectAsState()
     var editing by remember { mutableStateOf<Recording?>(null) }
     var history by remember { mutableStateOf<Recording?>(null) }
+    var stopping by remember { mutableStateOf<Recording?>(null) }
     var reviewConflicts by remember { mutableStateOf(false) }
 
     val now = System.currentTimeMillis()
@@ -260,7 +261,10 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                             profileNames = profileNames,
                             showProfiles = showProfiles,
                             onPlay = { onPlay(rec) },
-                            onStop = { app.opentv.core.RecordingSignals.requestDuration(rec.id) },
+                            onStop = {
+                                if (rec.status == RecordingStatus.PREPARING) stopping = rec
+                                else app.opentv.core.RecordingSignals.requestDuration(rec.id)
+                            },
                             onRetry = { viewModel.retry(rec) },
                             onDelete = { viewModel.delete(rec) },
                             onSettings = { editing = rec },
@@ -270,6 +274,21 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                 }
             }
         }
+    }
+    stopping?.let { recording ->
+        AlertDialog(
+            onDismissRequest = { stopping = null },
+            title = { Text("Stop Recording?") },
+            text = { Text("Stop preparing this recording?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.stop(recording.id); stopping = null }) {
+                    Text("Confirm Stop Recording")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { stopping = null }) { Text(stringResource(R.string.common_cancel)) }
+            },
+        )
     }
     editing?.let { recording ->
         RecordingPreferencesDialog(recording, onDismiss = { editing = null }) { start, end, protect, lock ->
