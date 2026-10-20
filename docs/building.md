@@ -16,6 +16,8 @@ matching Kotlin serialization/coroutines versions. The later grouped update fail
 configuration because KSP calls an AGP API absent from 8.7.3; Core 1.19.1 also declares
 minimum compile SDK 37 and AGP 9.1. Upgrade the compiler, Android plugins, SDK and dependent
 libraries together rather than bypassing AAR checks or raising the device minimum silently.
+SQLCipher stays at 4.12.0 because 4.19.1 requires compile SDK 36; the encrypted database
+schema and cipher configuration are unchanged.
 
 Compose BOM 2024.11.00 and OkHttp 4.12.0 are the validated dependencies for this SDK 35 toolchain. MockWebServer shares OkHttp's catalog version. Dependabot defers major upgrades of Compose, OkHttp and Gradle until a coordinated toolchain migration; minor and patch updates remain enabled.
 
