@@ -8,7 +8,14 @@ Nuvix is an independent GPL-3.0-or-later modification of [OpenTV](https://github
 - Android SDK platform 35, build-tools 35.0.0 and platform-tools.
 - Android Studio with Kotlin support, or the command-line SDK tools.
 
-The checked-in Gradle 8.11.1 wrapper includes an official distribution SHA-256 checksum. Android Gradle Plugin 8.7.3, Kotlin 2.0.21 and matching KSP versions are defined in `gradle/libs.versions.toml`. Nuvix targets Android 15 and preserves upstream support for Android 6/API 23 and newer. Android TV, Google TV and Fire TV capabilities vary by device.
+The checked-in Gradle 8.14.6 wrapper includes an official distribution SHA-256 checksum. Android Gradle Plugin 8.7.3, Kotlin 2.0.21 and matching KSP versions are defined in `gradle/libs.versions.toml`. Nuvix targets Android 15 and preserves upstream support for Android 6/API 23 and newer. Android TV, Google TV and Fire TV capabilities vary by device.
+
+The SDK 35/API 23 dependency matrix retains Kotlin 2.0.21 with matching KSP, Core 1.13.1,
+TV Material 1.0.0, Media3 1.5.0, Room 2.6.1, Navigation 2.8.4, WorkManager 2.9.1 and
+matching Kotlin serialization/coroutines versions. The later grouped update failed Gradle
+configuration because KSP calls an AGP API absent from 8.7.3; Core 1.19.1 also declares
+minimum compile SDK 37 and AGP 9.1. Upgrade the compiler, Android plugins, SDK and dependent
+libraries together rather than bypassing AAR checks or raising the device minimum silently.
 
 Compose BOM 2024.11.00 and OkHttp 4.12.0 are the validated dependencies for this SDK 35 toolchain. MockWebServer shares OkHttp's catalog version. Dependabot defers major upgrades of Compose, OkHttp and Gradle until a coordinated toolchain migration; minor and patch updates remain enabled.
 

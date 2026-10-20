@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Restore the compatible SDK 35/API 23 compiler and AndroidX dependency matrix after the
+  grouped update introduced incompatible KSP/AGP APIs and SDK 37 library requirements.
+  Keep the Gradle wrapper update and compatible independent dependency updates.
+
 - Require a fresh explicit stop review when an active recording's proposed end passes during
   confirmation, including clock corrections during validation. Normal end-time confirmation
   preserves the running capture; duplicate/stale revision protection remains unchanged.
