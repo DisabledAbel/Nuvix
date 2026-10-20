@@ -7,7 +7,10 @@ or Stop Recording Now. Back/Cancel leaves the recording unchanged. The current e
 remaining time, original program/padded ends, manual change, modification time, protection
 and padding lock are displayed. Custom time uses D-pad date/hour/minute steppers with a timezone display; review
 shows the resolved timestamp, including the date, before saving. Elapsed ends require a
-separate **Confirm Stop Recording** action. Times before capture start are rejected.
+separate **Confirm Stop Recording** action. Times before capture start are rejected. If a selected end passes while the review is open
+or while confirmation is being validated, the change is rejected without stopping capture.
+Review again to see **Confirm Stop Recording** and explicitly approve stopping. Stop consent
+is tied to that displayed review, including when the device clock moves forward.
 
 The defaults remain two minutes early and five minutes late. The original padded end
 uses the booking's saved override, not today's global settings. Extensions add to the
@@ -58,7 +61,8 @@ state, rechecks policy on confirmation, and commits a revision comparison plus a
 in one transaction. That transaction also checks the complete recording-demand snapshot;
 byte-progress changes do not invalidate it. Duplicate OK and stale editor confirmations
 cannot apply the increment twice. New bookings, finalization, protection or account-policy
-changes require review again.
+changes require review again. Rejected confirmations, including stale demand or elapsed-end
+consent, add a credential-free `EXTENSION_REJECTED` entry to recording history.
 
 The foreground service keeps its existing HTTP response, output sink, progress and account
 reservation. A separate 250 ms deadline watcher reads the committed end. It must atomically

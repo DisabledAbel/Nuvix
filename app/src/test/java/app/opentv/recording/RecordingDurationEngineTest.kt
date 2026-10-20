@@ -29,6 +29,7 @@ class RecordingDurationEngineTest {
     private val db = Room.inMemoryDatabaseBuilder(context, OpenTvDatabase::class.java).allowMainThreadQueries().build()
     private val manager = AccountConnectionManager.createForTest(context)
     private var clock = 100_000L
+    private var clockRead: () -> Long = { clock }
     private var rearmed = 0
     private val stops = mutableListOf<Long>()
     private lateinit var engine: RecordingEngine
@@ -49,7 +50,7 @@ class RecordingDurationEngineTest {
         engine = RecordingEngine(context, RecordingRepository(db.recordings(), db.seriesRules(), db.recordingEvents()),
             SourceRepository(db.sources(), api, StalkerApi(http)), settings, db.channels(),
             EpgRepository(db.programmes(), db.epgFeeds(), db.epgAliases(), db.channels(), db.sources(), api, http, db, context.cacheDir),
-            durationConnections = manager, durationClock = { clock }, durationChanged = { rearmed++ }, durationStop = { stops += it })
+            durationConnections = manager, durationClock = { clockRead() }, durationChanged = { rearmed++ }, durationStop = { stops += it })
         db.recordings().insert(row())
         Unit
     }
@@ -85,6 +86,35 @@ class RecordingDurationEngineTest {
         val changed = db.recordings().byId(1)!!
         assertTrue(changed.protectedRecording && changed.lockPadding)
         assertEquals(RecordingStatus.FINALIZING, changed.status)
+    }
+    @Test fun endPassingDuringConfirmationCannotAcquireImplicitStopConsent() = runBlocking {
+        val before = db.recordings().byId(1)!!
+        val review = engine.previewDuration(1, DurationChoice.EndAt(clock + 1))
+        assertFalse(review.needsStopConfirmation)
+        var reads = 0
+        // Fresh preview still sees a future end, but the final pre-commit clock sees it elapsed.
+        clockRead = { if (++reads == 1) clock else clock + 1 }
+        // Even a caller passing true cannot turn a normal reviewed change into stop consent.
+        assertNotNull(engine.applyDuration(review, true))
+        assertEquals(before, db.recordings().byId(1))
+        assertTrue(stops.isEmpty())
+        assertEquals(0, rearmed)
+        val rejected = db.recordingEvents().forRecording(1).single()
+        assertEquals("EXTENSION_REJECTED", rejected.kind)
+        assertFalse(rejected.message.contains("private"))
+        clockRead = { clock + 1 }
+        val stopReview = engine.previewDuration(1, DurationChoice.EndAt(clock + 1))
+        assertTrue(stopReview.needsStopConfirmation)
+        assertNotNull(engine.applyDuration(stopReview, false))
+        assertNull(engine.applyDuration(stopReview, true))
+        assertEquals(listOf(1L), stops)
+    }
+    @Test fun endPassingWhileReviewIsOpenRequiresFreshStopReview() = runBlocking {
+        val review = engine.previewDuration(1, DurationChoice.EndAt(clock + 1))
+        clock++
+        assertNotNull(engine.applyDuration(review, true))
+        assertEquals(RecordingStatus.RECORDING, db.recordings().byId(1)!!.status)
+        assertTrue(stops.isEmpty())
     }
     @Test fun higherPriorityConflictBlocksAndPermittedConflictRequiresReviewedDecision() = runBlocking {
         val other = row().copy(id = 2, channelId = 2, status = RecordingStatus.SCHEDULED, scheduledStartMillis = 1_100_000,

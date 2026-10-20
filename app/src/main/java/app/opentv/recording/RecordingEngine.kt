@@ -414,22 +414,28 @@ class RecordingEngine(
 
     /** Confirmation rechecks current demand, then commits against deadline/finalization races. */
     suspend fun applyDuration(review: DurationReview, confirmStop: Boolean): String? = bookingLock.withLock { dueLock.withLock {
+        suspend fun reject(message: String): String {
+            repo.event(review.recording.id, "EXTENSION_REJECTED", message)
+            return message
+        }
         val fresh = try { previewDuration(review.recording.id,
             if (review.choice is DurationChoice.Add) DurationChoice.EndAt(review.proposedEndMillis) else review.choice)
         } catch (_: IllegalArgumentException) {
-            repo.event(review.recording.id, "EXTENSION_REJECTED", "Recording no longer accepts the reviewed end")
-            return@withLock "Recording changed or finalized. Refresh before editing."
+            return@withLock reject("Recording changed or finalized. Refresh before editing.")
         }
         // Stop is anchored at confirmation; all other choices retain the preview's exact end.
         val same = fresh.recording == review.recording && fresh.demand == review.demand &&
             fresh.policySignature == review.policySignature && fresh.affected == review.affected && fresh.warnings == review.warnings
         if (!same || (review.choice != DurationChoice.Stop && fresh.proposedEndMillis != review.proposedEndMillis))
-            return@withLock "Recording or account demand changed. Review again."
-        if (fresh.blocked) { repo.event(review.recording.id, "EXTENSION_REJECTED", "Duration edit rejected by current capacity or storage checks"); return@withLock "Change is unavailable. Review the current warnings." }
-        if (fresh.needsStopConfirmation && !confirmStop) return@withLock "Explicit stop confirmation is required."
+            return@withLock reject("Recording or account demand changed. Review again.")
+        if (fresh.blocked) return@withLock reject("Change is unavailable. Review the current warnings.")
         val now = durationClock()
         val end = fresh.proposedEndMillis
         val stop = end <= now || fresh.choice == DurationChoice.Stop
+        // Validation may span the selected end (or a wall-clock correction). Consent belongs
+        // to the displayed review, never to a newly elapsed deadline discovered while saving.
+        if (stop && (!review.needsStopConfirmation || !confirmStop))
+            return@withLock reject("The selected end has passed. Review again and explicitly confirm stopping.")
         val kind = when {
             stop -> "STOPPED_MANUALLY"
             review.choice == DurationChoice.Restore -> "DURATION_RESTORED"
@@ -439,7 +445,7 @@ class RecordingEngine(
         }
         if (!repo.commitDuration(fresh.recording.id, fresh.recording.durationRevision, end,
                 RecordingDuration.originalEnd(fresh.recording).takeIf { it > 0 } ?: -1, now, stop, fresh.demand, kind))
-            return@withLock "Recording changed or finalized. Refresh before editing."
+            return@withLock reject("Recording changed or finalized. Refresh before editing.")
         if (stop) durationStop(fresh.recording.id)
         durationChanged()
         null

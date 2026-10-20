@@ -687,3 +687,7 @@ Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale co
 transport continuity, conflict/preset projection and Compose remote action semantics. Physical
 Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
 USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.
+
+Duration confirmation requires renewed explicit stop consent if the chosen end passes during
+review or validation. An ordinary duration confirmation cannot stop a capture implicitly.
+This check leaves provider reservations, playback panels and the 150 ms audio policy untouched.

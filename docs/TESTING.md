@@ -500,6 +500,10 @@ transport continuity, conflict/preset projection and Compose remote action seman
 Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
 USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.
 
+The duration engine also tests an end passing while a review is open and between the final
+validation and commit clock reads. Neither case can turn ordinary confirmation into stop
+consent, even if a caller passes a stop flag; a new reviewed stop is required.
+
 Duration-specific suites: `RecordingDurationTest`, `RecordingDurationPersistenceTest`,
 `RecordingDurationEngineTest`, `RecordingDurationConflictTest`, `RecordingDurationRemoteTest`
 and `RecordingCaptureTest`. Run with the existing full Gradle commands above. The engine uses

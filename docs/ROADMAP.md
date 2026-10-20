@@ -73,6 +73,10 @@ extension for a future change; no provider data or local correction identifiers 
 
 ## Active DVR duration controls
 
+Duration confirmation now checks elapsed ends again immediately before committing. Stop consent
+must belong to the displayed review; an end passing during validation requires a fresh explicit
+stop review. Deterministic engine tests cover both review-time and pre-commit deadline races.
+
 Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
 additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
 Room updates and a live deadline watcher preserve the existing capture connection and file.
