@@ -62,7 +62,8 @@ fun RecordingDurationDialog(recordingId: Long, onDismiss: () -> Unit) {
                 busy = true
                 scope.launch {
                     try {
-                        error = graph.recordingEngine.applyDuration(requireNotNull(review), confirmStop = true)
+                        val confirmed = requireNotNull(review)
+                        error = graph.recordingEngine.applyDuration(confirmed, confirmStop = confirmed.needsStopConfirmation)
                         if (error == null) onDismiss() else review = null
                     } catch (_: Exception) { error = "Recording changed or storage is unavailable. Review again."; review = null }
                     finally { busy = false }

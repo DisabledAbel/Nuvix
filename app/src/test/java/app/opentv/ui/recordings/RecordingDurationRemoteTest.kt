@@ -71,5 +71,20 @@ class RecordingDurationRemoteTest {
         compose.onNodeWithText("Confirm With Warning").assertIsNotEnabled()
         compose.onNodeWithText("Adjust Extension").assertIsEnabled()
     }
+    @Test fun dpadMovesBetweenIncrementsAndOkOnlyProposesTheFocusedChoice() {
+        val choices = mutableListOf<DurationChoice>()
+        var confirmed = 0
+        compose.setContent { MaterialTheme { DurationEditor(row(), null, 100_000, false, null,
+            {}, { choices += it }, {}, { confirmed++ }, {}) } }
+        compose.onNodeWithText("Add 5 Minutes").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+            .performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Add 10 Minutes").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle {
+            assertEquals(listOf(DurationChoice.Add(10)), choices)
+            assertEquals(0, confirmed)
+        }
+    }
 
 }

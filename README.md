@@ -122,6 +122,9 @@ for automated coverage and outstanding hardware checks.
 
 ## Active DVR duration controls
 
+If a custom end passes while you review or save it, review again and choose **Confirm Stop
+Recording**. Ordinary duration confirmation cannot authorize an immediate stop.
+
 Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
 additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
 Room updates and a live deadline watcher preserve the existing capture connection and file.

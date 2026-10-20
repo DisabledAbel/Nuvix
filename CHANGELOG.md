@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require a fresh explicit stop review when an active recording's proposed end passes during
+  confirmation, including clock corrections during validation. Normal end-time confirmation
+  preserves the running capture; duplicate/stale revision protection remains unchanged.
+
 - Preview saved Multi-View presets against the next 24 hours of effective DVR windows, including
   padded/locked/protected capture, overlapping jobs and independent or shared account capacity.
 - Add one-time panel exclusion/replacement/primary edits, explicit preset saving, trusted provider
