@@ -88,6 +88,9 @@ class RecordingDurationEngineTest {
         assertEquals(RecordingStatus.FINALIZING, changed.status)
     }
     @Test fun endPassingDuringConfirmationCannotAcquireImplicitStopConsent() = runBlocking {
+        db.recordings().setSize(1, 8192)
+        manager.reserve(ConnectionRequest("recording:1", 1, 1, ConnectionPurpose.RECORDING))
+        val reservations = manager.snapshots.value
         val before = db.recordings().byId(1)!!
         val review = engine.previewDuration(1, DurationChoice.EndAt(clock + 1))
         assertFalse(review.needsStopConfirmation)
@@ -97,6 +100,7 @@ class RecordingDurationEngineTest {
         // Even a caller passing true cannot turn a normal reviewed change into stop consent.
         assertNotNull(engine.applyDuration(review, true))
         assertEquals(before, db.recordings().byId(1))
+        assertEquals(reservations, manager.snapshots.value)
         assertTrue(stops.isEmpty())
         assertEquals(0, rearmed)
         val rejected = db.recordingEvents().forRecording(1).single()
