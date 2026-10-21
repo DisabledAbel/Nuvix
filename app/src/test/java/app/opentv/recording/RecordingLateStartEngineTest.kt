@@ -107,6 +107,10 @@ class RecordingLateStartEngineTest {
         clock = 3_501_000
         assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.MISSED, repo.byId(1)!!.status)
         assertEquals(1, repo.byId(2)!!.durationRevision)
+        val missedEvent = db.recordingEvents().forRecording(1).last()
+        assertEquals(clock, missedEvent.atMillis)
+        assertTrue(missedEvent.message.contains("Expected provider capture start=4001000"))
+        assertEquals(0L, repo.byId(1)!!.startedAtMillis)
     }
     @Test fun independentAccountDoesNotBlockLateRecordingAndRemovedProviderFailsWithoutOutput() = runBlocking<Unit> {
         val independent = source.copy(id = 2, username = "another-account")
