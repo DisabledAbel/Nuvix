@@ -1,18 +1,17 @@
 [versions]
-# Keep compiler, generated Room code and AndroidX on the SDK 35 / API 23 matrix.
-# Newer KSP needs AGP APIs absent in 8.7.3; core 1.19.1 requires SDK 37 / AGP 9.1.
-# Upgrade these together in a separate toolchain migration.
+# AGP 9 uses built-in Kotlin; keep Compose/serialization aligned with its KGP.
+# Retain the SDK 35 / API 23 runtime dependency matrix.
 agp = "9.4.1"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.28"
+kotlin = "2.2.10"
+ksp = "2.3.1"
 coreKtx = "1.13.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
-# Validated with compileSdk 35 / AGP 8.7.3. Newer calendar majors need a toolchain migration.
+# Retain the validated Compose runtime while migrating the build toolchain.
 composeBom = "2024.11.00"
 tvCompose = "1.0.0"
 media3 = "1.5.0"
-room = "2.6.1"
+room = "2.7.2"
 okhttp = "4.12.0"
 serialization = "1.7.3"
 coroutines = "1.9.0"
@@ -86,7 +85,6 @@ androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
