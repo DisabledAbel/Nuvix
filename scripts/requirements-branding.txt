@@ -1,1 +1,3 @@
 Pillow>=11.3.0,<13
+# Static release workflow security contracts in scripts/tests.
+PyYAML>=6.0,<7

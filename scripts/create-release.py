@@ -27,8 +27,11 @@ def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certif
         if not match:
             raise ValueError("A nightly-YYYYMMDD.RUN.ATTEMPT release tag is required")
         application_id += ".nightly"
-    elif channel != "stable" or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
-        raise ValueError("A stable vX.Y.Z release tag is required")
+    elif channel not in ("stable", "rc") or not re.fullmatch(
+        r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)" +
+        (r"-rc\.[1-9][0-9]*" if channel == "rc" else ""), tag, re.ASCII
+    ):
+        raise ValueError("A matching stable vX.Y.Z or RC vX.Y.Z-rc.N release tag is required")
     if metadata.get("applicationId") != application_id:
         raise ValueError("Release metadata has the wrong application ID")
     elements = metadata.get("elements", [])
@@ -97,13 +100,19 @@ def release_notes(changelog: Path, version: str) -> str:
             selected.append(line)
     notes = "\n".join(selected).strip() or f"Nuvix {version}. See the attached source and repository changelog."
     return notes + "\n\nThe corresponding GPL-3.0-or-later source archive is attached to this release. " \
-        "Nuvix is an independent modified version of OpenTV, with no official affiliation with OpenTV or DIRECTV.\n"
+        "Nuvix is an independent modified version of OpenTV, with no official affiliation with OpenTV or DIRECTV.\n\n" \
+        "Requires Android 6.0 (API 23) or newer. Install nuvix.apk using Android's installation prompt; " \
+        "updates retain app data only with the same package/signing key and a higher versionCode. " \
+        "Verify SHA256SUMS and the independently recorded signing certificate before installing. " \
+        "Release candidates are experimental and are not offered to stable users.\n\n" \
+        "Nuvix does not provide IPTV channels, playlists, credentials, or copyrighted media. " \
+        "Use authorized sources. Playback and recording support depends on the device and provider.\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", required=True)
-    parser.add_argument("--channel", choices=("stable", "nightly"), default="stable")
+    parser.add_argument("--channel", choices=("stable", "rc"), default="stable")
     parser.add_argument("--android-sdk", type=Path, required=True)
     parser.add_argument("--expected-certificate-sha256", required=True)
     parser.add_argument("--output", type=Path, default=Path("dist"))
@@ -118,8 +127,8 @@ def main() -> None:
     if Path(filename).name != filename:
         raise ValueError("Unexpected APK output path")
     apk = args.metadata.parent / filename
-    # compileSdk 35's release toolchain is fixed in the project for reproducibility.
-    tools = args.android_sdk / "build-tools" / "35.0.0"
+    # Match the explicitly configured buildToolsVersion, independently of compileSdk.
+    tools = args.android_sdk / "build-tools" / "36.0.0"
     manifest = verify_apk(apk, tools, metadata, args.tag, args.expected_certificate_sha256, args.channel)
     args.output.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(apk, args.output / "nuvix.apk")

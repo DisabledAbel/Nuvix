@@ -1,34 +1,53 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing version tag to release (for example v0.1.0)'
+      version:
+        description: 'Committed versionName (1.0.0-rc.1 or 1.0.0), without v'
         required: true
         type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options: [rc, stable]
+        default: rc
 
 permissions:
   contents: read
+  actions: read
 
+# Serialize all versions: RC and stable use one application ID/versionCode sequence.
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: nuvix-release-publication
   cancel-in-progress: false
 
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_CHANNEL: ${{ inputs.channel }}
+
 jobs:
-  build:
-    name: Verify signed release
+  validate:
+    name: Test and prepare unsigned release
+    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      plan_sha256: ${{ steps.prepare.outputs.plan_sha256 }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
+      - name: Validate manual request, production protection, commit and version history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release-control.py preflight --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL"
       - name: Install branding validation dependency
         run: python3 -m pip install -r scripts/requirements-branding.txt
-      - name: Verify release metadata and branding assets
+      - name: Python release policy and branding tests
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -41,48 +60,24 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;36.0.0'
       - name: Set up Gradle and validate wrapper
         uses: gradle/actions/setup-gradle@v6
-      - name: Validate release tag and signing secrets
+      - name: Validate Gradle configuration
+        run: ./gradlew help --stacktrace
+      - name: Test, lint and build unsigned release and debug APKs
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease --stacktrace
+      - name: Verify bounded Sports Hub queries
+        run: python3 scripts/benchmark_sports_queries.py
+      - name: Bind unsigned artifacts to this commit and run
+        id: prepare
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-          EXPECTED_SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'A stable vX.Y.Z tag is required.'; exit 1; }
-          git rev-parse --verify "refs/tags/$RELEASE_TAG" >/dev/null
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
-          for variable in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            test -n "${!variable}" || { echo "Required signing secret missing: $variable"; exit 1; }
-          done
-          [[ "$EXPECTED_SIGNING_CERT_SHA256" =~ ^[[:xdigit:]]{64}$ ]] || { echo 'Repository variable SIGNING_CERT_SHA256 must contain the long-lived signing certificate fingerprint.'; exit 1; }
-          umask 077
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nuvix-release.jks"
-          echo "KEYSTORE_PATH=$RUNNER_TEMP/nuvix-release.jks" >> "$GITHUB_ENV"
-      - name: Test, lint and build signed APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --stacktrace
-      - name: Verify APK and create release assets
-        env:
-          EXPECTED_SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          python3 scripts/create-release.py --tag "$RELEASE_TAG" --android-sdk "$ANDROID_HOME" --expected-certificate-sha256 "$EXPECTED_SIGNING_CERT_SHA256" --output dist
-          git archive --format=tar.gz --prefix="nuvix-$RELEASE_TAG/" HEAD > "dist/nuvix-$RELEASE_TAG-source.tar.gz"
-      - name: Upload verified release assets
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release-control.py prepare --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL"
+      - name: Upload unsigned preparation only
         uses: actions/upload-artifact@v7
         with:
-          name: nuvix-release
-          path: dist/
+          name: nuvix-release-prepared
+          path: prepared/
           if-no-files-found: error
-      - name: Remove signing keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/nuvix-release.jks"
+          retention-days: 7
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -90,29 +85,69 @@ jobs:
           name: release-validation-reports
           path: |
             app/build/reports/tests/
-            app/build/reports/lint-results-debug.*
+            app/build/reports/lint-results-*
           if-no-files-found: ignore
 
-  publish:
-    name: Publish APK and corresponding source
-    needs: build
+  security:
+    name: Supabase migrations and security
+    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: bash scripts/test-supabase.sh
+
+  publish:
+    name: Approve, sign and publish
+    needs: [validate, security]
+    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
     permissions:
       contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_PLAN_SHA256: ${{ needs.validate.outputs.plan_sha256 }}
+      EXPECTED_SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
-          name: nuvix-release
-          path: dist
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v3
+          name: nuvix-release-prepared
+          path: prepared
+      - name: Revalidate approval protection, commit, history and artifact checksums
+        run: python3 scripts/release-control.py verify --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL" --expected-plan-sha256 "$EXPECTED_PLAN_SHA256"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          files: |
-            dist/*.apk
-            dist/update.json
-            dist/SHA256SUMS
-            dist/*-source.tar.gz
-          fail_on_unmatched_files: true
-          body_path: dist/release-notes.md
-          generate_release_notes: true
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;36.0.0'
+      - name: Sign approved APK and verify package, version and certificate
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: python3 scripts/release-control.py sign --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL" --expected-plan-sha256 "$EXPECTED_PLAN_SHA256"
+      - name: Upload all verified assets to a draft, then publish atomically
+        run: python3 scripts/release-control.py publish --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL" --expected-plan-sha256 "$EXPECTED_PLAN_SHA256"
+      - name: Clean signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/nuvix-release.jks"
+      - name: Report failure or cancellation
+        if: failure() || cancelled()
+        run: echo 'Release did not complete. Inspect existing tags/drafts before redispatching; no overwrite or automatic retry is allowed.' >> "$GITHUB_STEP_SUMMARY"
