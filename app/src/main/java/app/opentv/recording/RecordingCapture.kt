@@ -79,7 +79,11 @@ internal class RecordingCapture(
                             if (read == 0) continue
                             // The network may have taken minutes to yield useful MPEG-TS data.
                             // Check before creating/writing output, once per capture, never on reconnect.
-                            if (total == 0L && !beforeFirstWrite()) return Result(0, startRejected = true)
+                            if (total == 0L) {
+                                val approved = try { beforeFirstWrite() }
+                                catch (_: IOException) { return Result(total, "Recording destination is unavailable or full") }
+                                if (!approved) return Result(0, startRejected = true)
+                            }
                             try {
                                 checkStorage()
                                 output.write(buffer, 0, read)

@@ -307,7 +307,9 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
             onDismiss = { editing = null; lateError = null }) { start, end, protect, lock, options ->
             if (!lateBusy) { lateBusy = true; viewModel.updatePreferences(recording, start, end, protect, lock, options) { saved ->
                 lateBusy = false
-                if (saved) { editing = null; lateError = null } else lateError = "Recording changed or has started. Close and review again."
+                if (editing?.id == recording.id) {
+                    if (saved) { editing = null; lateError = null } else lateError = "Recording changed or has started. Close and review again."
+                }
             } }
         }
     }

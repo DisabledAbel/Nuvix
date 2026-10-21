@@ -49,6 +49,50 @@ class RecordingLateStartEngineTest {
             scheduleAlarm = { id, at -> alarms += id to at })
     }
     @After fun close() = db.close()
+    private fun channel(id: Long = 1) = Channel(id = id, sourceId = 1, streamId = "$id", name = "Test $id",
+        categoryId = null, logoUrl = null, epgChannelId = null, number = null, streamUrl = "https://private.invalid/live.ts")
+
+    @Test fun manualUnboundedBookingPinsInheritedPolicyAndPreservesExplicitPolicies() = runBlocking<Unit> {
+        engine.updateGlobalLateStart(LateStartOptions(LateStartPolicy.SKIP_IF_LATE))
+        val inherited = repo.byId(engine.startChannel(channel()))!!
+        assertEquals("RECORD_REMAINING", inherited.lateStartPolicy)
+        assertEquals(0L, inherited.programmeEndMillis)
+        for ((index, policy) in listOf(LateStartPolicy.RECORD_REMAINING, LateStartPolicy.SKIP_IF_LATE,
+            LateStartPolicy.MINIMUM_REMAINING).withIndex()) {
+            val explicit = repo.byId(engine.startChannel(channel(index + 2L),
+                lateStart = LateStartOptions(policy, 23)))!!
+            assertEquals(policy.name, explicit.lateStartPolicy)
+            assertEquals(23, explicit.minimumRemainingMinutes)
+        }
+        val series = repo.byId(engine.startChannel(channel(5), ruleId = 10))!!
+        assertEquals("INHERIT", series.lateStartPolicy)
+        val now = System.currentTimeMillis()
+        val bounded = repo.byId(engine.startChannel(channel(6), Programme(feedId = 1, epgChannelId = "test",
+            title = "Test", startUtcMillis = now - 10_000, endUtcMillis = now + 60_000)))!!
+        assertEquals("INHERIT", bounded.lateStartPolicy)
+    }
+
+    @Test fun reusedSeriesRuleSavesExplicitPolicyAndInheritLeavesItUnchanged() = runBlocking<Unit> {
+        val channel = channel()
+        val now = System.currentTimeMillis()
+        val programme = Programme(feedId = 1, epgChannelId = "test", title = "Game",
+            startUtcMillis = now + 600_000, endUtcMillis = now + 3_600_000)
+        val ruleId = engine.recordSeries(channel, programme, emptyList(), LateStartOptions(LateStartPolicy.SKIP_IF_LATE))
+        val original = repo.ruleById(ruleId)!!
+        assertEquals("SKIP_IF_LATE", original.lateStartPolicy)
+        val selected = LateStartOptions(LateStartPolicy.MINIMUM_REMAINING, 23)
+        assertEquals(ruleId, engine.recordSeries(channel, programme, listOf(programme), selected))
+        val updated = original.copy(lateStartPolicy = selected.policy.name, minimumRemainingMinutes = 23)
+        assertEquals(updated, repo.ruleById(ruleId))
+        val booking = repo.scheduled().single()
+        assertEquals(ruleId, booking.seriesRuleId)
+        assertEquals("INHERIT", booking.lateStartPolicy)
+        assertEquals(selected, RecordingLateStart.resolve(booking, updated, LateStartOptions(LateStartPolicy.SKIP_IF_LATE)))
+        assertEquals(ruleId, engine.recordSeries(channel, programme, listOf(programme)))
+        assertEquals(updated, repo.ruleById(ruleId))
+        assertEquals(1, repo.enabledRules().size)
+        assertEquals(1, repo.scheduled().size)
+    }
     @Test fun dueSkipNeverReclaimsMultiViewAndDuplicateAlarmCannotReviveIt() = runBlocking<Unit> {
         repo.insert(row().copy(lateStartPolicy = "SKIP_IF_LATE"))
         val panel = (manager.reserve(ConnectionRequest("panel", 1, 1, ConnectionPurpose.MULTIVIEW)) as ReservationResult.Reserved).token

@@ -19,6 +19,49 @@ import okio.Buffer
 
 /** Regression tests for recording capture. */
 class RecordingCaptureTest {
+    @Test fun destinationOpenFailureIsTerminalBeforeFirstWrite() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(1))))
+        server.start()
+        try {
+            val output = ByteArrayOutputStream()
+            var reportedBytes = -1L
+            val result = RecordingCapture(OkHttpClient(), retryDelayMillis = 0).copy(
+                server.url("/live.ts").toString(), "Nuvix", output, 0,
+                {}, { reportedBytes = it }, {},
+                beforeFirstWrite = { throw IOException("destination unavailable") },
+                onStarted = { fail("Storage failure must not start capture") },
+                onInterruption = { fail("Storage failure must not report a network interruption") })
+            assertEquals("Recording destination is unavailable or full", result.error)
+            assertEquals(0L, result.bytes)
+            assertEquals(0L, reportedBytes)
+            assertEquals(0, output.size())
+            assertFalse(result.startRejected)
+            assertFalse(result.retryable)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun firstWriteGatePreservesCancellationAndOtherCallbackExceptions() = runBlocking {
+        val server = MockWebServer()
+        repeat(2) { server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(1)))) }
+        server.start()
+        try {
+            for (failure in listOf(kotlinx.coroutines.CancellationException("Canceled"), IllegalStateException("Provider disabled"))) {
+                val output = ByteArrayOutputStream()
+                var reportedBytes = -1L
+                try {
+                    RecordingCapture(OkHttpClient()).copy(server.url("/live.ts").toString(), "Nuvix", output, 0,
+                        {}, { reportedBytes = it }, {}, beforeFirstWrite = { throw failure })
+                    fail("Callback exception must propagate")
+                } catch (caught: Exception) { assertSame(failure, caught) }
+                assertEquals(0L, reportedBytes)
+                assertEquals(0, output.size())
+            }
+            assertEquals(2, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
     /** Checks: storage Failure Is Terminal And Does Not Open Another Provider Connection. */
     @Test fun storageFailureIsTerminalAndDoesNotOpenAnotherProviderConnection() = runBlocking {
         val server = MockWebServer()
