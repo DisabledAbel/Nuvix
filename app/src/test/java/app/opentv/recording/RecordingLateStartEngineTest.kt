@@ -37,7 +37,7 @@ class RecordingLateStartEngineTest {
         filePath = "/missing-never-created.ts", streamUrl = "https://private.invalid/secret", status = RecordingStatus.SCHEDULED,
         scheduledStartMillis = 880_000, programmeStartMillis = 1_000_000, programmeEndMillis = 4_600_000,
         scheduledEndMillis = 4_900_000, protectedRecording = true, lockPadding = true)
-    @Before fun setup() = runBlocking {
+    @Before fun setup() = runBlocking<Unit> {
         db.sources().insert(source); manager.registerSource(source); manager.setMaximumConnections(1, 1)
         val http = OkHttpClient.Builder().addInterceptor { error("No provider requests allowed") }.build()
         val api = XtreamApi(http)
@@ -49,7 +49,7 @@ class RecordingLateStartEngineTest {
             scheduleAlarm = { id, at -> alarms += id to at })
     }
     @After fun close() = db.close()
-    @Test fun dueSkipNeverReclaimsMultiViewAndDuplicateAlarmCannotReviveIt() = runBlocking {
+    @Test fun dueSkipNeverReclaimsMultiViewAndDuplicateAlarmCannotReviveIt() = runBlocking<Unit> {
         repo.insert(row().copy(lateStartPolicy = "SKIP_IF_LATE"))
         val panel = (manager.reserve(ConnectionRequest("panel", 1, 1, ConnectionPurpose.MULTIVIEW)) as ReservationResult.Reserved).token
         val snapshots = manager.snapshots.value
@@ -59,7 +59,7 @@ class RecordingLateStartEngineTest {
         assertEquals(1, db.recordingEvents().forRecording(1).size)
         assertFalse(repo.claimScheduled(1, clock)); manager.release(panel)
     }
-    @Test fun latePolicyRevalidationPreventsReclaimingPanelsAfterAdmissionDelay() = runBlocking {
+    @Test fun latePolicyRevalidationPreventsReclaimingPanelsAfterAdmissionDelay() = runBlocking<Unit> {
         clock = 1_000_000
         repo.insert(row().copy(lateStartPolicy = "SKIP_IF_LATE"))
         manager.reserve(ConnectionRequest("panel", 1, 1, ConnectionPurpose.MULTIVIEW))
@@ -74,14 +74,14 @@ class RecordingLateStartEngineTest {
         assertEquals(RecordingStatus.MISSED, repo.byId(1)!!.status)
         assertEquals(snapshots, manager.snapshots.value)
     }
-    @Test fun reconciliationUsesCurrentDefaultsAndExplicitOverrideIsUnchanged() = runBlocking {
+    @Test fun reconciliationUsesCurrentDefaultsAndExplicitOverrideIsUnchanged() = runBlocking<Unit> {
         repo.insert(row()); repo.insert(row().copy(id = 2, channelId = 2, sourceId = 2, lateStartPolicy = "RECORD_REMAINING"))
         engine.updateGlobalLateStart(LateStartOptions(LateStartPolicy.SKIP_IF_LATE))
         assertEquals(RecordingStatus.MISSED, repo.byId(1)!!.status)
         assertEquals(RecordingStatus.SCHEDULED, repo.byId(2)!!.status)
         assertTrue(alarms.any { it.first == 2L })
     }
-    @Test fun accountConflictWaitsWithoutChangingActiveProtectedLockedOrExtendedWindow() = runBlocking {
+    @Test fun accountConflictWaitsWithoutChangingActiveProtectedLockedOrExtendedWindow() = runBlocking<Unit> {
         repo.insert(row().copy(protectedRecording = false, seriesRuleId = 3))
         val active = row().copy(id = 2, channelId = 2, status = RecordingStatus.RECORDING,
             scheduledStartMillis = 100_000, programmeStartMillis = 100_000, programmeEndMillis = 1_500_000,
@@ -96,7 +96,7 @@ class RecordingLateStartEngineTest {
         assertTrue(engine.prepareDue(1))
         assertEquals(4_900_000, repo.byId(1)!!.scheduledEndMillis)
     }
-    @Test fun anticipatedReleaseMustMeetMinimumAndLaterExtensionIsRevalidated() = runBlocking {
+    @Test fun anticipatedReleaseMustMeetMinimumAndLaterExtensionIsRevalidated() = runBlocking<Unit> {
         repo.insert(row().copy(lateStartPolicy = "MINIMUM_REMAINING", minimumRemainingMinutes = 15, protectedRecording = false, seriesRuleId = 3))
         val blocker = row().copy(id = 2, channelId = 2, status = RecordingStatus.RECORDING,
             scheduledStartMillis = 100_000, programmeStartMillis = 100_000, programmeEndMillis = 3_000_000,
@@ -108,7 +108,7 @@ class RecordingLateStartEngineTest {
         assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.MISSED, repo.byId(1)!!.status)
         assertEquals(1, repo.byId(2)!!.durationRevision)
     }
-    @Test fun independentAccountDoesNotBlockLateRecordingAndRemovedProviderFailsWithoutOutput() = runBlocking {
+    @Test fun independentAccountDoesNotBlockLateRecordingAndRemovedProviderFailsWithoutOutput() = runBlocking<Unit> {
         val independent = source.copy(id = 2, username = "another-account")
         db.sources().insert(independent); manager.registerSource(independent); manager.setMaximumConnections(2, 1)
         repo.insert(row()); repo.insert(row().copy(id = 2, sourceId = 2, status = RecordingStatus.RECORDING))
@@ -117,7 +117,7 @@ class RecordingLateStartEngineTest {
         assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.FAILED, repo.byId(1)!!.status)
         assertFalse(java.io.File(row().filePath).exists())
     }
-    @Test fun stalePreferenceRevisionCannotResetOtherProperties() = runBlocking {
+    @Test fun stalePreferenceRevisionCannotResetOtherProperties() = runBlocking<Unit> {
         clock = 800_000
         repo.insert(row())
         assertTrue(engine.updateLateStart(1, LateStartOptions(LateStartPolicy.MINIMUM_REMAINING, 7), 0))

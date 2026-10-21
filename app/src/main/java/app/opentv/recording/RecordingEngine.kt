@@ -552,7 +552,7 @@ class RecordingEngine(
         for (adjustment in plan.adjustments) {
             if (repo.setScheduledWindow(adjustment.recordingId, adjustment.after.startMillis, adjustment.after.endMillis) == 1) {
                 repo.event(adjustment.recordingId, "PADDING_ADJUSTED", "$reason; minimum unlocked padding adjusted")
-                scheduleAlarm(adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
+                scheduleAlarm(adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(durationClock() + 1_000L))
             }
         }
         durationChanged()
@@ -596,7 +596,7 @@ class RecordingEngine(
             return@withLock false
         }
         val window = plan.windows[recordingId]
-        if (window != null && window.startMillis > System.currentTimeMillis() + 1_000L) {
+        if (window != null && window.startMillis > durationClock() + 1_000L) {
             scheduleAlarm(recordingId, window.startMillis)
             return@withLock false
         }
