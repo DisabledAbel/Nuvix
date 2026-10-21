@@ -362,10 +362,12 @@ class RecordingEngine(
             row.seriesRuleId?.let { repo.ruleById(it) }, settings.recordLateStart.value))
 
     /** A skip is durable before any allocator reclamation or output creation. */
-    suspend fun allowLateStart(row: Recording, at: Long = durationClock()): Boolean {
-        val decision = lateStartDecision(row, at)
+    suspend fun allowLateStart(row: Recording, at: Long = durationClock(), anticipated: Boolean = false): Boolean {
+        val evaluated = lateStartDecision(row, at)
+        val decision = if (anticipated) evaluated.copy(reason = "Expected provider capture start=$at. ${evaluated.reason}") else evaluated
         if (decision.action == RecordingLateStart.Decision.Action.SKIP) {
-            if (repo.commitLateStart(row, at, decision)) {
+            // A prospective admission decision happens now, not at the future release time.
+            if (repo.commitLateStart(row, if (anticipated) durationClock() else at, decision)) {
                 RecordingScheduler.cancel(appContext, row.id)
                 RecordingScheduler.cancelWarning(appContext, row.id)
                 RecordingConflictNotifications.cancel(appContext, row.id)
@@ -586,7 +588,7 @@ class RecordingEngine(
             val next = blockers.map { it.scheduledEndMillis }.filter { it > now }.minOrNull()
             // A running capture is never canceled to make room. Reevaluate the prospective start,
             // then the actual start again when capacity is released (including manual extensions).
-            if (next != null && allowLateStart(recording, next + 1_000L)) {
+            if (next != null && allowLateStart(recording, next + 1_000L, anticipated = true)) {
                 repo.event(recordingId, "WAITING_FOR_ACCOUNT", "Waiting for a provider connection; policy rechecked at expected and actual capture start")
                 scheduleAlarm(recordingId, next + 1_000L)
             } else if (repo.byId(recordingId)?.status == RecordingStatus.SCHEDULED) {

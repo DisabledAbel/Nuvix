@@ -76,7 +76,9 @@ bookings for a later policy-checked attempt.
 Missed decisions are committed atomically with credential-free history before playback
 reclamation. First useful capture records policy/threshold, program and padded bounds, actual
 start, delay and whether content was missed; finalization adds Completed/Partial/Missed/Failed
-or Canceled. History explains program-start skips, insufficient remaining time, waiting for
+or Canceled. A skip based on expected future provider availability is timestamped when the
+decision is made and labels the anticipated start separately; it never invents an actual capture
+start. History explains program-start skips, insufficient remaining time, waiting for
 provider capacity/network, and capturing remaining content. It contains no stream URL or
 provider credentials. A start event's timing source identifies scheduler/device wakeup or provider
 availability collectively; Android cannot reliably attribute every delayed alarm to a sleep cause.
