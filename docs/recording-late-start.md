@@ -65,9 +65,12 @@ a rejected start creates no persistent empty capture file. If slow external stor
 policy boundary during opening, the newly created empty destination is removed after closing.
 
 Account conflicts keep independent pools separate and honor explicitly linked shared accounts.
-A finite active recording can defer a waiting booking until capacity is expected; the prospective
-start and the eventual start both use its policy. A duration extension triggers another check when
-the wait expires. No active recording is silently canceled to admit a late booking. Protection,
+An active recording can defer a waiting booking until capacity is expected; the prospective
+start and the eventual start both use its policy. A projection that would skip stays pending until
+the actual policy cutoff, so an earlier release can still permit capture. Closing/releasing a
+capture immediately rearms other waiting bookings on that account, including after an early
+manual stop, while retaining the releasing job's retry backoff. A duration extension triggers
+another check when the wait expires. No active recording is silently canceled to admit a late booking. Protection,
 manual-before-series scheduling priority, padding locks and the existing conflict planner remain
 in force. Unknown additional-account allowance still requires existing approval; policy never
 grants provider access. Empty transient network attempts release capacity and rearm bounded
@@ -76,9 +79,9 @@ bookings for a later policy-checked attempt.
 Missed decisions are committed atomically with credential-free history before playback
 reclamation. First useful capture records policy/threshold, program and padded bounds, actual
 start, delay and whether content was missed; finalization adds Completed/Partial/Missed/Failed
-or Canceled. A skip based on expected future provider availability is timestamped when the
-decision is made and labels the anticipated start separately; it never invents an actual capture
-start. History explains program-start skips, insufficient remaining time, waiting for
+or Canceled. A projected wait is timestamped when the decision is made and labels the anticipated start
+separately. Only a current policy rejection marks Missed; projections never invent an actual
+capture start. History explains program-start skips, insufficient remaining time, waiting for
 provider capacity/network, and capturing remaining content. It contains no stream URL or
 provider credentials. A start event's timing source identifies scheduler/device wakeup or provider
 availability collectively; Android cannot reliably attribute every delayed alarm to a sleep cause.

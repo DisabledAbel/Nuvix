@@ -123,8 +123,8 @@ class RecordingRepository(
         dao.retryPreserving(id, filePath, archive)
 
     /** Appends a durable recording activity or policy-decision event. */
-    suspend fun event(id: Long, kind: String, message: String) {
-        events?.insert(RecordingEvent(recordingId = id, atMillis = System.currentTimeMillis(), kind = kind, message = message))
+    suspend fun event(id: Long, kind: String, message: String, atMillis: Long = System.currentTimeMillis()) {
+        events?.insert(RecordingEvent(recordingId = id, atMillis = atMillis, kind = kind, message = message))
     }
 
     /** Observes the recording's chronological activity history. */

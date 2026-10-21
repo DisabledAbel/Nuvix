@@ -33,6 +33,8 @@ class RecordingLateStartTest {
         assertEquals(SKIP, decision(start + 5_001, LateStartPolicy.SKIP_IF_LATE).action)
     }
     @Test fun minimumEqualityIsInclusiveAndCustomThresholdIgnoresPaddingAndExtensions() {
+        assertEquals(end - 15 * 60_000 + 1, RecordingLateStart.recheckAt(row(), LateStartOptions(LateStartPolicy.MINIMUM_REMAINING, 15), start))
+        assertEquals(start + 5_001, RecordingLateStart.recheckAt(row(), LateStartOptions(LateStartPolicy.SKIP_IF_LATE), start))
         assertEquals(CAPTURE, decision(end - 15 * 60_000, LateStartPolicy.MINIMUM_REMAINING, 15).action)
         assertEquals(SKIP, decision(end - 15 * 60_000 + 1, LateStartPolicy.MINIMUM_REMAINING, 15).action)
         assertEquals(CAPTURE, decision(end - 7 * 60_000, LateStartPolicy.MINIMUM_REMAINING, 7).action)

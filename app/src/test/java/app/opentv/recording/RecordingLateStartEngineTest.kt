@@ -88,11 +88,17 @@ class RecordingLateStartEngineTest {
             scheduledEndMillis = 1_900_000, sizeBytes = 564, startedAtMillis = 100_000,
             originalEndMillis = 1_800_000, durationRevision = 2, manualExtensionMillis = 100_000)
         repo.insert(active)
+        val independent = source.copy(id = 3, username = "independent-account")
+        db.sources().insert(independent); manager.registerSource(independent); manager.setMaximumConnections(3, 1)
+        repo.insert(row().copy(id = 3, channelId = 3, sourceId = 3))
         assertFalse(engine.prepareDue(1))
         assertEquals(RecordingStatus.SCHEDULED, repo.byId(1)!!.status)
         assertEquals(active, repo.byId(2)); assertEquals(1L to 1_901_000L, alarms.last())
-        clock = 1_901_000
-        repo.markFinished(2, true, clock, 564, null)
+        clock = 1_100_000 // The user stops the active capture before its expected end.
+        repo.markFinished(2, false, clock, 564, "Stopped early")
+        alarms.clear()
+        engine.rearmScheduled(excludingId = 2, releasedSourceId = 1)
+        assertEquals(listOf(1L to 1_101_000L), alarms)
         assertTrue(engine.prepareDue(1))
         assertEquals(4_900_000, repo.byId(1)!!.scheduledEndMillis)
     }
@@ -105,11 +111,16 @@ class RecordingLateStartEngineTest {
         assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.SCHEDULED, repo.byId(1)!!.status)
         db.recordings().update(blocker.copy(scheduledEndMillis = 4_000_000, durationRevision = 1))
         clock = 3_501_000
+        assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.SCHEDULED, repo.byId(1)!!.status)
+        assertEquals(1L to 3_700_001L, alarms.last())
+        val waiting = db.recordingEvents().forRecording(1).last()
+        assertEquals(clock, waiting.atMillis)
+        assertTrue(waiting.message.contains("expected capture start=4001000"))
+        clock = 3_700_001 // Equality was still allowed one millisecond earlier.
         assertFalse(engine.prepareDue(1)); assertEquals(RecordingStatus.MISSED, repo.byId(1)!!.status)
         assertEquals(1, repo.byId(2)!!.durationRevision)
         val missedEvent = db.recordingEvents().forRecording(1).single { it.kind == "MISSED" }
         assertEquals(clock, missedEvent.atMillis)
-        assertTrue(missedEvent.message.contains("Expected provider capture start=4001000"))
         assertEquals(0L, repo.byId(1)!!.startedAtMillis)
     }
     @Test fun independentAccountDoesNotBlockLateRecordingAndRemovedProviderFailsWithoutOutput() = runBlocking<Unit> {
