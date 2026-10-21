@@ -14,7 +14,7 @@ class MultiViewPreviewCatalogTest {
         val source = Source(id = 7, name = "My Provider", kind = SourceKind.XTREAM,
             url = "https://example.invalid", username = "private-user", password = "private-password")
         val registered = mutableListOf<Source>()
-        val result = loadMultiViewPreviewChannels(presentation(1 to 7), { channel(1, 7) }, { source }, registered::add)
+        val result = loadMultiViewPreviewChannels(presentation(1L to 7L), { channel(1, 7) }, { source }, registered::add)
         assertThat(registered).containsExactly(source)
         assertThat(result).containsExactly(MultiViewPreviewChannel(1, 7, "Channel 1", "My Provider"))
         assertThat(result.toString()).doesNotContain("private-user")
@@ -27,7 +27,7 @@ class MultiViewPreviewCatalogTest {
             Source(id = 8, name = "Disabled", kind = SourceKind.M3U, url = "https://example.invalid", enabled = false)).associateBy { it.id }
         val catalog = listOf(channel(2, 9), channel(3, 7).copy(hidden = true), channel(4, 8)).associateBy { it.id }
         val registered = mutableListOf<Source>()
-        val result = loadMultiViewPreviewChannels(presentation(1 to 7, 2 to 7, 3 to 7, 4 to 8),
+        val result = loadMultiViewPreviewChannels(presentation(1L to 7L, 2L to 7L, 3L to 7L, 4L to 8L),
             { catalog[it] }, { sources[it] }, registered::add)
         assertThat(result).isEmpty()
         assertThat(registered).isEmpty()
@@ -36,7 +36,7 @@ class MultiViewPreviewCatalogTest {
     @Test fun savedChannelsCannotBypassCurrentCategoryVisibility() = runTest {
         val source = Source(id = 7, name = "Provider", kind = SourceKind.M3U, url = "https://example.invalid")
         val registered = mutableListOf<Source>()
-        val result = loadMultiViewPreviewChannels(presentation(1 to 7), { channel(1, 7) }, { source },
+        val result = loadMultiViewPreviewChannels(presentation(1L to 7L), { channel(1, 7) }, { source },
             registerSource = registered::add, visible = { false })
         assertThat(result).isEmpty()
         assertThat(registered).isEmpty()
