@@ -2,7 +2,7 @@
 # Keep compiler, generated Room code and AndroidX on the SDK 35 / API 23 matrix.
 # Newer KSP needs AGP APIs absent in 8.7.3; core 1.19.1 requires SDK 37 / AGP 9.1.
 # Upgrade these together in a separate toolchain migration.
-agp = "8.7.3"
+agp = "9.4.1"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
 coreKtx = "1.13.1"
