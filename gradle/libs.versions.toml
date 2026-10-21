@@ -24,7 +24,7 @@ zxing = "3.5.4"
 navigation = "2.8.4"
 junit = "4.13.2"
 truth = "1.4.5"
-robolectric = "4.17"
+robolectric = "4.13"
 androidxTestExt = "1.2.1"
 
 [libraries]
