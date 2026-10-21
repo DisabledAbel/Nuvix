@@ -39,6 +39,7 @@ class RecordingEngine(
     private val durationClock: () -> Long = System::currentTimeMillis,
     private val durationChanged: suspend () -> Unit = { RecordingScheduler.rearmWarnings(appContext) },
     private val durationStop: (Long) -> Unit = { RecordingService.stop(appContext, it) },
+    private val scheduleAlarm: (Long, Long) -> Unit = { id, at -> RecordingScheduler.set(appContext, id, at) },
 ) {
 
     /** Start recording [channel] now. [programme], when given, names and time-bounds the capture. */
@@ -47,6 +48,7 @@ class RecordingEngine(
         programme: Programme? = null,
         ruleId: Long? = null,
         profileId: Long = settings.activeProfileId.value,
+        lateStart: LateStartOptions = LateStartOptions(),
     ): Long = bookingLock.withLock {
         val requestTime = System.currentTimeMillis()
         (repo.active() + repo.scheduled()).firstOrNull {
@@ -75,7 +77,7 @@ class RecordingEngine(
             filePath = locator,
             streamUrl = recordUrlFor(channel.streamUrl, source?.kind),
             userAgent = ua,
-            scheduledStartMillis = programme?.startUtcMillis?.minus(settings.recordPadStartMinutes.value.coerceAtLeast(0) * 60_000L) ?: now,
+            scheduledStartMillis = minOf(now, programme?.startUtcMillis?.minus(settings.recordPadStartMinutes.value.coerceAtLeast(0) * 60_000L) ?: now),
             programmeStartMillis = programme?.startUtcMillis ?: 0,
             programmeEndMillis = programme?.endUtcMillis ?: 0,
             padStartMinutes = settings.recordPadStartMinutes.value.coerceAtLeast(0),
@@ -84,12 +86,13 @@ class RecordingEngine(
             scheduledEndMillis = programme?.endUtcMillis
                 ?.let { it + settings.recordPadEndMinutes.value.coerceAtLeast(0) * 60_000L } ?: 0,
             status = RecordingStatus.SCHEDULED,
+            lateStartPolicy = lateStart.policy.name, minimumRemainingMinutes = lateStart.minimumMinutes,
             seriesRuleId = ruleId,
             profileId = profileId,
         )
         val id = repo.insert(recording)
         repo.event(id, "SCHEDULED", "Immediate recording requested")
-        RecordingScheduler.set(appContext, id, now + 1_000L)
+        scheduleAlarm(id, now + 1_000L)
         startServiceOrFail(id)
         id
     }
@@ -106,12 +109,13 @@ class RecordingEngine(
         programme: Programme,
         ruleId: Long? = null,
         profileId: Long = settings.activeProfileId.value,
+        lateStart: LateStartOptions = LateStartOptions(),
     ): Long {
         val now = System.currentTimeMillis()
         return if (programme.startUtcMillis > now + LEAD_MILLIS) {
-            scheduleProgramme(channel, programme, ruleId, profileId)
+            scheduleProgramme(channel, programme, ruleId, profileId, lateStart)
         } else {
-            startChannel(channel, programme, ruleId, profileId)
+            startChannel(channel, programme, ruleId, profileId, lateStart)
         }
     }
 
@@ -121,6 +125,7 @@ class RecordingEngine(
         programme: Programme,
         ruleId: Long? = null,
         profileId: Long = settings.activeProfileId.value,
+        lateStart: LateStartOptions = LateStartOptions(),
     ): Long = bookingLock.withLock {
         // Padding: start early and keep going past the listed end, so a late start or an overrun
         // (sport, news) isn't clipped — the Sky-Q behaviour.
@@ -163,15 +168,16 @@ class RecordingEngine(
             padStartMinutes = settings.recordPadStartMinutes.value.coerceAtLeast(0),
             padEndMinutes = settings.recordPadEndMinutes.value.coerceAtLeast(0),
             status = RecordingStatus.SCHEDULED,
+            lateStartPolicy = lateStart.policy.name, minimumRemainingMinutes = lateStart.minimumMinutes,
             seriesRuleId = ruleId,
             profileId = profileId,
         )
         val id = repo.insert(recording)
         repo.event(id, "SCHEDULED", "Recording scheduled with configured padding")
         val armAt = scheduledStart.coerceAtLeast(System.currentTimeMillis() + 1_000L)
-        RecordingScheduler.set(appContext, id, armAt)
+        scheduleAlarm(id, armAt)
         // Warning review is independent of optional recording auto-navigation.
-        RecordingScheduler.rearmWarnings(appContext)
+        durationChanged()
         id
     }
 
@@ -191,13 +197,13 @@ class RecordingEngine(
         when {
             start > now + LEAD_MILLIS -> {
                 if (!prepareRetry(current)) return@withLock false
-                RecordingScheduler.set(appContext, recording.id, start)
+                scheduleAlarm(recording.id, start)
                 true
             }
             end == 0L || end > now -> {
                 if (!prepareRetry(current)) return@withLock false
                 // Durable fallback covers process death between the status transition and start.
-                RecordingScheduler.set(appContext, recording.id, now + 1_000L)
+                scheduleAlarm(recording.id, now + 1_000L)
                 startServiceOrFail(recording.id)
                 true
             }
@@ -212,19 +218,14 @@ class RecordingEngine(
      * re-setting an existing alarm is idempotent, so this is safe to run every time.
      */
     suspend fun rearmScheduled() {
-        val now = System.currentTimeMillis()
+        repo.failInterrupted()
+        val now = durationClock()
         for (rec in repo.scheduled()) {
-            if (rec.scheduledEndMillis > 0 && rec.scheduledEndMillis <= now) {
-                repo.setScheduledStatus(rec.id, RecordingStatus.MISSED, "Recording window elapsed while capture was unavailable")
-                repo.event(rec.id, "MISSED", "Recording window elapsed while capture was unavailable")
-                RecordingScheduler.cancel(appContext, rec.id)
-                RecordingScheduler.cancelWarning(appContext, rec.id)
-                continue
-            }
+            if (rec.scheduledStartMillis <= now && !allowLateStart(rec, now)) continue
             val at = if (rec.scheduledStartMillis <= now) now + 1_000L else rec.scheduledStartMillis
-            RecordingScheduler.set(appContext, rec.id, at)
+            scheduleAlarm(rec.id, at)
         }
-        RecordingScheduler.rearmWarnings(appContext)
+        durationChanged()
     }
 
     /** Cancel a scheduled recording: disarm the alarm (and its pre-warning) and drop the row. */
@@ -234,7 +235,7 @@ class RecordingEngine(
         if (repo.cancelScheduled(recordingId)) {
             repo.event(recordingId, "CANCELED", "Scheduled recording canceled by user")
         }
-        RecordingScheduler.rearmWarnings(appContext)
+        durationChanged()
     }
 
     /**
@@ -242,7 +243,8 @@ class RecordingEngine(
      * every matching future airing already in the guide. Airings beyond the loaded window get
      * picked up by [scheduleMatching] on the next guide refresh.
      */
-    suspend fun recordSeries(channel: Channel, programme: Programme, windowProgrammes: List<Programme>): Long {
+    suspend fun recordSeries(channel: Channel, programme: Programme, windowProgrammes: List<Programme>,
+        lateStart: LateStartOptions = LateStartOptions()): Long {
         val key = titleKeyOf(programme.title)
         val existing = repo.ruleForChannelTitle(channel.id, key)
         val ruleId = existing?.id ?: repo.addRule(
@@ -252,6 +254,7 @@ class RecordingEngine(
                 titleKey = key,
                 title = programme.title,
                 createdAtMillis = System.currentTimeMillis(),
+                lateStartPolicy = lateStart.policy.name, minimumRemainingMinutes = lateStart.minimumMinutes,
             ),
         )
         scheduleMatching(channel, key, ruleId, windowProgrammes)
@@ -338,8 +341,11 @@ class RecordingEngine(
 
     /** Updates recording protection and padding choices subject to the current lifecycle state. */
     suspend fun updatePreferences(recordingId: Long, padStartMinutes: Int, padEndMinutes: Int,
-        protectedRecording: Boolean, lockPadding: Boolean) = bookingLock.withLock { dueLock.withLock {
-        val recording = repo.byId(recordingId) ?: return@withLock
+        protectedRecording: Boolean, lockPadding: Boolean, lateStart: LateStartOptions? = null,
+        lateRevision: Long? = null): Boolean = bookingLock.withLock { dueLock.withLock {
+        val recording = repo.byId(recordingId) ?: return@withLock false
+        if (lateRevision != null && lateRevision != recording.lateStartRevision) return@withLock false
+        if (lateStart != null && !repo.setLateStart(recording, lateStart)) return@withLock false
         val startPad = padStartMinutes.coerceIn(0, 180)
         val endPad = padEndMinutes.coerceIn(0, 180)
         val canChangePadding = recording.status == RecordingStatus.SCHEDULED && recording.programmeStartMillis > 0 && recording.programmeEndMillis > 0
@@ -348,7 +354,45 @@ class RecordingEngine(
             recording.programmeStartMillis - startPad * 60_000L, recording.programmeEndMillis + endPad * 60_000L)
         repo.event(recordingId, "PREFERENCES", "User updated recording protection or padding preferences")
         if (recording.status == RecordingStatus.SCHEDULED) rearmScheduled()
+        true
     } }
+
+    suspend fun lateStartDecision(row: Recording, at: Long = durationClock()): RecordingLateStart.Decision =
+        RecordingLateStart.evaluate(row, at, RecordingLateStart.resolve(row,
+            row.seriesRuleId?.let { repo.ruleById(it) }, settings.recordLateStart.value))
+
+    /** A skip is durable before any allocator reclamation or output creation. */
+    suspend fun allowLateStart(row: Recording, at: Long = durationClock()): Boolean {
+        val decision = lateStartDecision(row, at)
+        if (decision.action == RecordingLateStart.Decision.Action.SKIP) {
+            if (repo.commitLateStart(row, at, decision)) {
+                RecordingScheduler.cancel(appContext, row.id)
+                RecordingScheduler.cancelWarning(appContext, row.id)
+                RecordingConflictNotifications.cancel(appContext, row.id)
+            }
+            return false
+        }
+        if (decision.action == RecordingLateStart.Decision.Action.WAIT && row.status == RecordingStatus.PREPARING && repo.deferPreparing(row.id))
+            scheduleAlarm(row.id, row.scheduledStartMillis)
+        return decision.action == RecordingLateStart.Decision.Action.CAPTURE
+    }
+
+    suspend fun updateLateStart(id: Long, options: LateStartOptions, revision: Long): Boolean = dueLock.withLock {
+        val row = repo.byId(id) ?: return@withLock false
+        if (row.lateStartRevision != revision || !repo.setLateStart(row, options)) return@withLock false
+        repo.event(id, "LATE_START_POLICY_CHANGED", "User selected ${options.policy.name}; minimum ${options.minimumMinutes} minutes")
+        rearmScheduled()
+        true
+    }
+
+    suspend fun updateSeriesLateStart(id: Long, options: LateStartOptions) = dueLock.withLock {
+        if (repo.setRuleLateStart(id, options)) rearmScheduled()
+    }
+
+    suspend fun updateGlobalLateStart(options: LateStartOptions) = dueLock.withLock {
+        settings.setRecordLateStart(options)
+        rearmScheduled()
+    }
 
     /** Read-only review: no streams, reservations, padding or other recordings are modified. */
     suspend fun previewDuration(id: Long, choice: DurationChoice): DurationReview {
@@ -492,10 +536,10 @@ class RecordingEngine(
 
     /** Builds an account-aware conflict preview for scheduled recordings. */
     suspend fun previewConflicts(): DvrConflictPlan {
-        val manager = AccountConnectionManager.get(appContext)
+        val manager = durationConnections
         val candidates = repo.scheduled() + repo.active()
         candidates.map { it.sourceId }.distinct().forEach { id -> sources.byId(id)?.let { manager.registerSource(it) } }
-        return DvrConflictPolicy.resolve(candidates, System.currentTimeMillis(),
+        return DvrConflictPolicy.resolve(candidates, durationClock(),
             accountForSource = { manager.accountKeyForSource(it) ?: "unregistered:$it" },
             capacityForAccount = { account -> manager.snapshots.value.firstOrNull { it.accountKey == account }?.effectiveMaximum })
     }
@@ -508,40 +552,55 @@ class RecordingEngine(
         for (adjustment in plan.adjustments) {
             if (repo.setScheduledWindow(adjustment.recordingId, adjustment.after.startMillis, adjustment.after.endMillis) == 1) {
                 repo.event(adjustment.recordingId, "PADDING_ADJUSTED", "$reason; minimum unlocked padding adjusted")
-                RecordingScheduler.set(appContext, adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
+                scheduleAlarm(adjustment.recordingId, adjustment.after.startMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
             }
         }
-        RecordingScheduler.rearmWarnings(appContext)
+        durationChanged()
     }
 
     /** Resolve known recording-account contention at the deadline, never infer unknown capacity. */
     suspend fun prepareDue(recordingId: Long): Boolean = dueLock.withLock {
         val recording = repo.byId(recordingId) ?: return@withLock false
         if (recording.status != RecordingStatus.SCHEDULED) return@withLock false
-        val now = System.currentTimeMillis()
-        val manager = AccountConnectionManager.get(appContext)
-        sources.byId(recording.sourceId)?.let { manager.registerSource(it) }
+        val now = durationClock()
+        if (!allowLateStart(recording, now)) {
+            if (recording.scheduledStartMillis > now) scheduleAlarm(recordingId, recording.scheduledStartMillis)
+            return@withLock false
+        }
+        val manager = durationConnections
+        val source = sources.byId(recording.sourceId)?.takeIf { it.enabled }
+        if (source == null) {
+            if (repo.setScheduledStatus(recordingId, RecordingStatus.FAILED, "Recording provider was removed or disabled"))
+                repo.event(recordingId, "FAILED", "Recording provider was removed or disabled; no connection opened")
+            return@withLock false
+        }
+        manager.registerSource(source)
         val plan = previewConflicts()
         // Deadline fallback changes only this due booking; other accounts and future deadlines
         // retain their pending user decisions. Explicit applyConflictFallback previews all rows.
         applyAdjustments(plan.copy(adjustments = plan.adjustments.filter { it.recordingId == recordingId }),
             "Unattended recording-priority fallback")
         if (recordingId in plan.rejectedIds) {
-            repo.setScheduledStatus(recordingId, RecordingStatus.MISSED, "Account capacity is reserved by a higher-priority recording")
-            repo.event(recordingId, "MISSED", "Unattended conflict fallback preserved the higher-priority recording")
+            val account = manager.accountKeyForSource(recording.sourceId)
+            val blockers = repo.active().filter { manager.accountKeyForSource(it.sourceId) == account }
+            val next = blockers.map { it.scheduledEndMillis }.filter { it > now }.minOrNull()
+            // A running capture is never canceled to make room. Reevaluate the prospective start,
+            // then the actual start again when capacity is released (including manual extensions).
+            if (next != null && allowLateStart(recording, next + 1_000L)) {
+                repo.event(recordingId, "WAITING_FOR_ACCOUNT", "Waiting for a provider connection; policy rechecked at expected and actual capture start")
+                scheduleAlarm(recordingId, next + 1_000L)
+            } else if (repo.byId(recordingId)?.status == RecordingStatus.SCHEDULED) {
+                repo.setScheduledStatus(recordingId, RecordingStatus.MISSED, "Account capacity is reserved by a higher-priority recording")
+                repo.event(recordingId, "MISSED", "Unattended conflict fallback preserved the higher-priority recording")
+            }
             return@withLock false
         }
         val window = plan.windows[recordingId]
         if (window != null && window.startMillis > System.currentTimeMillis() + 1_000L) {
-            RecordingScheduler.set(appContext, recordingId, window.startMillis)
+            scheduleAlarm(recordingId, window.startMillis)
             return@withLock false
         }
-        val victims = DvrStartPolicy.victims(recording, repo.active(), plan.rejectedIds, now,
-            manager.snapshotForSource(recording.sourceId)?.effectiveMaximum, manager::accountKeyForSource)
-        for (active in victims) {
-            repo.event(active.id, "CONFLICT", "Higher-priority recording requires this account capacity")
-            RecordingService.stopForConflict(active.id)
-        }
+        // Existing active captures retain their reservations, regardless of a newly due booking.
         true
     }
 

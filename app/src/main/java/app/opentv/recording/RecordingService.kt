@@ -120,8 +120,15 @@ class RecordingService : Service() {
         var sink: RecordingStorage.Sink? = null
         var token: ReservationToken? = null
         var late = false
+        var interrupted = false
         var programmeEnd = 0L
         var deadlineWatcher: Job? = null
+        var actualPath: String? = null
+        var gateRow: Recording? = null
+        var gateDecision: RecordingLateStart.Decision? = null
+        var mediaReadyAt = 0L
+        var storageMonitor: () -> Unit = {}
+        var writeAttempted = false
         val connections = AccountConnectionManager.get(applicationContext)
         try {
             repo.failInterrupted()
@@ -129,41 +136,47 @@ class RecordingService : Service() {
             claimed = repo.claimScheduled(id, System.currentTimeMillis())
             if (!claimed) return // Duplicate alarm, canceled booking, or already finished capture.
             val recording = repo.byId(id) ?: return
-            val now = System.currentTimeMillis()
-            if (recording.scheduledEndMillis > 0 && now >= recording.scheduledEndMillis) {
-                repo.setStatus(id, RecordingStatus.MISSED, "Recording window ended before capture could start")
-                repo.event(id, "MISSED", "Recording window ended before capture could start")
-                claimed = false
-                return
-            }
+            if (!graph.recordingEngine.allowLateStart(recording)) { claimed = false; return }
             programmeEnd = recording.programmeEndMillis.takeIf { it > 0 } ?: recording.scheduledEndMillis
-            late = isLateStart(recording, now)
-            graph.sourceRepository.byId(recording.sourceId)?.let { connections.registerSource(it) }
+            val source = graph.sourceRepository.byId(recording.sourceId)?.takeIf { it.enabled }
+                ?: run { error = "Recording provider was removed or disabled"; return }
+            connections.registerSource(source)
             val request = ConnectionRequest("recording:$id", generations.incrementAndGet(), recording.sourceId, ConnectionPurpose.RECORDING)
             val beforeViewing = connections.snapshotForSource(recording.sourceId)?.reservations
                 .orEmpty().filter { it.token.purpose != ConnectionPurpose.RECORDING }.map { it.token }
-            when (val reservation = connections.reserveForRecording(request, allowInterruptLive = true)) {
+            val beforeAdmission = repo.byId(id) ?: return
+            if (!graph.recordingEngine.allowLateStart(beforeAdmission)) { claimed = false; return }
+            when (val reservation = connections.reserveForRecording(request, allowInterruptLive = true,
+                canStart = { repo.byId(id)?.let { graph.recordingEngine.allowLateStart(it) } == true })) {
                 is ReservationResult.Reserved -> token = reservation.token
                 is ReservationResult.ApprovalRequired -> {
                     connections.discardChallenge(reservation.challenge)
                     error = "Account allowance is unknown; an additional recording connection needs confirmation"
                     return
                 }
-                is ReservationResult.Denied -> { error = reservation.reason; return }
+                is ReservationResult.Denied -> {
+                    // A concurrent capture can win admission after the conflict preview. Retry
+                    // without retaining a reservation, creating a file or canceling its owner.
+                    if (repo.byId(id)?.status != RecordingStatus.PREPARING) { claimed = false; return }
+                    if (repo.deferPreparing(id)) {
+                        RecordingScheduler.set(applicationContext, id, System.currentTimeMillis() + 5_000L)
+                        claimed = false
+                    } else error = "Provider connection is unavailable"
+                    return
+                }
             }
             repo.event(id, "PROVIDER_SELECTED", "Authorized provider selected; account connection reserved")
             val afterViewing = connections.snapshotForSource(recording.sourceId)?.reservations.orEmpty().map { it.token }.toSet()
             val reclaimed = beforeViewing.filter { it !in afterViewing }
             if (reclaimed.isNotEmpty()) repo.event(id, "VIEWING_RECLAIMED", "Unattended recording priority released ${reclaimed.size} conflicting viewing connection(s); unrelated accounts retained")
-            RecordingStorage.checkHeadroom(recording.filePath,
-                RecordingStorage.MIN_FREE_BYTES * captures.size.coerceAtLeast(1))
-            sink = RecordingStorage.openSink(applicationContext, graph.settings, recording.filePath)
-            var actualPath = recording.filePath
-            sink.resolvedLocator?.let { actual ->
-                actualPath = actual
-                if (actual != recording.filePath) repo.setFilePath(id, actual)
+            // Storage is deliberately lazy. An HTTP response alone is not captured content.
+            val output = object : java.io.OutputStream() {
+                override fun write(value: Int) { writeAttempted = true; requireNotNull(sink).output.write(value) }
+                override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                    writeAttempted = true
+                    requireNotNull(sink).output.write(bytes, offset, length)
+                }
             }
-            RecordingLiveState.markActive(id, actualPath)
             // This job owns no socket or reservation. An edit only changes the durable row.
             // Claiming FINALIZING and editing the deadline serialize in SQLite.
             deadlineWatcher = scope.launch {
@@ -184,18 +197,46 @@ class RecordingService : Service() {
                 }
             }
             val result = RecordingCapture(graph.streamingHttpClient).copy(
-                recording.streamUrl, recording.userAgent, sink.output, 0,
+                recording.streamUrl, recording.userAgent, output, 0,
                 onCall = { call -> capture.call = call; if (!capture.job.isActive) call?.cancel() },
                 onProgress = { bytes ->
                     total = bytes
                     withContext(NonCancellable) { repo.setSize(id, bytes) }
                 },
-                checkStorage = RecordingStorage.storageMonitor(actualPath),
+                checkStorage = { storageMonitor() },
+                beforeFirstWrite = {
+                    val fresh = repo.byId(id)
+                    if (fresh == null || !graph.recordingEngine.allowLateStart(fresh)) false
+                    else {
+                        RecordingStorage.checkHeadroom(fresh.filePath,
+                            RecordingStorage.MIN_FREE_BYTES * captures.size.coerceAtLeast(1))
+                        sink = RecordingStorage.openSink(applicationContext, graph.settings, fresh.filePath)
+                        actualPath = sink?.resolvedLocator ?: fresh.filePath
+                        storageMonitor = RecordingStorage.storageMonitor(requireNotNull(actualPath))
+                        if (actualPath != fresh.filePath) repo.setFilePath(id, requireNotNull(actualPath))
+                        // SAF/NAS opening can itself be slow. Recheck with fresh bounds/defaults.
+                        val ready = repo.byId(id)
+                        mediaReadyAt = System.currentTimeMillis()
+                        if (ready == null || !graph.recordingEngine.allowLateStart(ready, mediaReadyAt)) false
+                        else {
+                            gateRow = ready
+                            gateDecision = graph.recordingEngine.lateStartDecision(ready, mediaReadyAt)
+                            gateDecision?.action == RecordingLateStart.Decision.Action.CAPTURE
+                        }
+                    }
+                },
+                onInterruption = {
+                    interrupted = true
+                    repo.markContentMissed(id)
+                    repo.event(id, "CAPTURE_INTERRUPTED", "Network interruption after useful capture; existing recovery retained and result will be Partial")
+                },
                 onStarted = {
-                    val firstByteAt = System.currentTimeMillis()
-                    late = isLateStart(recording, firstByteAt)
-                    repo.markStarted(id, firstByteAt)
-                    repo.event(id, "STARTED", if (late) "Capture started late; remaining content will be Partial" else "Capture started")
+                    val ready = requireNotNull(gateRow)
+                    val decision = requireNotNull(gateDecision)
+                    late = decision.contentMissed
+                    if (!repo.commitLateStart(ready, mediaReadyAt, decision))
+                        throw CancellationException("Recording changed before useful capture was committed")
+                    RecordingLiveState.markActive(id, requireNotNull(actualPath))
                     connections.markActive(requireNotNull(token))
                     // A disabled notification or an unavailable Activity must not stop capture.
                     runCatching { RecordingAlarmReceiver.notifyCaptureStarted(applicationContext, recording) }
@@ -203,6 +244,17 @@ class RecordingService : Service() {
             )
             total = result.bytes
             error = result.error
+            if (result.bytes == 0L && result.retryable && recording.scheduledEndMillis > System.currentTimeMillis() && repo.deferPreparing(id)) {
+                repo.event(id, "WAITING_FOR_NETWORK", "Useful stream data unavailable; policy will be rechecked when retrying")
+                RecordingScheduler.set(applicationContext, id, System.currentTimeMillis() + 30_000L)
+                claimed = false
+            }
+            if (result.startRejected) {
+                val current = repo.byId(id)
+                if (current?.status == RecordingStatus.PREPARING && repo.deferPreparing(id))
+                    RecordingScheduler.set(applicationContext, id, maxOf(current.scheduledStartMillis, System.currentTimeMillis() + 1_000L))
+                claimed = false // Shared gate already persisted MISSED, or the clock moved before start.
+            }
         } catch (_: CancellationException) {
             error = capture.stopReason ?: if ((capture.userStopped || capture.deadlineReached) && programmeEnd > System.currentTimeMillis())
                 "Recording stopped before the programme finished"
@@ -222,14 +274,30 @@ class RecordingService : Service() {
                 // Keep tail-following active until all output has actually been closed.
                 RecordingLiveState.markInactive(id)
                 token?.let { connections.release(it) }
+                // Only remove a destination created by this job, and only if it contains no media.
+                if (!writeAttempted && sink != null) actualPath?.let {
+                    RecordingStorage.delete(applicationContext, graph.settings, it)
+                }
                 if (claimed) {
-                    val reason = error ?: if (late) "Recording started after the programme began" else null
+                    // A destination can throw after accepting some bytes. Never delete that file.
+                    if (writeAttempted && total == 0L) actualPath?.let { path ->
+                        total = RecordingStorage.sizeOf(path).coerceAtLeast(0)
+                    }
+                    val reason = error ?: if (late) "Recording started after the programme began"
+                        else if (interrupted) "Capture experienced a network interruption; available content preserved" else null
                     val ok = total > 0 && reason == null
                     runCatching {
-                        repo.markFinished(id, ok, System.currentTimeMillis(), total, reason ?: if (total == 0L) "No content captured" else null)
+                        val at = System.currentTimeMillis()
+                        val end = repo.byId(id)?.scheduledEndMillis ?: 0
+                        val expiredEmpty = total == 0L && (capture.deadlineReached || end in 1..at)
+                        val finalReason = if (expiredEmpty) "Recording window elapsed before useful media arrived"
+                            else reason ?: if (total == 0L) "No content captured" else null
+                        if (expiredEmpty) repo.markMissed(id, at, requireNotNull(finalReason))
+                        else repo.markFinished(id, ok, at, total, finalReason)
                         if (capture.userStopped && total == 0L) repo.setStatus(id, RecordingStatus.CANCELED, "Stopped before content arrived")
-                        repo.event(id, if (ok) "COMPLETED" else if (total > 0) "PARTIAL" else "FAILED",
-                            reason ?: if (ok) "Capture completed" else "No content captured")
+                        repo.event(id, if (capture.userStopped && total == 0L) "CANCELED" else if (ok) "COMPLETED"
+                            else if (total > 0) "PARTIAL" else if (expiredEmpty) "MISSED" else "FAILED",
+                            finalReason ?: "Capture completed")
                     }.onFailure { Log.w(TAG, "Recording $id final status could not be persisted; recovery will reconcile it") }
                 }
             }
@@ -356,13 +424,9 @@ class RecordingService : Service() {
     }
 
     companion object {
-        private const val LATE_START_GRACE_MILLIS = 5_000L
-
         /** Checks whether capture begins beyond the grace period after a known program start. */
         internal fun isLateStart(recording: Recording, atMillis: Long): Boolean {
-            // Legacy padded windows do not establish the programme's actual start time.
-            val programmeStart = recording.programmeStartMillis.takeIf { it > 0 } ?: return false
-            return atMillis > programmeStart && atMillis - programmeStart > LATE_START_GRACE_MILLIS
+            return RecordingLateStart.isLate(recording, atMillis)
         }
 
         private const val TAG = "Nuvix"

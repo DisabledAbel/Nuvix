@@ -25,8 +25,9 @@ Saved preset previews now evaluate the next 24 hours of effective recording wind
 account policies, explicit provider alternatives, one-time edits and confirmation/startup
 revalidation. Continue With Warning preserves the later pre-recording review and unattended
 priority. See [preset planning](smart-multiview-dvr.md#upcoming-dvr-conflicts-in-preset-previews).
-Physical-TV validation, structured broadcast language preferences and a per-recording late-start
-setting remain outstanding; the existing fixed grace policy is unchanged.
+Configurable [late-start settings](recording-late-start.md) now support global defaults, series
+inheritance and episode overrides with first-media revalidation. Physical-TV validation and
+structured broadcast language preferences remain outstanding; the five-second start grace is preserved.
 
 Further DVR work remains separate: explicit alternative-provider recording resolution,
 reliable-source sports extensions, external-storage capacity

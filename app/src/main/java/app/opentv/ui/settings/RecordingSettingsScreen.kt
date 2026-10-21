@@ -206,6 +206,13 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(20.dp))
+        SectionCard("Late Start") {
+            val lateStart by settings.recordLateStart.collectAsState()
+            app.opentv.ui.recordings.LateStartControls(lateStart, inherit = false) { options ->
+                scope.launch { ServiceLocator.get(context).recordingEngine.updateGlobalLateStart(options) }
+            }
+        }
+        Spacer(Modifier.height(20.dp))
         SectionCard(stringResource(R.string.recset_save_to)) {
             TargetRow(
                 label = stringResource(R.string.recset_internal_label),

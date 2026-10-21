@@ -83,6 +83,22 @@ class RecordingRepository(
     suspend fun commitScheduledProvider(id: Long, sourceId: Long, url: String, agent: String,
         demand: List<Recording>, now: Long): Boolean = dao.commitScheduledProvider(id, sourceId, url, agent, demand, now)
 
+    suspend fun setLateStart(row: Recording, options: app.opentv.recording.LateStartOptions): Boolean =
+        dao.setLateStart(row.id, row.lateStartRevision, options.policy.name, options.minimumMinutes) == 1
+
+    suspend fun deferPreparing(id: Long): Boolean = dao.deferPreparing(id) == 1
+
+    suspend fun commitLateStart(row: Recording, at: Long, decision: app.opentv.recording.RecordingLateStart.Decision): Boolean =
+        dao.commitLateStart(row, at, decision.options.policy.name,
+            if (decision.options.policy == app.opentv.recording.LateStartPolicy.MINIMUM_REMAINING) decision.options.minimumMinutes else 0,
+            decision.delayMillis, decision.contentMissed,
+            decision.action == app.opentv.recording.RecordingLateStart.Decision.Action.SKIP,
+            app.opentv.recording.RecordingLateStart.history(row, at, decision))
+
+    suspend fun ruleById(id: Long): SeriesRule? = ruleDao.byId(id)
+    suspend fun setRuleLateStart(id: Long, options: app.opentv.recording.LateStartOptions): Boolean =
+        ruleDao.setLateStart(id, options.policy.name, options.minimumMinutes) == 1
+
     /** Changes an unlocked pending recording's capture window. */
     suspend fun setScheduledWindow(id: Long, startMillis: Long, endMillis: Long) =
         dao.setScheduledWindow(id, startMillis, endMillis)
@@ -118,6 +134,8 @@ class RecordingRepository(
     suspend fun markStarted(id: Long, atMillis: Long) =
         dao.markStarted(id, RecordingStatus.RECORDING, atMillis)
 
+    suspend fun markContentMissed(id: Long) = dao.markContentMissed(id)
+
     /** Persists the captured-byte count. */
     suspend fun setSize(id: Long, bytes: Long) = dao.setSize(id, bytes)
 
@@ -133,6 +151,9 @@ class RecordingRepository(
             bytes = bytes,
             error = error,
         )
+
+    suspend fun markMissed(id: Long, atMillis: Long, reason: String) =
+        dao.markFinished(id, RecordingStatus.MISSED, atMillis, 0, reason)
 
     /** Updates recording status and optional failure text. */
     suspend fun setStatus(id: Long, status: RecordingStatus, error: String? = null) =
@@ -152,6 +173,18 @@ class RecordingRepository(
         for (recording in dao.active()) {
             val file = File(recording.filePath)
             val bytes = if (file.isAbsolute && file.isFile) file.length() else recording.sizeBytes
+            if (recording.status == RecordingStatus.PREPARING && bytes == 0L) {
+                // External storage may have accepted data just before process death, before the
+                // first useful-byte transaction. Keep its locator rather than ever truncating it.
+                val uncertainExternal = recording.filePath.startsWith("content://") || recording.filePath.startsWith("smb://")
+                val archive = if (uncertainExternal) recording.copy(status = RecordingStatus.FAILED,
+                    error = "Preparation interrupted; prior external destination preserved for recovery") else null
+                if (dao.recoverPreparing(recording, app.opentv.recording.RecordingStorage.retryLocator(recording.filePath),
+                        archive, System.currentTimeMillis())) {
+                    if (file.isAbsolute && file.isFile && file.length() == 0L) file.delete()
+                }
+                continue
+            }
             dao.markFinished(recording.id, if (bytes > 0) RecordingStatus.PARTIAL else RecordingStatus.FAILED,
                 System.currentTimeMillis(), bytes, "Interrupted; available captured content preserved")
             event(recording.id, "INTERRUPTED", "Capture interrupted; available content preserved")

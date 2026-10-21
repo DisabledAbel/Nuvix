@@ -136,3 +136,12 @@ Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale co
 transport continuity, conflict/preset projection and Compose remote action semantics. Physical
 Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
 USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.
+
+### DVR late-start controls
+
+Settings → Recording → Late Start defaults to **Record Remaining**. Choose **Skip If Late**
+(the existing inclusive five-second program-start grace) or **Minimum Time Remaining**
+(ten minutes initially; presets/custom D-pad selector). Guide scheduling, recording options
+and series rules support explicit overrides or live default inheritance. Late media is Partial;
+missing only start padding is not. Skips stay visible as Missed with reasons and no empty output.
+See [timing, inheritance, account/Multi-View behavior and Google TV checklist](docs/recording-late-start.md).

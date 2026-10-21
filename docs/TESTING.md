@@ -510,3 +510,31 @@ and `RecordingCaptureTest`. Run with the existing full Gradle commands above. Th
 an injected clock and recording stop/rearm hooks with an isolated Room database and fake provider
 HTTP interceptor. No IPTV credentials or networked provider is required. Existing v12/v13 and
 v6 migration tests now migrate through v15 and continue validating all prior data.
+
+## DVR late starts
+
+Run the existing complete validation tasks:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/benchmark_sports_queries.py
+bash scripts/test-supabase.sh
+```
+
+`RecordingLateStartTest` covers all three policies, inclusive five-second grace and threshold
+boundaries, optional padding, invalid/unknown bounds, terminal states, epoch arithmetic,
+inheritance and credential-free history. `RecordingLateStartPersistenceTest` verifies useful
+start versus preparation, duplicate/stale transitions, settings/rule persistence, retry archives
+and Complete/Partial results. `RecordingLateStartEngineTest` exercises fake-clock reconciliation,
+account-specific waits, protected/locked active extensions, removed providers, policy changes
+and Multi-View reservation preservation. `RecordingCaptureTest` adds first-useful-media rejection
+before writes and reconnects that cannot rerun initial late policy. `RecordingLateStartMigrationTest`
+opens a real v15 fixture through the v16 Room migration and validates media, preferences, rules,
+duration metadata and history. Earlier migration tests continue to validate the complete chain.
+`LateStartRemoteTest` uses D-pad movement/OK and Cancel for policies, preset/custom minutes and
+separate save. Existing duration, stale deadline, provider, Multi-View and security tests remain enabled.
+
+Use the [manual Google TV checklist](recording-late-start.md#manual-google-tv-checklist) for focus
+restoration/Back, screen-off/wakeup/boot, provider conflicts, active duration edits, USB/NAS,
+clock/DST changes and populated upgrades. JVM tests do not certify physical-TV/provider behavior.

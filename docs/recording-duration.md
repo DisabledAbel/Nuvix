@@ -98,3 +98,13 @@ and Fire TV, including a low-memory model, verify:
 - Upgrade a populated v14 database; verify old recordings, profiles, overrides and partial files.
 
 No physical-device or real-provider acceptance is implied by automated tests.
+
+## Late-start interaction
+
+[Late-start policies](recording-late-start.md) run before useful capture; already-capturing rows
+retain recovery and the current revision-safe deadline. Minimum remaining time uses the stored
+scheduled **program** end, so extending the effective capture end does not buy threshold minutes.
+Record Remaining keeps that effective end and reports missed content as Partial, without adding
+automatic compensation. Rejected policy/settings edits cannot reset protection, padding locks or
+an existing duration revision. Room 15→16 adds policy/evidence columns without rewriting duration
+metadata. Test a waiting lower-priority booking again after a higher-priority active end is extended.
