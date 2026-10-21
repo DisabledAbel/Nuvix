@@ -29,7 +29,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-35 build-tools;36.0.0'
       - name: Set up Gradle and validate wrapper
         uses: gradle/actions/setup-gradle@v6
       - name: Validate Gradle configuration
