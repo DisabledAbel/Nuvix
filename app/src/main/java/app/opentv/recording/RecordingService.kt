@@ -231,9 +231,11 @@ class RecordingService : Service() {
                     }
                 },
                 onInterruption = {
-                    interrupted = true
-                    repo.markContentMissed(id)
-                    repo.event(id, "CAPTURE_INTERRUPTED", "Network interruption after useful capture; existing recovery retained and result will be Partial")
+                    if (!capture.deadlineReached && !capture.userStopped && capture.stopReason == null) {
+                        interrupted = true
+                        repo.markContentMissed(id)
+                        repo.event(id, "CAPTURE_INTERRUPTED", "Network interruption after useful capture; existing recovery retained and result will be Partial")
+                    }
                 },
                 onStarted = {
                     val ready = requireNotNull(gateRow)

@@ -20,6 +20,9 @@ import app.opentv.data.repo.SourceRepository
 import app.opentv.recording.RecordingEngine
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Hand-rolled dependency container.
@@ -43,6 +46,8 @@ object ServiceLocator {
     /** Owns the shared database, network clients, repositories and local settings stores. */
     class Graph(context: Context) {
         private val appContext = context.applicationContext
+        /** Immediate setting writes must survive navigation away from their screen. */
+        val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
         val settings: AppSettings by lazy { AppSettings.get(appContext) }
         val connections: app.opentv.connections.AccountConnectionManager by lazy {

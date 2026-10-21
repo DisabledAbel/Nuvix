@@ -93,7 +93,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun RecordingSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val settings = remember { ServiceLocator.get(context).settings }
+    val graph = remember { ServiceLocator.get(context) }
+    val settings = graph.settings
     val scope = rememberCoroutineScope()
 
     var target by remember { mutableStateOf(settings.recordingTarget.value) }
@@ -209,7 +210,7 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
         SectionCard("Late Start") {
             val lateStart by settings.recordLateStart.collectAsState()
             app.opentv.ui.recordings.LateStartControls(lateStart, inherit = false) { options ->
-                scope.launch { ServiceLocator.get(context).recordingEngine.updateGlobalLateStart(options) }
+                graph.applicationScope.launch { graph.recordingEngine.updateGlobalLateStart(options) }
             }
         }
         Spacer(Modifier.height(20.dp))

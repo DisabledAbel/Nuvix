@@ -66,6 +66,8 @@ class RecordingEngine(
         val title = programme?.title?.takeIf { it.isNotBlank() } ?: channel.displayName
         val filename = RecordingStorage.fileNameFor(channel.displayName, title, now)
         val locator = RecordingStorage.plannedLocator(appContext, settings, filename)
+        val lateStartPolicy = if (ruleId == null && programme == null && lateStart.policy == LateStartPolicy.INHERIT)
+            LateStartPolicy.RECORD_REMAINING else lateStart.policy
 
         val recording = Recording(
             channelId = channel.id,
@@ -86,7 +88,7 @@ class RecordingEngine(
             scheduledEndMillis = programme?.endUtcMillis
                 ?.let { it + settings.recordPadEndMinutes.value.coerceAtLeast(0) * 60_000L } ?: 0,
             status = RecordingStatus.SCHEDULED,
-            lateStartPolicy = lateStart.policy.name, minimumRemainingMinutes = lateStart.minimumMinutes,
+            lateStartPolicy = lateStartPolicy.name, minimumRemainingMinutes = lateStart.minimumMinutes,
             seriesRuleId = ruleId,
             profileId = profileId,
         )
@@ -254,6 +256,9 @@ class RecordingEngine(
         lateStart: LateStartOptions = LateStartOptions()): Long {
         val key = titleKeyOf(programme.title)
         val existing = repo.ruleForChannelTitle(channel.id, key)
+        if (existing != null && lateStart.policy != LateStartPolicy.INHERIT) {
+            repo.setRuleLateStart(existing.id, lateStart)
+        }
         val ruleId = existing?.id ?: repo.addRule(
             SeriesRule(
                 channelId = channel.id,
