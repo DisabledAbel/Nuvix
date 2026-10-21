@@ -3,7 +3,7 @@
 # Retain the SDK 35 / API 23 runtime dependency matrix.
 agp = "9.4.1"
 kotlin = "2.2.10"
-ksp = "2.3.1"
+ksp = "2.3.9"
 coreKtx = "1.13.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
