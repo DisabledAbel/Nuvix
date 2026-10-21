@@ -31,7 +31,7 @@ class RecordingLateStartPersistenceTest {
         originalEndMillis = 4_900_000, durationRevision = 2)
     @After fun close() = db.close()
 
-    @Test fun preparationIsNotUsefulCaptureAndSkipIsAtomicVisibleAndFileFree() = runBlocking {
+    @Test fun preparationIsNotUsefulCaptureAndSkipIsAtomicVisibleAndFileFree() = runBlocking<Unit> {
         val id = repo.insert(row().copy(lateStartPolicy = "SKIP_IF_LATE"))
         assertTrue(repo.claimScheduled(id, 1_000_000)); assertFalse(repo.claimScheduled(id, 1_000_001))
         val preparing = repo.byId(id)!!
@@ -46,7 +46,7 @@ class RecordingLateStartPersistenceTest {
         assertFalse(File(missed.filePath).exists()); assertTrue(repo.all().any { it.id == id })
         assertEquals(1, db.recordingEvents().forRecording(id).size)
     }
-    @Test fun processRestartDuringPreparationRearmsAndKeepsExplicitPolicyAndDuration() = runBlocking {
+    @Test fun processRestartDuringPreparationRearmsAndKeepsExplicitPolicyAndDuration() = runBlocking<Unit> {
         val id = repo.insert(row().copy(status = RecordingStatus.PREPARING, lateStartPolicy = "SKIP_IF_LATE"))
         repo.failInterrupted()
         val recovered = repo.byId(id)!!
@@ -59,14 +59,14 @@ class RecordingLateStartPersistenceTest {
             LateStartOptions(LateStartPolicy.SKIP_IF_LATE)).action)
         assertEquals("STARTUP_RECOVERED", db.recordingEvents().forRecording(id).single().kind)
     }
-    @Test fun interruptedExternalPreparationPreservesUncertainFileInsteadOfReusingIt() = runBlocking {
+    @Test fun interruptedExternalPreparationPreservesUncertainFileInsteadOfReusingIt() = runBlocking<Unit> {
         val id = repo.insert(row().copy(status = RecordingStatus.PREPARING, filePath = "content://test/old-destination"))
         repo.failInterrupted()
         assertEquals(RecordingStatus.SCHEDULED, repo.byId(id)!!.status)
         assertNotEquals("content://test/old-destination", repo.byId(id)!!.filePath)
         assertEquals("content://test/old-destination", repo.all().single { it.id != id }.filePath)
     }
-    @Test fun actualStartSnapshotSurvivesRestartAndLateBytesBecomePartial() = runBlocking {
+    @Test fun actualStartSnapshotSurvivesRestartAndLateBytesBecomePartial() = runBlocking<Unit> {
         val id = repo.insert(row())
         assertTrue(repo.claimScheduled(id, 1_000_000))
         val preparing = repo.byId(id)!!
@@ -82,7 +82,7 @@ class RecordingLateStartPersistenceTest {
         assertTrue(recovered.protectedRecording && recovered.lockPadding)
         assertEquals(2, recovered.durationRevision); assertEquals(4_900_000, recovered.scheduledEndMillis)
     }
-    @Test fun stalePolicyCallbackCannotSkipOrStartChangedOrCanceledBooking() = runBlocking {
+    @Test fun stalePolicyCallbackCannotSkipOrStartChangedOrCanceledBooking() = runBlocking<Unit> {
         val id = repo.insert(row())
         val stale = repo.byId(id)!!
         assertTrue(repo.setLateStart(stale, LateStartOptions(LateStartPolicy.SKIP_IF_LATE)))
@@ -93,7 +93,7 @@ class RecordingLateStartPersistenceTest {
         assertFalse(repo.claimScheduled(id, 1_000_000))
         assertEquals(RecordingStatus.CANCELED, repo.byId(id)!!.status)
     }
-    @Test fun optionalPaddingDelayCompletesAndRetryRetainsPolicyAndArchivedContent() = runBlocking {
+    @Test fun optionalPaddingDelayCompletesAndRetryRetainsPolicyAndArchivedContent() = runBlocking<Unit> {
         val id = repo.insert(row().copy(lateStartPolicy = "MINIMUM_REMAINING", minimumRemainingMinutes = 7))
         assertTrue(repo.claimScheduled(id, 990_000))
         val preparing = repo.byId(id)!!
@@ -109,7 +109,7 @@ class RecordingLateStartPersistenceTest {
         assertEquals(0, retry.startedAtMillis); assertEquals("", retry.capturePolicy)
         assertEquals(564, repo.all().first { it.id != id }.sizeBytes)
     }
-    @Test fun globalAndSeriesInheritanceRemainLiveWhileEpisodeOverridePersists() = runBlocking {
+    @Test fun globalAndSeriesInheritanceRemainLiveWhileEpisodeOverridePersists() = runBlocking<Unit> {
         fun settings() = AppSettings::class.java.getDeclaredConstructor(Context::class.java).apply { isAccessible = true }.newInstance(context)
         val global = settings(); global.setRecordLateStart(LateStartOptions(LateStartPolicy.RECORD_REMAINING))
         val ruleId = repo.addRule(SeriesRule(channelId = 1, channelName = "News", titleKey = "news", title = "News"))

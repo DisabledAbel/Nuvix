@@ -208,6 +208,9 @@ class RecordingService : Service() {
                     val fresh = repo.byId(id)
                     if (fresh == null || !graph.recordingEngine.allowLateStart(fresh)) false
                     else {
+                        check(graph.sourceRepository.byId(fresh.sourceId)?.enabled == true) {
+                            "Recording provider was removed or disabled before useful media arrived"
+                        }
                         RecordingStorage.checkHeadroom(fresh.filePath,
                             RecordingStorage.MIN_FREE_BYTES * captures.size.coerceAtLeast(1))
                         sink = RecordingStorage.openSink(applicationContext, graph.settings, fresh.filePath)

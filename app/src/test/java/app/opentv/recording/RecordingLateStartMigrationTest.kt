@@ -20,7 +20,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class RecordingLateStartMigrationTest {
-    @Test fun version15UpgradePreservesProtectedLockedExtendedMediaSeriesAndHistory() = runBlocking {
+    @Test fun version15UpgradePreservesProtectedLockedExtendedMediaSeriesAndHistory() = runBlocking<Unit> {
         val context = RuntimeEnvironment.getApplication()
         val name = "late-start-v15.db"
         context.deleteDatabase(name)
