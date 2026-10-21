@@ -406,6 +406,19 @@ class AppSettings private constructor(context: Context) {
         _recordConflictLeadMinutes.value = value
     }
 
+    private val _recordLateStart = MutableStateFlow(app.opentv.recording.LateStartOptions(
+        app.opentv.recording.LateStartPolicy.parse(prefs.getString("record_late_start_policy", "RECORD_REMAINING").orEmpty()),
+        prefs.getInt("record_minimum_remaining_minutes", 10).coerceIn(1, 1440)))
+    val recordLateStart: StateFlow<app.opentv.recording.LateStartOptions> = _recordLateStart.asStateFlow()
+
+    fun setRecordLateStart(options: app.opentv.recording.LateStartOptions) {
+        val value = options.copy(policy = options.policy.takeUnless { it == app.opentv.recording.LateStartPolicy.INHERIT }
+            ?: app.opentv.recording.LateStartPolicy.RECORD_REMAINING)
+        prefs.edit().putString("record_late_start_policy", value.policy.name)
+            .putInt("record_minimum_remaining_minutes", value.minimumMinutes).apply()
+        _recordLateStart.value = value
+    }
+
     /** Minutes to start a scheduled recording early, so a late start isn't clipped. */
     private val _recordPadStartMinutes = MutableStateFlow(prefs.getInt(KEY_PAD_START, 2))
     val recordPadStartMinutes: StateFlow<Int> = _recordPadStartMinutes.asStateFlow()

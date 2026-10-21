@@ -953,8 +953,47 @@ interface RecordingDao {
     suspend fun update(recording: Recording)
 
     /** Duplicate alarms and simultaneous starts can claim the same booking only once. */
-    @Query("UPDATE recordings SET status = 'PREPARING', startedAtMillis = :startedAt, error = NULL WHERE id = :id AND status = 'SCHEDULED'")
+    @Query("UPDATE recordings SET status = 'PREPARING', error = NULL WHERE id = :id AND status = 'SCHEDULED' AND :startedAt >= 0")
     suspend fun claimScheduled(id: Long, startedAt: Long): Int
+
+    /** Policy edits cannot rewrite an already-admitted capture or a stale booking. */
+    @Query("""UPDATE recordings SET lateStartPolicy = :policy, minimumRemainingMinutes = :minutes,
+        lateStartRevision = lateStartRevision + 1 WHERE id = :id AND status = 'SCHEDULED'
+        AND lateStartRevision = :revision""")
+    suspend fun setLateStart(id: Long, revision: Long, policy: String, minutes: Int): Int
+
+    @Query("""UPDATE recordings SET status = 'SCHEDULED' WHERE id = :id AND status = 'PREPARING'
+        AND sizeBytes = 0 AND startedAtMillis = 0""")
+    suspend fun deferPreparing(id: Long): Int
+
+    /** Compare the complete booking snapshot and persist the decision/history together. */
+    @Transaction
+    suspend fun commitLateStart(expected: Recording, at: Long, policy: String, minutes: Int,
+        delay: Long, missed: Boolean, skip: Boolean, reason: String): Boolean {
+        val current = byId(expected.id) ?: return false
+        if (current != expected || current.status !in setOf(RecordingStatus.SCHEDULED, RecordingStatus.PREPARING)) return false
+        if (!skip && current.status != RecordingStatus.PREPARING) return false
+        update(current.copy(status = if (skip) RecordingStatus.MISSED else RecordingStatus.RECORDING,
+            startedAtMillis = if (skip) 0 else at, endedAtMillis = if (skip) at else 0,
+            capturePolicy = policy, captureMinimumRemainingMinutes = minutes,
+            captureDelayMillis = delay, contentMissed = missed, error = if (skip) reason else null))
+        insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = current.id, atMillis = at,
+            kind = if (skip) "MISSED" else "STARTED", message = reason))
+        return true
+    }
+
+    /** Process death before useful media can retry, without overwriting an uncertain external sink. */
+    @Transaction
+    suspend fun recoverPreparing(expected: Recording, path: String, archive: Recording?, at: Long): Boolean {
+        if (byId(expected.id) != expected || expected.status != RecordingStatus.PREPARING || expected.sizeBytes > 0) return false
+        archive?.let { insert(it.copy(id = 0, seriesRuleId = null)) }
+        update(expected.copy(status = RecordingStatus.SCHEDULED, filePath = path, startedAtMillis = 0,
+            endedAtMillis = 0, sizeBytes = 0, capturePolicy = "", captureDelayMillis = 0,
+            captureMinimumRemainingMinutes = 0, contentMissed = false, lateStartRevision = expected.lateStartRevision + 1))
+        insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = expected.id, atMillis = at,
+            kind = "STARTUP_RECOVERED", message = "Preparation interrupted before confirmed useful capture; late-start policy will be reevaluated"))
+        return true
+    }
 
     /** Claims a preparing or capturing recording for finalization; returns the affected row count. */
     @Query("UPDATE recordings SET status = 'FINALIZING' WHERE id = :id AND status IN ('PREPARING', 'RECORDING')")
@@ -1030,7 +1069,7 @@ interface RecordingDao {
     suspend fun cancelScheduled(id: Long): Int
 
     /** Resets an eligible failed, partial or missed recording for another capture attempt. */
-    @Query("UPDATE recordings SET status = 'SCHEDULED', filePath = :filePath, sizeBytes = 0, startedAtMillis = 0, endedAtMillis = 0, error = NULL WHERE id = :id AND status IN ('FAILED', 'PARTIAL', 'MISSED', 'CANCELED')")
+    @Query("UPDATE recordings SET status = 'SCHEDULED', filePath = :filePath, sizeBytes = 0, startedAtMillis = 0, endedAtMillis = 0, error = NULL, capturePolicy = '', captureMinimumRemainingMinutes = 0, captureDelayMillis = 0, contentMissed = 0, lateStartRevision = lateStartRevision + 1 WHERE id = :id AND status IN ('FAILED', 'PARTIAL', 'MISSED', 'CANCELED')")
     suspend fun prepareRetry(id: Long, filePath: String): Int
 
     /** Archive partial bytes and change retry ownership as one durable operation. */
@@ -1049,6 +1088,9 @@ interface RecordingDao {
     /** Updates status only while the recording remains scheduled; returns the affected count. */
     @Query("UPDATE recordings SET status = :status, error = :error WHERE id = :id AND status = 'SCHEDULED'")
     suspend fun setScheduledStatus(id: Long, status: RecordingStatus, error: String? = null): Int
+
+    @Query("UPDATE recordings SET contentMissed = 1 WHERE id = :id AND status IN ('PREPARING', 'RECORDING', 'FINALIZING')")
+    suspend fun markContentMissed(id: Long)
 
     /** Records the number of captured bytes. */
     @Query("UPDATE recordings SET sizeBytes = :bytes WHERE id = :id")
@@ -1105,6 +1147,12 @@ interface RecordingEventDao {
 /** Room queries and mutations for series rule records. */
 @Dao
 interface SeriesRuleDao {
+    @Query("SELECT * FROM series_rules WHERE id = :id")
+    suspend fun byId(id: Long): SeriesRule?
+
+    @Query("UPDATE series_rules SET lateStartPolicy = :policy, minimumRemainingMinutes = :minutes WHERE id = :id")
+    suspend fun setLateStart(id: Long, policy: String, minutes: Int): Int
+
     /** Observes the stored series rule rows as they change. */
     @Query("SELECT * FROM series_rules ORDER BY createdAtMillis DESC")
     fun observeAll(): Flow<List<SeriesRule>>

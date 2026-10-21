@@ -658,10 +658,10 @@ deadline races admission. No future capacity is held for viewing.
 
 ### Remaining boundaries
 
-The current `main` model has no configurable per-recording late-start policy
-or structured channel language/commentary preference. The active duration editor is documented below. This change preserves the existing
-five-second programme-start grace and partial-capture behavior; it does not invent new DVR rules
-or infer language from names. Persisted effective windows are honored. Device acceptance below
+The model now supports [configurable late-start recording policies](recording-late-start.md),
+including global/series inheritance and episode overrides. Structured channel language/commentary
+preferences remain separate. The active duration editor is documented below. Late-start decisions
+preserve the existing five-second program-start grace and partial-capture behavior. Persisted effective windows are honored. Device acceptance below
 is still required; synthetic tests do not establish provider capacity or TV rendering quality.
 
 - [ ] Android TV, Google TV and Fire TV: scroll a four-panel preview with D-pad/OK/Back and large text;
@@ -691,3 +691,14 @@ USB/NAS behavior, alarms and process interruption. Automatic sports extensions r
 Duration confirmation requires renewed explicit stop consent if the chosen end passes during
 review or validation. An ordinary duration confirmation cannot stop a capture implicitly.
 This check leaves provider reservations, playback panels and the 150 ms audio policy untouched.
+
+## Configurable late-start recording
+
+The shared [late-start evaluator](recording-late-start.md) checks due alarms, reconciliation,
+account admission/waits and first valid media. A Missed recording never acquires/reclaims panel
+capacity; policy checks also surround slow optional-owner closure. Eligible recordings use the
+existing account-scoped reclamation order, keeping unrelated panels and 150 ms audio behavior.
+Running recordings keep their reservation and deadline; a late booking waits or skips rather than
+silently canceling active capture. Independent and explicitly linked accounts, protection,
+manual/series priority, padding locks, compact Guide/Sports/presets and warnings remain shared.
+See the feature guide for exact grace/threshold arithmetic, migration 15→16, history and device checks.

@@ -56,6 +56,8 @@ fun ProgrammeDetailsDialog(
     var chosenVariant by remember(channel.id) { mutableStateOf(channel) }
     var sourceOptions by remember(channel.id) { mutableStateOf<List<Channel>>(emptyList()) }
     var actionPending by remember { mutableStateOf(false) }
+    var lateStart by remember(channel.id, programme.startUtcMillis) { mutableStateOf(app.opentv.recording.LateStartOptions()) }
+    var editingLateStart by remember { mutableStateOf(false) }
     LaunchedEffect(channel.id) { sourceOptions = graph.catalogRepository.recordSourceOptions(channel) }
     val recordingSourceIds = activeRecordings.mapTo(mutableSetOf()) { it.sourceId }
     fun actionsFor(candidate: Channel, at: Long = nowMillis) = GuideProgrammeActions.evaluate(
@@ -95,6 +97,8 @@ fun ProgrammeDetailsDialog(
     }
     fun success(message: String) { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
 
+    if (editingLateStart) app.opentv.ui.recordings.LateStartDialog("Recording Late Start", lateStart,
+        onDismiss = { editingLateStart = false }, onSave = { lateStart = it; editingLateStart = false })
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.width(440.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
@@ -135,6 +139,9 @@ fun ProgrammeDetailsDialog(
                 }
                 Spacer(Modifier.height(16.dp))
             }
+            if (recordingActions.canRecordNow || recordingActions.canScheduleRecording || recordingActions.canRecordSeries) {
+                RecordActionRow("Late Start: ${lateStart.policy.label}", enabled = !actionPending) { editingLateStart = true }
+            }
             when {
                 actions.status == GuideProgrammeStatus.AIRING && recordingThis != null ->
                     RecordActionRow("Recording Duration", primary = true, enabled = !actionPending) {
@@ -145,7 +152,7 @@ fun ProgrammeDetailsDialog(
                     val selected = chosenVariant
                     submit {
                         check(freshActions(selected).canRecordNow)
-                        graph.recordingEngine.startChannel(selected, programme)
+                        graph.recordingEngine.startChannel(selected, programme, lateStart = lateStart)
                         success(context.getString(R.string.guide_details_starting_recording, selected.shownName))
                         onRecordingScheduled()
                     }
@@ -167,7 +174,7 @@ fun ProgrammeDetailsDialog(
                     val selected = chosenVariant
                     submit {
                         check(freshActions(selected).canScheduleRecording)
-                        graph.recordingEngine.scheduleProgramme(selected, programme)
+                        graph.recordingEngine.scheduleProgramme(selected, programme, lateStart = lateStart)
                         success(context.getString(R.string.rec_scheduled_title, programme.title))
                         onRecordingScheduled()
                     }
@@ -210,7 +217,7 @@ fun ProgrammeDetailsDialog(
                 submit {
                     val current = freshActions(selected)
                     check(current.canRecordSeries)
-                    graph.recordingEngine.recordSeries(selected, programme, targetRow.programmes)
+                    graph.recordingEngine.recordSeries(selected, programme, targetRow.programmes, lateStart = lateStart)
                     success(context.getString(R.string.rec_series_recording_set, programme.title))
                     onRecordingScheduled()
                 }

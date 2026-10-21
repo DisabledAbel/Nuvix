@@ -121,9 +121,16 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
     /** Observes the selected recording's activity history. */
     fun events(id: Long): Flow<List<RecordingEvent>> = graph.recordingRepository.observeEvents(id) ?: flowOf(emptyList())
 
+    fun updateSeriesLateStart(rule: SeriesRule, options: app.opentv.recording.LateStartOptions, done: () -> Unit) {
+        viewModelScope.launch { graph.recordingEngine.updateSeriesLateStart(rule.id, options); done() }
+    }
+
     /** Saves recording protection and padding choices through the recording engine. */
-    fun updatePreferences(recording: Recording, start: Int, end: Int, protect: Boolean, lock: Boolean) {
-        viewModelScope.launch { graph.recordingEngine.updatePreferences(recording.id, start, end, protect, lock) }
+    fun updatePreferences(recording: Recording, start: Int, end: Int, protect: Boolean, lock: Boolean,
+        options: app.opentv.recording.LateStartOptions, done: (Boolean) -> Unit) {
+        viewModelScope.launch { done(graph.recordingEngine.updatePreferences(recording.id, start, end, protect, lock,
+            options.takeIf { recording.status == RecordingStatus.SCHEDULED && it != app.opentv.recording.LateStartOptions(
+                app.opentv.recording.LateStartPolicy.parse(recording.lateStartPolicy), recording.minimumRemainingMinutes.coerceIn(1, 1440)) }, recording.lateStartRevision)) }
     }
 
     /** Applies an explicitly selected recording conflict-resolution action. */
@@ -180,6 +187,10 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     val seriesRules by viewModel.seriesRules.collectAsState()
     val conflicts by viewModel.conflicts.collectAsState()
     var editing by remember { mutableStateOf<Recording?>(null) }
+    var seriesEditing by remember { mutableStateOf<SeriesRule?>(null) }
+    var lateBusy by remember { mutableStateOf(false) }
+    var lateError by remember { mutableStateOf<String?>(null) }
+
     var history by remember { mutableStateOf<Recording?>(null) }
     var stopping by remember { mutableStateOf<Recording?>(null) }
     var reviewConflicts by remember { mutableStateOf(false) }
@@ -233,6 +244,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                             upcomingCount = ruleEpisodes.size,
                             nextAtMillis = ruleEpisodes.minByOrNull { it.scheduledStartMillis }?.scheduledStartMillis,
                             onRemove = { viewModel.removeSeriesRule(rule) },
+                            onLateStart = { seriesEditing = rule },
                         )
                     }
                 }
@@ -291,10 +303,20 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
         )
     }
     editing?.let { recording ->
-        RecordingPreferencesDialog(recording, onDismiss = { editing = null }) { start, end, protect, lock ->
-            viewModel.updatePreferences(recording, start, end, protect, lock)
-            editing = null
+        RecordingPreferencesDialog(recording, busy = lateBusy, error = lateError,
+            onDismiss = { editing = null; lateError = null }) { start, end, protect, lock, options ->
+            if (!lateBusy) { lateBusy = true; viewModel.updatePreferences(recording, start, end, protect, lock, options) { saved ->
+                lateBusy = false
+                if (saved) { editing = null; lateError = null } else lateError = "Recording changed or has started. Close and review again."
+            } }
         }
+    }
+    seriesEditing?.let { rule ->
+        LateStartDialog("Series Late Start — ${rule.title}", app.opentv.recording.LateStartOptions(
+            app.opentv.recording.LateStartPolicy.parse(rule.lateStartPolicy), rule.minimumRemainingMinutes.coerceIn(1, 1440)),
+            busy = lateBusy, onDismiss = { seriesEditing = null }, onSave = { options ->
+                if (!lateBusy) { lateBusy = true; viewModel.updateSeriesLateStart(rule, options) { lateBusy = false; seriesEditing = null } }
+            })
     }
     history?.let { recording ->
         val events by remember(recording.id) { viewModel.events(recording.id) }.collectAsState(emptyList())
@@ -378,7 +400,7 @@ private fun formatWhen(utcMillis: Long): String =
 
 /** Displays a series recording rule and its removal action. */
 @Composable
-private fun SeriesRuleRow(rule: SeriesRule, upcomingCount: Int, nextAtMillis: Long?, onRemove: () -> Unit) {
+private fun SeriesRuleRow(rule: SeriesRule, upcomingCount: Int, nextAtMillis: Long?, onRemove: () -> Unit, onLateStart: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -423,6 +445,7 @@ private fun SeriesRuleRow(rule: SeriesRule, upcomingCount: Int, nextAtMillis: Lo
             )
         }
         Spacer(Modifier.width(10.dp))
+        OutlinedButton(onClick = onLateStart) { Text("Late Start") }
         ActionButton(Icons.Filled.Delete, stringResource(R.string.rec_series_remove), onRemove)
     }
 }
@@ -601,8 +624,11 @@ private fun formatSize(bytes: Long): String {
 private fun RecordingPreferencesDialog(
     recording: Recording,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Boolean, Boolean) -> Unit,
+    busy: Boolean = false, error: String? = null,
+    onSave: (Int, Int, Boolean, Boolean, app.opentv.recording.LateStartOptions) -> Unit,
 ) {
+    var options by remember(recording.id) { mutableStateOf(app.opentv.recording.LateStartOptions(
+        app.opentv.recording.LateStartPolicy.parse(recording.lateStartPolicy), recording.minimumRemainingMinutes.coerceIn(1, 1440))) }
     var protect by remember(recording.id) { mutableStateOf(recording.protectedRecording) }
     var lock by remember(recording.id) { mutableStateOf(recording.lockPadding) }
     var start by remember(recording.id) { mutableStateOf(recording.padStartMinutes) }
@@ -627,13 +653,17 @@ private fun RecordingPreferencesDialog(
                     }
                     Switch(checked = lock, onCheckedChange = { lock = it })
                 }
+                if (recording.status == RecordingStatus.SCHEDULED) {
+                    LateStartControls(options, onChange = { options = it })
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (paddingEditable) {
                     PaddingStepper(stringResource(R.string.recset_pad_start), start, 30) { start = it }
                     PaddingStepper(stringResource(R.string.recset_pad_end), end, 60) { end = it }
                 } else Text(stringResource(R.string.rec_padding_edit_unavailable), style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(start, end, protect, lock) }) { Text(stringResource(R.string.rec_save_options)) } },
+        confirmButton = { TextButton(enabled = !busy, onClick = { onSave(start, end, protect, lock, options) }) { Text(stringResource(R.string.rec_save_options)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }

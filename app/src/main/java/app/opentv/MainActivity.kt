@@ -63,6 +63,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
@@ -164,6 +166,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         liveSession?.setForeground(true)
+        // Returning from sleep may follow an inexact/delayed alarm. Only pending rows rearm;
+        // the service's atomic claim retains any capture already running.
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try { ServiceLocator.get(applicationContext).recordingEngine.rearmScheduled() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Protected storage/readiness is reported by existing UI. */ }
+        }
     }
 
     /** Updates live playback policy when the activity leaves the foreground. */

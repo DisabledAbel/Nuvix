@@ -42,7 +42,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
     /** Dispatches recording alarms and system rearm events to background recording work. */
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> rescheduleAll(context)
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIME_CHANGED -> rescheduleAll(context)
             RecordingScheduler.ACTION_START -> {
                 val id = RecordingScheduler.recordingIdFrom(intent)
                 if (id > 0) onDue(context, id)
@@ -65,13 +65,8 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
                 if (rec.status != RecordingStatus.SCHEDULED) return@launch
                 RecordingConflictNotifications.cancel(app, id)
                 val now = System.currentTimeMillis()
-                if (rec.scheduledEndMillis > 0 && now >= rec.scheduledEndMillis) {
-                    graph.recordingRepository.setScheduledStatus(id, RecordingStatus.MISSED, "Recording window expired before alarm delivery")
-                    graph.recordingRepository.event(id, "MISSED", "Recording window expired before alarm delivery")
-                    return@launch
-                }
-                if (rec.scheduledStartMillis > now + 1_000L) {
-                    RecordingScheduler.set(app, id, rec.scheduledStartMillis)
+                if (!graph.recordingEngine.allowLateStart(rec, now)) {
+                    if (rec.scheduledStartMillis > now) RecordingScheduler.set(app, id, rec.scheduledStartMillis)
                     return@launch
                 }
                 try { RecordingService.start(app, id) }

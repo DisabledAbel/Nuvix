@@ -97,19 +97,24 @@ class AccountConnectionManager private constructor(context: Context) {
         request: ConnectionRequest,
         approval: UnknownConnectionApproval? = null,
         allowInterruptLive: Boolean = false,
+        canStart: suspend () -> Boolean = { true },
     ): ReservationResult {
         require(request.purpose == ConnectionPurpose.RECORDING)
+        if (!canStart()) return ReservationResult.Denied("Recording start is no longer permitted")
         val first = reserve(request, approval)
         if (first is ReservationResult.Reserved || !allowInterruptLive) return first
         // Admission to reclamation checks recording-only usage under the allocator's lock.
         val key = allocator.beginRecordingReclaim(request.sourceId) ?: return first
         try {
             for (token in allocator.optionalReservations(key).sortedBy(::reclamationPriority)) {
+                if (!canStart()) return ReservationResult.Denied("Recording start is no longer permitted")
                 val close = owner(token) ?: continue
                 try { close() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { continue }
+                if (!canStart()) return ReservationResult.Denied("Recording start is no longer permitted")
                 val retried = reserve(request)
                 if (retried is ReservationResult.Reserved) return retried
             }
+            if (!canStart()) return ReservationResult.Denied("Recording start is no longer permitted")
             return reserve(request)
         } finally {
             allocator.endRecordingReclaim(key)

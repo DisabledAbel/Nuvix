@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add configurable DVR late starts: default Record Remaining, Skip If Late and minimum remaining
+  scheduled program time, including inclusive threshold equality and remote custom minutes.
+- Persist live global/series inheritance and episode overrides; share policy checks across alarms,
+  reconciliation, admission/account waits and first validated media. Retain configured capture ends,
+  active duration edits, protected/locked bookings, independent accounts and unrelated Multi-View.
+- Add Room 15→16 without replacing saved recordings/providers/history, atomic credential-free
+  decision events and actual useful-capture metadata; avoid persistent empty outputs on skips.
+- Add fake-clock/Room/provider/capture and TV remote regression tests plus Google TV acceptance guidance.
+
 - Restore the compatible SDK 35/API 23 compiler and AndroidX dependency matrix after the
   grouped update introduced incompatible KSP/AGP APIs and SDK 37 library requirements.
   Keep the Gradle wrapper update and compatible independent dependency updates.

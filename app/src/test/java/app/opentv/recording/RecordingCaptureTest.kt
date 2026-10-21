@@ -150,6 +150,50 @@ class RecordingCaptureTest {
         } finally { server.shutdown() }
     }
 
+    @Test fun policyIsRecheckedWhenUsefulMediaArrivesBeforeAnyOutputWrite() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(1))))
+        server.start()
+        try {
+            var clock = 1_000_000L
+            val row = app.opentv.data.model.Recording(channelId = 1, sourceId = 1, channelName = "News", title = "News",
+                filePath = "/never-created.ts", streamUrl = server.url("/live.ts").toString(),
+                status = app.opentv.data.model.RecordingStatus.PREPARING, programmeStartMillis = clock,
+                programmeEndMillis = clock + 3_600_000, scheduledStartMillis = clock - 120_000, scheduledEndMillis = clock + 3_900_000)
+            var opened = 0; var started = 0
+            val out = ByteArrayOutputStream()
+            val result = RecordingCapture(OkHttpClient(), nowMillis = { clock }).copy(row.streamUrl, "Nuvix", out, 0,
+                onCall = { if (it != null) clock += 6_000 }, onProgress = {}, checkStorage = {}, onStarted = { started++ },
+                beforeFirstWrite = {
+                    val d = RecordingLateStart.evaluate(row, clock, LateStartOptions(LateStartPolicy.SKIP_IF_LATE))
+                    if (d.action == RecordingLateStart.Decision.Action.CAPTURE) { opened++; true } else false
+                })
+            assertTrue(result.startRejected); assertEquals(0L, result.bytes)
+            assertEquals(0, opened); assertEquals(0, started); assertEquals(0, out.size())
+        } finally { server.shutdown() }
+    }
+
+    @Test fun reconnectAfterOnTimeUsefulCaptureDoesNotRunLateStartGateAgain() = runBlocking {
+        val server = MockWebServer()
+        repeat(2) { server.enqueue(MockResponse().setBody(Buffer().write(transportBytes(it)))) }
+        server.start()
+        try {
+            var clock = 1_000_000L
+            var gates = 0; var writes = 0
+            val out = object : ByteArrayOutputStream() {
+                override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                    super.write(bytes, offset, length)
+                    clock = if (++writes == 1) 1_006_000L else 1_100_000L
+                }
+            }
+            val result = RecordingCapture(OkHttpClient(), nowMillis = { clock }, retryDelayMillis = 0).copy(
+                server.url("/live.ts").toString(), "Nuvix", out, 1_100_000,
+                {}, {}, {}, beforeFirstWrite = { gates++; true })
+            assertEquals(1, gates); assertEquals(1128L, result.bytes)
+            assertFalse(result.startRejected); assertEquals(2, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
     private fun transportBytes(marker: Int) = ByteArray(188 * 3) { offset -> if (offset % 188 == 0) 0x47 else marker.toByte() }
 
     /** Checks: already Expired Window Never Opens Http Connection. */

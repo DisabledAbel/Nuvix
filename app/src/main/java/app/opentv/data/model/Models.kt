@@ -480,6 +480,15 @@ data class Recording(
     @ColumnInfo(defaultValue = "0") val durationRevision: Long = 0,
     @ColumnInfo(defaultValue = "0") val manualExtensionMillis: Long = 0,
     @ColumnInfo(defaultValue = "0") val durationModifiedAtMillis: Long = 0,
+    /** Stable strings retain unknown future values without breaking Room reads. INHERIT resolves at start. */
+    @ColumnInfo(defaultValue = "'INHERIT'") val lateStartPolicy: String = "INHERIT",
+    @ColumnInfo(defaultValue = "10") val minimumRemainingMinutes: Int = 10,
+    @ColumnInfo(defaultValue = "0") val lateStartRevision: Long = 0,
+    /** Snapshot of the decision made when useful media was available, independent of future defaults. */
+    @ColumnInfo(defaultValue = "''") val capturePolicy: String = "",
+    @ColumnInfo(defaultValue = "0") val captureMinimumRemainingMinutes: Int = 0,
+    @ColumnInfo(defaultValue = "0") val captureDelayMillis: Long = 0,
+    @ColumnInfo(defaultValue = "0") val contentMissed: Boolean = false,
     /** Preference in unavoidable conflicts and exclusion from any future automatic retention. */
     @ColumnInfo(defaultValue = "0") val protectedRecording: Boolean = false,
     /** Independent of protection: automatic conflict resolution may not trim this padding. */
@@ -521,6 +530,8 @@ data class SeriesRule(
     val title: String,
     val createdAtMillis: Long = 0,
     val enabled: Boolean = true,
+    @ColumnInfo(defaultValue = "'INHERIT'") val lateStartPolicy: String = "INHERIT",
+    @ColumnInfo(defaultValue = "10") val minimumRemainingMinutes: Int = 10,
 )
 
 /**

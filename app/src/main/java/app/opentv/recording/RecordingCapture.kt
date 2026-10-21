@@ -19,7 +19,7 @@ internal class RecordingCapture(
     private val maxEmptyConnections: Int = 5,
 ) {
     /** Capture byte count and optional failure information from the stream writer. */
-    data class Result(val bytes: Long, val error: String? = null)
+    data class Result(val bytes: Long, val error: String? = null, val startRejected: Boolean = false, val retryable: Boolean = false)
 
     /** Storage failures terminate immediately; only transport failures are reconnected. */
     suspend fun copy(
@@ -31,10 +31,13 @@ internal class RecordingCapture(
         onProgress: suspend (Long) -> Unit,
         checkStorage: () -> Unit,
         onStarted: suspend () -> Unit = {},
+        beforeFirstWrite: suspend () -> Boolean = { true },
+        onInterruption: suspend () -> Unit = {},
     ): Result {
         var total = 0L
         var emptyConnections = 0
         var lastReport = 0L
+        var interrupted = false
         try {
             while (endMillis <= 0 || nowMillis() < endMillis) {
                 currentCoroutineContext().ensureActive()
@@ -74,6 +77,9 @@ internal class RecordingCapture(
                             val read = input.read(buffer)
                             if (read < 0) break
                             if (read == 0) continue
+                            // The network may have taken minutes to yield useful MPEG-TS data.
+                            // Check before creating/writing output, once per capture, never on reconnect.
+                            if (total == 0L && !beforeFirstWrite()) return Result(0, startRejected = true)
                             try {
                                 checkStorage()
                                 output.write(buffer, 0, read)
@@ -94,6 +100,7 @@ internal class RecordingCapture(
                     throw cancelled
                 } catch (_: IOException) {
                     currentCoroutineContext().ensureActive()
+                    if (total > 0 && !interrupted) { interrupted = true; onInterruption() }
                     // Detailed transport errors can contain URLs with provider credentials.
                 } finally {
                     onCall(null)
@@ -102,7 +109,7 @@ internal class RecordingCapture(
                 if (total == before) {
                     emptyConnections++
                     if (emptyConnections >= maxEmptyConnections) {
-                        return Result(total, "Stream stopped before recording finished")
+                        return Result(total, "Stream stopped before recording finished", retryable = total == 0L)
                     }
                     delay(retryDelayMillis)
                 } else {
@@ -111,7 +118,7 @@ internal class RecordingCapture(
                     delay(minOf(retryDelayMillis, 250L))
                 }
             }
-            return Result(total)
+            return Result(total, if (interrupted) "Capture experienced a network interruption; available content preserved" else null)
         } finally {
             // Report bytes even on user cancellation or a storage failure, for partial recovery.
             onProgress(total)
