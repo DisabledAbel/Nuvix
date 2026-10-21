@@ -41,6 +41,15 @@ class UpdateCheckerTest {
         assertNull(checker(release.copy(prerelease = true, assets = emptyList()), metadata).check())
     }
 
+    @Test fun `RC tags are excluded even when marked stable by mistake`() = runTest {
+        assertNull(checker(release.copy(tagName = "v1.0.0-rc.1", assets = emptyList()), metadata).check())
+        assertNull(checker(release.copy(tagName = "nightly-20261015.1.1", assets = emptyList()), metadata).check())
+    }
+
+    @Test fun `stable tag must match metadata version`() = runTest {
+        expectInvalid(checker(release, metadata.copy(versionName = "1.0.0-rc.1")))
+    }
+
     /** Checks: release cannot choose an arbitrary attached APK. */
     @Test fun `release cannot choose an arbitrary attached APK`() = runTest {
         expectInvalid(checker(release.copy(assets = release.assets.map {

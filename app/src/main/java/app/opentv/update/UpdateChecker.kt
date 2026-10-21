@@ -50,7 +50,7 @@ class UpdateChecker(
             if (body.contentLength() > MAX_RELEASE_BYTES) throw IOException("Release response too large")
             json.decodeFromString<GitHubRelease>(body.readLimited(MAX_RELEASE_BYTES))
         }
-        if (release.draft || release.prerelease) return@withContext null
+        if (release.draft || release.prerelease || !STABLE_TAG.matches(release.tagName)) return@withContext null
         val apk = release.assets.singleOrNull { it.name == APK_ASSET }
             ?: throw UpdateValidationException("Release must contain one $APK_ASSET")
         val metadataAsset = release.assets.singleOrNull { it.name == METADATA_ASSET }
@@ -68,6 +68,9 @@ class UpdateChecker(
             json.decodeFromString<UpdateMetadata>(body.readLimited(MAX_METADATA_BYTES))
         }
         UpdateSecurity.validateMetadata(metadata, applicationId, apk.size)
+        if (metadata.versionName != release.tagName.removePrefix("v")) {
+            throw UpdateValidationException("Stable release tag and metadata version differ")
+        }
         if (metadata.versionCode <= currentVersionCode.toLong()) return@withContext null
         Update(
             versionCode = metadata.versionCode,
@@ -84,6 +87,7 @@ class UpdateChecker(
     }
 
     companion object {
+        private val STABLE_TAG = Regex("""v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)""")
         const val REPO_SLUG = "DisabledAbel/Nuvix"
         const val APK_ASSET = "nuvix.apk"
         const val METADATA_ASSET = "update.json"

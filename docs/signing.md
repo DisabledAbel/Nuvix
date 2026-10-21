@@ -4,11 +4,7 @@ Every stable Nuvix update must retain the release application ID `com.disabledab
 
 ## Signing key
 
-Create a dedicated, long-lived key on a trusted machine, using password prompts rather than putting passwords into shell history:
-
-```sh
-keytool -genkeypair -v -keystore nuvix-release.jks -alias nuvix -keyalg RSA -keysize 4096 -validity 10000
-```
+Reuse the existing long-lived production keystore. Do not generate or replace it as part of release setup. If no production installation has ever been distributed and no signing identity exists, establish that identity separately and record its certificate before enabling releases. The workflow never generates a production key.
 
 Back up the key and passwords securely in multiple protected locations. Losing the private key prevents ordinary in-place updates of existing installations. A different key generally requires users to uninstall the app, which can erase app data and launcher choices. The shared Android debug key is unsuitable for public distribution. Never commit private keys or passwords.
 
@@ -16,7 +12,7 @@ For a local signed build set `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, 
 
 ## GitHub Actions secrets
 
-Configure these repository Actions secrets before pushing a release tag:
+Configure these **production environment secrets** only after setting the protection rules in [the release guide](releases.md):
 
 | Secret | Contents |
 | --- | --- |
@@ -25,11 +21,11 @@ Configure these repository Actions secrets before pushing a release tag:
 | `KEY_ALIAS` | Alias of the release key |
 | `KEY_PASSWORD` | Private-key password |
 
-Also set the public repository Actions **variable** `SIGNING_CERT_SHA256` to the 64-character SHA-256 fingerprint of the long-lived release certificate (hexadecimal without colons). Obtain it with `keytool -list -v -keystore nuvix-release.jks -alias nuvix`, which prompts for the password. Keep this fingerprint stable: publication rejects a different certificate before uploading an unusable update.
+Also set the public production environment **variable** `SIGNING_CERT_SHA256` to the 64-character SHA-256 fingerprint of the long-lived release certificate (hexadecimal without colons). Obtain it with `keytool -list -v -keystore nuvix-release.jks -alias nuvix`, which prompts for the password. Keep this fingerprint stable: publication rejects a different certificate before uploading an unusable update.
 
-The workflow checks every secret and the configured certificate fingerprint, decodes the keystore into the runner's temporary directory with restrictive permissions, and deletes it after building. It does not print passwords or key material. The build job has read-only repository permission; only the publication job receives `contents: write`.
+Validation has no signing secrets and prepares an unsigned release APK. After a different maintainer approves `production`, the publishing job verifies the recorded approval and artifact digests, decodes the keystore temporarily with restrictive permissions, signs with `apksigner`, verifies the final APK, and removes the key. Signed APKs are not exposed as Actions artifacts. Only the gated publishing job has `contents: write`.
 
-Update `versionCode`/`versionName` in `app/build.gradle.kts` and the changelog. Commit the complete corresponding source, then push `v0.1.0` (or a future matching version). Manual release dispatch requires an existing matching version tag and checks out that tag. Do not reuse a distributed versionCode or replace a public release with a differently signed build.
+Update the committed `versionCode`/`versionName` and changelog, merge reviewed changes into `main`, and manually dispatch Release with a matching version and `rc` or `stable` channel. Do not precreate tags. RCs use the production package and signer, so stable needs a higher code than every candidate. See [manual releases](releases.md) for approval, environment verification, failure recovery and the v1.0 checklist.
 
 ## Release verification and assets
 
@@ -37,7 +33,7 @@ Update `versionCode`/`versionName` in `app/build.gradle.kts` and the changelog. 
 
 - `nuvix.apk`: verified universal release APK.
 - `update.json`: schema 1 metadata containing `versionCode`, `versionName`, `applicationId`, `apkAsset`, APK `sha256`, `sizeBytes`, and `signingCertificateSha256`.
-- `SHA256SUMS`: APK integrity checksum.
+- `SHA256SUMS`: integrity checksums for the APK, manifest, notes and corresponding source in the approved workflow (standalone `create-release.py` emits the APK checksum).
 - Release notes extracted from the matching changelog section.
 
 The workflow attaches a `nuvix-vX.Y.Z-source.tar.gz` archive from the exact tagged commit, including the GPL license, to meet corresponding-source obligations. GitHub Releases also exposes that commit's source archives. Preserve third-party copyright notices and licenses when distributing binaries.

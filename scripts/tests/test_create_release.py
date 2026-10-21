@@ -113,6 +113,18 @@ class ReleaseVerificationTest(unittest.TestCase):
                 release.verify_apk(self.apk, Path("sdk"), self.metadata,
                                    "nightly-20261015.1.1", "b" * 64, "nightly")
 
+    def test_candidate_keeps_production_identity_and_verifies_signature(self):
+        self.metadata["elements"][0]["versionName"] = "1.0.0-rc.1"
+        badging = self.badging.replace("0.1.0", "1.0.0-rc.1")
+        with patch.object(release, "run", side_effect=[badging, self.signature]):
+            result = release.verify_apk(self.apk, Path("sdk"), self.metadata, "v1.0.0-rc.1", "a" * 64, "rc")
+        self.assertEqual(release.APPLICATION_ID, result["applicationId"])
+        self.assertEqual("1.0.0-rc.1", result["versionName"])
+
+    def test_candidate_cannot_be_verified_as_stable(self):
+        with self.assertRaisesRegex(ValueError, "release tag"):
+            release.verify_apk(self.apk, Path("sdk"), self.metadata, "v1.0.0-rc.1", "a" * 64, "stable")
+
 
 if __name__ == "__main__":
     unittest.main()
