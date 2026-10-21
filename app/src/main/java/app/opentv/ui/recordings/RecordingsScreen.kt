@@ -121,8 +121,8 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
     /** Observes the selected recording's activity history. */
     fun events(id: Long): Flow<List<RecordingEvent>> = graph.recordingRepository.observeEvents(id) ?: flowOf(emptyList())
 
-    fun updateSeriesLateStart(rule: SeriesRule, options: app.opentv.recording.LateStartOptions, done: () -> Unit) {
-        viewModelScope.launch { graph.recordingEngine.updateSeriesLateStart(rule.id, options); done() }
+    fun updateSeriesLateStart(rule: SeriesRule, options: app.opentv.recording.LateStartOptions, done: (Boolean) -> Unit) {
+        viewModelScope.launch { done(graph.recordingEngine.updateSeriesLateStart(rule.id, options)) }
     }
 
     /** Saves recording protection and padding choices through the recording engine. */
@@ -316,8 +316,14 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     seriesEditing?.let { rule ->
         LateStartDialog("Series Late Start — ${rule.title}", app.opentv.recording.LateStartOptions(
             app.opentv.recording.LateStartPolicy.parse(rule.lateStartPolicy), rule.minimumRemainingMinutes.coerceIn(1, 1440)),
-            busy = lateBusy, onDismiss = { seriesEditing = null }, onSave = { options ->
-                if (!lateBusy) { lateBusy = true; viewModel.updateSeriesLateStart(rule, options) { lateBusy = false; seriesEditing = null } }
+            busy = lateBusy, error = lateError, onDismiss = { seriesEditing = null; lateError = null }, onSave = { options ->
+                if (!lateBusy) { lateBusy = true; viewModel.updateSeriesLateStart(rule, options) { saved ->
+                    lateBusy = false
+                    if (seriesEditing?.id == rule.id) {
+                        if (saved) { seriesEditing = null; lateError = null }
+                        else lateError = "Series rule changed or was removed. Close and review again."
+                    }
+                } }
             })
     }
     history?.let { recording ->

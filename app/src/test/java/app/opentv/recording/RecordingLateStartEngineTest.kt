@@ -49,6 +49,35 @@ class RecordingLateStartEngineTest {
             scheduleAlarm = { id, at -> alarms += id to at })
     }
     @After fun close() = db.close()
+    @Test fun conflictPreviewExcludesUnavailableScheduledSourcesAndKeepsAllActiveRows() = runBlocking<Unit> {
+        val disabled = source.copy(id = 2, enabled = false, username = "disabled-account")
+        db.sources().insert(disabled)
+        repo.insert(row())
+        repo.insert(row().copy(id = 2, sourceId = 2))
+        repo.insert(row().copy(id = 3, sourceId = 3)) // Removed provider.
+        repo.insert(row().copy(id = 4, sourceId = 2, status = RecordingStatus.RECORDING))
+        repo.insert(row().copy(id = 5, sourceId = 3, status = RecordingStatus.PREPARING))
+        repo.insert(row().copy(id = 6, sourceId = 4, status = RecordingStatus.FINALIZING))
+        val before = repo.scheduled() + repo.active()
+        val plan = engine.previewConflicts()
+        assertEquals(setOf(1L, 4L, 5L, 6L), plan.windows.keys + plan.rejectedIds)
+        assertFalse(2L in plan.unknownCapacityIds || 3L in plan.unknownCapacityIds)
+        assertEquals(before, repo.scheduled() + repo.active())
+        assertNotNull(manager.accountKeyForSource(2)) // Active disabled sources still register.
+    }
+
+    @Test fun seriesLateStartUpdateReportsMissingRuleAndSuccessfulPersistence() = runBlocking<Unit> {
+        val options = LateStartOptions(LateStartPolicy.MINIMUM_REMAINING, 23)
+        assertFalse(engine.updateSeriesLateStart(99, options))
+        assertTrue(alarms.isEmpty())
+        val id = repo.addRule(SeriesRule(channelId = 1, channelName = "Game", titleKey = "game", title = "Game"))
+        repo.insert(row().copy(seriesRuleId = id))
+        assertTrue(engine.updateSeriesLateStart(id, options))
+        assertEquals(options.policy.name, repo.ruleById(id)!!.lateStartPolicy)
+        assertEquals(23, repo.ruleById(id)!!.minimumRemainingMinutes)
+        assertTrue(alarms.any { it.first == 1L })
+    }
+
     private fun channel(id: Long = 1) = Channel(id = id, sourceId = 1, streamId = "$id", name = "Test $id",
         categoryId = null, logoUrl = null, epgChannelId = null, number = null, streamUrl = "https://private.invalid/live.ts")
 

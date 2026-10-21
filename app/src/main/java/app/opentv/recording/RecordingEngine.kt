@@ -397,8 +397,10 @@ class RecordingEngine(
         true
     }
 
-    suspend fun updateSeriesLateStart(id: Long, options: LateStartOptions) = dueLock.withLock {
-        if (repo.setRuleLateStart(id, options)) rearmScheduled()
+    suspend fun updateSeriesLateStart(id: Long, options: LateStartOptions): Boolean = dueLock.withLock {
+        if (!repo.setRuleLateStart(id, options)) return@withLock false
+        rearmScheduled()
+        true
     }
 
     suspend fun updateGlobalLateStart(options: LateStartOptions) = dueLock.withLock {
@@ -549,7 +551,7 @@ class RecordingEngine(
     /** Builds an account-aware conflict preview for scheduled recordings. */
     suspend fun previewConflicts(): DvrConflictPlan {
         val manager = durationConnections
-        val candidates = repo.scheduled() + repo.active()
+        val candidates = repo.scheduled().filter { sources.byId(it.sourceId)?.enabled == true } + repo.active()
         candidates.map { it.sourceId }.distinct().forEach { id -> sources.byId(id)?.let { manager.registerSource(it) } }
         return DvrConflictPolicy.resolve(candidates, durationClock(),
             accountForSource = { manager.accountKeyForSource(it) ?: "unregistered:$it" },
