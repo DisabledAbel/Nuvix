@@ -166,6 +166,40 @@ class ReleasePolicyTest(unittest.TestCase):
                 control.sign("1.0.0", "stable", "a" * 64)
             run.assert_not_called()
 
+    def test_prepare_binds_unsigned_apk_and_metadata_to_job_output(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(control, "ROOT", Path(directory)), \
+             patch.object(control, "preflight", return_value=("v1.0.0", 23)):
+            root = Path(directory)
+            output = root / "app/build/outputs/apk/release"
+            output.mkdir(parents=True)
+            (output / "app-release-unsigned.apk").write_bytes(b"unsigned")
+            (output / "output-metadata.json").write_text(json.dumps({"applicationId": control.release.APPLICATION_ID,
+                "elements": [{"versionName": "1.0.0", "versionCode": 23, "outputFile": "app-release-unsigned.apk"}]}))
+            with patch.dict(os.environ, dict(self.env, GITHUB_OUTPUT=str(root / "output"), GITHUB_STEP_SUMMARY=str(root / "summary"))):
+                control.prepare("1.0.0", "stable")
+            plan = json.loads((root / "prepared/plan.json").read_text())
+            self.assertEqual(control.digest(root / "prepared/unsigned.apk"), plan["unsignedSha256"])
+            self.assertEqual(control.digest(root / "prepared/output-metadata.json"), plan["metadataSha256"])
+            self.assertEqual("plan_sha256=" + control.digest(root / "prepared/plan.json") + "\n", (root / "output").read_text())
+            self.assertEqual("a" * 40, plan["commit"])
+
+    def test_signing_tool_failure_cleans_multiline_base64_keystore(self):
+        from subprocess import CalledProcessError
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(control, "verify_prepared", return_value=("v1.0.0", 23)), \
+             patch.dict(os.environ, {"KEYSTORE_BASE64": "Zml4\ndHVyZQ==\n", "KEYSTORE_PASSWORD": "private",
+                                    "KEY_ALIAS": "alias", "KEY_PASSWORD": "private", "ANDROID_HOME": directory,
+                                    "RUNNER_TEMP": directory, "EXPECTED_SIGNING_CERT_SHA256": "a" * 64}):
+            key = Path(directory) / "nuvix-release.jks"
+            def fail(*args):
+                self.assertEqual(b"fixture", key.read_bytes())
+                self.assertEqual(0o600, key.stat().st_mode & 0o777)
+                self.assertNotIn("private", args)
+                raise CalledProcessError(1, "apksigner")
+            with patch.object(control.release, "run", side_effect=fail), self.assertRaises(CalledProcessError):
+                control.sign("1.0.0", "stable", "a" * 64)
+            self.assertFalse(key.exists())
+
     def test_failed_revalidation_has_no_publication_side_effect(self):
         with patch.object(control, "verify_prepared", side_effect=ValueError("canceled")), \
              patch.object(control, "api") as api:

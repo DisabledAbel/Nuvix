@@ -220,7 +220,7 @@ def sign(version, channel, expected):
     try:
         with keystore.open("xb") as stream:
             keystore.chmod(0o600)
-            stream.write(base64.b64decode(os.environ["KEYSTORE_BASE64"], validate=True))
+            stream.write(base64.b64decode("".join(os.environ["KEYSTORE_BASE64"].split()), validate=True))
         # Password values never appear in argv or logs. apksigner output is captured.
         release.run(str(tools / "apksigner"), "sign", "--ks", str(keystore),
                     "--ks-key-alias", os.environ["KEY_ALIAS"], "--ks-pass", "env:KEYSTORE_PASSWORD",
