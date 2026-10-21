@@ -8,7 +8,7 @@ Nuvix is an independent GPL-3.0-or-later modification of [OpenTV](https://github
 - Android SDK platform 35, build-tools 36.0.0 and platform-tools.
 - Android Studio with Kotlin support, or the command-line SDK tools.
 
-The checked-in Gradle 9.6.0 wrapper includes an official distribution SHA-256 checksum. Android Gradle Plugin 9.4.1, built-in Kotlin 2.2.10 and KSP 2.3.1 are defined in `gradle/libs.versions.toml`. Nuvix targets Android 15 and preserves upstream support for Android 6/API 23 and newer. Android TV, Google TV and Fire TV capabilities vary by device.
+The checked-in Gradle 9.6.0 wrapper includes an official distribution SHA-256 checksum. Android Gradle Plugin 9.4.1, built-in Kotlin 2.2.10 and KSP 2.3.9 are defined in `gradle/libs.versions.toml`. Nuvix targets Android 15 and preserves upstream support for Android 6/API 23 and newer. Android TV, Google TV and Fire TV capabilities vary by device.
 
 AGP 9 supplies Kotlin support directly; do not reapply `org.jetbrains.kotlin.android`
 or restore the removed `android.kotlinOptions` block. Kotlin's JVM target follows
