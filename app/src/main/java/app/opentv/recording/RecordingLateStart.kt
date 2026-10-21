@@ -73,6 +73,17 @@ object RecordingLateStart {
             else "Useful capture started within the program-start grace; optional padding does not affect completeness")
     }
 
+    /** First instant a currently eligible start must be checked again, including equality. */
+    fun recheckAt(recording: Recording, options: LateStartOptions, now: Long): Long {
+        val end = recording.scheduledEndMillis.takeIf { it > 0 } ?: Long.MAX_VALUE
+        val policyEnd = when (options.policy) {
+            LateStartPolicy.SKIP_IF_LATE -> recording.programmeStartMillis.coerceAtMost(Long.MAX_VALUE - GRACE_MILLIS - 1) + GRACE_MILLIS + 1
+            LateStartPolicy.MINIMUM_REMAINING -> recording.programmeEndMillis - options.minimumMinutes * 60_000L + 1
+            else -> end
+        }
+        return minOf(end, policyEnd).coerceAtLeast(now.coerceAtMost(Long.MAX_VALUE - 1) + 1)
+    }
+
     /** Numeric timing and fixed reasons only: never serialize a Recording or a provider URL. */
     fun history(recording: Recording, at: Long, decision: Decision): String =
         "${decision.reason}. Policy=${decision.options.policy.name}; minimumMinutes=${if (decision.options.policy == LateStartPolicy.MINIMUM_REMAINING) decision.options.minimumMinutes else 0}; " +

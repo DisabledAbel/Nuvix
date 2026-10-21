@@ -217,10 +217,17 @@ class RecordingEngine(
      * each launch. A booking whose start slipped past while the app was dead fires almost at once;
      * re-setting an existing alarm is idempotent, so this is safe to run every time.
      */
-    suspend fun rearmScheduled() {
+    suspend fun rearmScheduled(excludingId: Long? = null, releasedSourceId: Long? = null) {
         repo.failInterrupted()
+        val releasedAccount = releasedSourceId?.let(durationConnections::accountKeyForSource)
+        if (releasedSourceId != null && releasedAccount == null) return
         val now = durationClock()
         for (rec in repo.scheduled()) {
+            if (rec.id == excludingId) continue
+            if (releasedAccount != null) {
+                sources.byId(rec.sourceId)?.let { durationConnections.registerSource(it) }
+                if (durationConnections.accountKeyForSource(rec.sourceId) != releasedAccount) continue
+            }
             if (rec.scheduledStartMillis <= now && !allowLateStart(rec, now)) continue
             val at = if (rec.scheduledStartMillis <= now) now + 1_000L else rec.scheduledStartMillis
             scheduleAlarm(rec.id, at)
@@ -362,12 +369,10 @@ class RecordingEngine(
             row.seriesRuleId?.let { repo.ruleById(it) }, settings.recordLateStart.value))
 
     /** A skip is durable before any allocator reclamation or output creation. */
-    suspend fun allowLateStart(row: Recording, at: Long = durationClock(), anticipated: Boolean = false): Boolean {
-        val evaluated = lateStartDecision(row, at)
-        val decision = if (anticipated) evaluated.copy(reason = "Expected provider capture start=$at. ${evaluated.reason}") else evaluated
+    suspend fun allowLateStart(row: Recording, at: Long = durationClock()): Boolean {
+        val decision = lateStartDecision(row, at)
         if (decision.action == RecordingLateStart.Decision.Action.SKIP) {
-            // A prospective admission decision happens now, not at the future release time.
-            if (repo.commitLateStart(row, if (anticipated) durationClock() else at, decision)) {
+            if (repo.commitLateStart(row, at, decision)) {
                 RecordingScheduler.cancel(appContext, row.id)
                 RecordingScheduler.cancelWarning(appContext, row.id)
                 RecordingConflictNotifications.cancel(appContext, row.id)
@@ -586,14 +591,20 @@ class RecordingEngine(
             val account = manager.accountKeyForSource(recording.sourceId)
             val blockers = repo.active().filter { manager.accountKeyForSource(it.sourceId) == account }
             val next = blockers.map { it.scheduledEndMillis }.filter { it > now }.minOrNull()
-            // A running capture is never canceled to make room. Reevaluate the prospective start,
-            // then the actual start again when capacity is released (including manual extensions).
-            if (next != null && allowLateStart(recording, next + 1_000L, anticipated = true)) {
-                repo.event(recordingId, "WAITING_FOR_ACCOUNT", "Waiting for a provider connection; policy rechecked at expected and actual capture start")
-                scheduleAlarm(recordingId, next + 1_000L)
-            } else if (repo.byId(recordingId)?.status == RecordingStatus.SCHEDULED) {
-                repo.setScheduledStatus(recordingId, RecordingStatus.MISSED, "Account capacity is reserved by a higher-priority recording")
-                repo.event(recordingId, "MISSED", "Unattended conflict fallback preserved the higher-priority recording")
+            if (blockers.isNotEmpty()) {
+                val expected = next?.coerceAtMost(Long.MAX_VALUE - 1_000L)?.plus(1_000L) ?: (now + 5_000L)
+                val projected = lateStartDecision(recording, expected)
+                val current = lateStartDecision(recording, now)
+                // A provider may release earlier than its expected deadline. Keep an eligible
+                // booking pending until actual admission or the policy's own cutoff, whichever
+                // comes first. Actual release also rearms this account's waiting bookings.
+                val checkAt = minOf(expected, RecordingLateStart.recheckAt(recording, current.options, now))
+                repo.event(recordingId, "WAITING_FOR_ACCOUNT",
+                    "Waiting for provider capacity; expected capture start=$expected; projected policy=${projected.action}; recheck at=$checkAt", now)
+                scheduleAlarm(recordingId, checkAt)
+            } else if (repo.setScheduledStatus(recordingId, RecordingStatus.MISSED,
+                    "Account capacity is reserved by a higher-priority recording")) {
+                repo.event(recordingId, "MISSED", "Unattended conflict fallback preserved the higher-priority recording", now)
             }
             return@withLock false
         }

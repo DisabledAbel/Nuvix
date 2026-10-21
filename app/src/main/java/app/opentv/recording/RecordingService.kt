@@ -122,6 +122,7 @@ class RecordingService : Service() {
         var late = false
         var interrupted = false
         var programmeEnd = 0L
+        var captureSourceId: Long? = null
         var deadlineWatcher: Job? = null
         var actualPath: String? = null
         var gateRow: Recording? = null
@@ -136,6 +137,7 @@ class RecordingService : Service() {
             claimed = repo.claimScheduled(id, System.currentTimeMillis())
             if (!claimed) return // Duplicate alarm, canceled booking, or already finished capture.
             val recording = repo.byId(id) ?: return
+            captureSourceId = recording.sourceId
             if (!graph.recordingEngine.allowLateStart(recording)) { claimed = false; return }
             programmeEnd = recording.programmeEndMillis.takeIf { it > 0 } ?: recording.scheduledEndMillis
             val source = graph.sourceRepository.byId(recording.sourceId)?.takeIf { it.enabled }
@@ -302,6 +304,11 @@ class RecordingService : Service() {
                             else if (total > 0) "PARTIAL" else if (expiredEmpty) "MISSED" else "FAILED",
                             finalReason ?: "Capture completed")
                     }.onFailure { Log.w(TAG, "Recording $id final status could not be persisted; recovery will reconcile it") }
+                }
+                // Close/release and final status precede waking other bookings. Keep this job's
+                // own network/admission backoff intact, and never disturb independent accounts.
+                if (token != null && captureSourceId != null) runCatching {
+                    graph.recordingEngine.rearmScheduled(excludingId = id, releasedSourceId = captureSourceId)
                 }
             }
         }
