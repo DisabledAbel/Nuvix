@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
 
     /** Explicit request from the player's PiP button — no eligibility guard, the user asked. */
     fun enterPipNow() {
-        if (!supportsPip()) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !supportsPip()) return
         val multiView = liveSession?.multiView
         val hasMultiView = multiView?.state?.value?.panels?.isNotEmpty() == true
         val previousFullscreen = multiView?.state?.value?.fullscreenPanelId
