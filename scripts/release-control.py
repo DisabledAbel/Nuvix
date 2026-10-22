@@ -119,6 +119,10 @@ def source_metadata(version):
     require(names == [version] and len(codes) == 1, "Commit versionName must match dispatch version")
     code = int(codes[0])
     require(1 <= code <= 2_147_483_647, "Invalid Android versionCode")
+    changelog = ROOT / "CHANGELOG.md"
+    require(changelog.is_file(), "CHANGELOG.md is required before release approval")
+    require(re.search(r"^## \[?" + re.escape(version) + r"\]?(?:\s|$)", changelog.read_text(), re.M),
+            "CHANGELOG.md must contain a heading for the requested release version")
     return code
 
 
