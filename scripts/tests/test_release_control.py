@@ -94,6 +94,7 @@ class ReleasePolicyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "app").mkdir()
+            (root / "CHANGELOG.md").write_text("## 1.0.0\n\nRelease notes.\n")
             for name, code in [("1.0.0", 23), ("1.0.0", 0), ("1.0.0", 2147483648), ("0.1.0", 23)]:
                 (root / "app/build.gradle.kts").write_text(f'versionName = "{name}"\nversionCode = {code}\n')
                 with patch.object(control, "ROOT", root):
@@ -102,6 +103,30 @@ class ReleasePolicyTest(unittest.TestCase):
                     else:
                         with self.assertRaises(ValueError):
                             control.source_metadata("1.0.0")
+
+    def test_source_metadata_requires_matching_version_heading(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(control, "ROOT", Path(directory)):
+            root = Path(directory)
+            (root / "app").mkdir()
+            changelog = root / "CHANGELOG.md"
+            for version in ["1.0.0", "1.0.0-rc.1"]:
+                (root / "app/build.gradle.kts").write_text(f'versionName = "{version}"\nversionCode = 23\n')
+                changelog.unlink(missing_ok=True)
+                with self.subTest(version=version, heading="missing"), self.assertRaisesRegex(ValueError, "CHANGELOG.md"):
+                    control.source_metadata(version)
+                for heading in ["", "## Unreleased", "## 1.0.1", "## 1x0x0", "### " + version,
+                                "## " + version + ".1", "## " + version + "-extra"]:
+                    changelog.write_text(heading + "\nRelease notes mention " + version + ".\n")
+                    with self.subTest(version=version, heading=heading), self.assertRaisesRegex(ValueError, "heading"):
+                        control.source_metadata(version)
+                for heading in ["## " + version, "## [" + version + "] - 2026-10-21"]:
+                    changelog.write_text(heading + "\n\nRelease notes.\n")
+                    with self.subTest(version=version, heading=heading):
+                        self.assertEqual(23, control.source_metadata(version))
+            (root / "app/build.gradle.kts").write_text('versionName = "1.0.0"\nversionCode = 23\n')
+            changelog.write_text("## 1.0.0-rc.1\nCandidate notes.\n")
+            with self.assertRaisesRegex(ValueError, "heading"):
+                control.source_metadata("1.0.0")
 
     def fake_api(self, path, **kwargs):
         values = {f"{control.BASE}/actions/runs/10": self.run,
@@ -319,7 +344,7 @@ class WorkflowSecurityTest(unittest.TestCase):
         self.assertIn("lintRelease", validation)
         steps = publisher["steps"]
         sign = next(s for s in steps if " sign " in s.get("run", ""))
-        self.assertEqual({"KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD"}, set(sign["env"]))
+        self.assertEqual({"GH_TOKEN", "KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD"}, set(sign["env"]))
         self.assertFalse(any("upload-artifact" in s.get("uses", "") for s in steps))
         for job in release["jobs"].values():
             self.assertIn("refs/heads/main", job["if"])
@@ -327,6 +352,28 @@ class WorkflowSecurityTest(unittest.TestCase):
             checkout = next(s for s in job["steps"] if "checkout@" in s.get("uses", ""))
             self.assertEqual("${{ github.sha }}", checkout["with"]["ref"])
             self.assertEqual("false", checkout["with"]["persist-credentials"])
+
+    def test_publish_token_scope_and_setup_action_pins(self):
+        workflow = self.workflows()["release.yml"]
+        self.assertNotIn("GH_TOKEN", workflow.get("env", {}))
+        publisher = workflow["jobs"]["publish"]
+        self.assertNotIn("GH_TOKEN", publisher.get("env", {}))
+        commands = set()
+        pinned_actions = set()
+        for step in publisher["steps"]:
+            run = step.get("run", "")
+            if run.startswith("python3 scripts/release-control.py "):
+                commands.add(run.split()[2])
+                self.assertEqual("${{ github.token }}", step["env"]["GH_TOKEN"])
+            else:
+                self.assertNotIn("GH_TOKEN", step.get("env", {}))
+            uses = step.get("uses", "")
+            name = uses.split("@")[0]
+            if name in ("actions/setup-java", "android-actions/setup-android"):
+                self.assertRegex(uses, r"^[^@]+@[a-f0-9]{40}$")
+                pinned_actions.add(name)
+        self.assertEqual({"verify", "sign", "publish"}, commands)
+        self.assertEqual({"actions/setup-java", "android-actions/setup-android"}, pinned_actions)
 
 
 if __name__ == "__main__":
