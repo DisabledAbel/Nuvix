@@ -1,0 +1,14 @@
+# Enforce with main ruleset: require PR approvals + Code Owner review, dismiss stale
+# approvals, and restrict bypass. CODEOWNERS alone cannot prevent policy changes.
+/.github/CODEOWNERS @DisabledAbel
+/.github/workflows/ @DisabledAbel
+/app/build.gradle.kts @DisabledAbel
+/app/src/main/AndroidManifest.xml @DisabledAbel
+/app/src/main/java/app/opentv/update/ @DisabledAbel
+/scripts/create-release.py @DisabledAbel
+/scripts/release-control.py @DisabledAbel
+/scripts/release-identity.py @DisabledAbel
+/scripts/tests/test*release* @DisabledAbel
+/docs/releases.md @DisabledAbel
+/docs/signing.md @DisabledAbel
+/docs/update-troubleshooting.md @DisabledAbel

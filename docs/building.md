@@ -1,6 +1,6 @@
 # Building Nuvix
 
-Nuvix is an independent GPL-3.0-or-later modification of [OpenTV](https://github.com/opentvproject/opentv). It retains OpenTV's Kotlin, Jetpack Compose, Room and Media3 architecture. Source packages remain `app.opentv` to preserve a reviewable upstream history; generated resources, the namespace and release application ID are `com.disabledabel.nuvix`.
+Nuvix is an independent GPL-3.0-or-later modification of [OpenTV](https://github.com/opentvproject/opentv). It retains OpenTV's Kotlin, Jetpack Compose, Room and Media3 architecture. Source packages remain `app.opentv` to preserve a reviewable upstream history; generated resources and the namespace remain `com.disabledabel.nuvix`, while the permanent release application ID is `com.nuvix.player`. See [migration limitations](releases.md#application-id-migration).
 
 ## Requirements
 
@@ -36,7 +36,7 @@ sdkmanager 'platforms;android-35' 'build-tools;36.0.0' 'platform-tools'
 python3 -m unittest discover -s scripts/tests -v
 ```
 
-The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. Its ID is `com.disabledabel.nuvix.debug`, allowing it to coexist with the stable app. Debug builds cannot install updates intended for the stable ID. Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. Its ID is `com.nuvix.player.debug`, allowing it to coexist with the stable app. Debug builds cannot install updates intended for the stable ID. Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
 A local `./gradlew :app:assembleRelease` without signing credentials produces an **unsigned** APK for inspection. Release builds never fall back to the Android debug signing key. Follow [release signing](signing.md) before distributing an APK.
 

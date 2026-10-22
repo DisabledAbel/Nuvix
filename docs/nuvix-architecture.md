@@ -1,6 +1,6 @@
 # Nuvix architecture
 
-Nuvix keeps OpenTV's native Kotlin/Compose/Media3/Room structure. The upstream commit and original-file digests are recorded in `upstream-source.json`. `MainActivity` owns navigation, the sidebar/home screens present local provider catalogs, `ServiceLocator` retains the dependency graph, and existing catalog, EPG, player, recording, reminder, LAN pairing, and NAS components remain in place. The Kotlin source namespace `app.opentv` preserves upstream structure; generated Android resources and installed identity use `com.disabledabel.nuvix`.
+Nuvix keeps OpenTV's native Kotlin/Compose/Media3/Room structure. The upstream commit and original-file digests are recorded in `upstream-source.json`. `MainActivity` owns navigation, the sidebar/home screens present local provider catalogs, `ServiceLocator` retains the dependency graph, and existing catalog, EPG, player, recording, reminder, LAN pairing, and NAS components remain in place. The Kotlin source namespace `app.opentv` preserves upstream structure; generated Android resources retain namespace `com.disabledabel.nuvix`; the permanent installed identity is `com.nuvix.player`.
 
 The Smart Multi-View/background DVR foundation extends those owners rather than replacing
 them. Its [architecture assessment](smart-multiview-dvr.md) records the baseline, account/

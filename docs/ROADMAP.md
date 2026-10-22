@@ -89,3 +89,17 @@ Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale co
 transport continuity, conflict/preset projection and Compose remote action semantics. Physical
 Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
 USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.
+
+## Permanent v1 identity preparation
+
+- Implemented: production `com.nuvix.player` with retained namespace/source structure, secret-free
+  PR release identity/build metadata/history checks, protected-environment certificate continuity,
+  stable updater signer compatibility and sensitive-file Code Owner requests.
+- Pending administrator verification: independently trusted existing certificate fingerprint,
+  production environment protections/secrets/API visibility and enforceable Code Owner reviews.
+- Pending device acceptance: old/new side-by-side setup, application startup, provider/storage
+  permissions, encrypted database and optional cloud sync, playback/DVR, stable-to-stable and
+  RC-to-stable updates with preserved data. No seamless old-package migration is claimed.
+- Version remains 0.1.0/code 21. Prepare v1 RC/version/changelog separately, then manually request
+  and independently approve a release only after the [v1 checklist](releases.md#v10-readiness-checklist).
+  Nightly publishing remains removed. No release is created by this identity change.

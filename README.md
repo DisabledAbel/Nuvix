@@ -74,6 +74,19 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 - **Cloud sync:** Apply the supplied migrations to your own project, sign in under **Settings → Supabase cloud sync**, then enable sync and choose categories on each TV. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 
+## Permanent app identity
+
+Production builds use **`com.nuvix.player`**. Future RC and stable APKs must use the same
+existing production signing key and strictly increasing Android version codes. Manual
+production approval and actual APK identity checks are required before publication.
+
+Test builds installed as `com.disabledabel.nuvix` are a separate app: install the new package
+alongside it and reconfigure authorized providers/settings. Private databases, tokens and
+Keystore keys cannot transfer automatically. Optional cloud sync can restore only supported,
+previously synced categories after setup and sign-in. Keep the old app until you verify the
+new setup. See [migration and release preparation](docs/releases.md#application-id-migration)
+and [signing continuity](docs/signing.md).
+
 ## Project status
 
 Nuvix is in development. Real-device testing is still needed for launcher selection, remote navigation, playback, database migration, cloud sync, and APK updates.

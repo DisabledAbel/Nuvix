@@ -1,6 +1,6 @@
 # Nuvix updates and troubleshooting
 
-Nuvix checks only **stable GitHub releases from `DisabledAbel/Nuvix`**. Drafts and prereleases are ignored. Android's numeric `versionCode` determines whether a release is newer; a tag or a larger display version name cannot cause a downgrade.
+Nuvix checks only **stable GitHub releases from `DisabledAbel/Nuvix`**. Drafts, prereleases, nightly tags and RC tags are ignored. Discovery scans at most 300 releases in pages of 30, selects the highest compatible versionCode, and fails closed if history exceeds that bound. The installed package and certificate must match before an update is advertised. Android's numeric `versionCode` determines whether a release is newer; a tag or a larger display version name cannot cause a downgrade.
 
 Open **Settings → Updates** or the update controls in About for a manual check. Automatic checks default on and run approximately every six hours when Android schedules the WorkManager job. They do not open dialogs, interrupt playback, or change the player. Update networking uses its own HTTP dispatcher and connection pool. Automatic download defaults off; enabling it requires an unmetered network and a battery that Android considers sufficient. A download can still share device bandwidth with playback.
 
@@ -15,7 +15,7 @@ Every stable release must have exactly one `nuvix.apk` and one `update.json` ass
   "schemaVersion": 1,
   "versionCode": 21,
   "versionName": "0.1.0",
-  "applicationId": "com.disabledabel.nuvix",
+  "applicationId": "com.nuvix.player",
   "apkAsset": "nuvix.apk",
   "sha256": "64 hexadecimal characters from the signed APK",
   "sizeBytes": 12345678,
@@ -51,3 +51,11 @@ On Android 8 and later, allow **Install unknown apps → Nuvix** when requested,
 | No scheduled check in standby | Android/Fire TV may defer work for Doze, networking, battery constraints, or force-stop. Open Nuvix or check manually; periodic timing is approximate. |
 
 Exercise the download, permission-denied/permission-granted, installer approval/cancellation, reboot/process-death, and Fire TV vendor flows on physical devices before announcing release support. JVM tests cover repository pinning, stable-only discovery, numeric versions, metadata validation, corruption, wrong package, and signer trust rules; they do not emulate a real OEM installer or prove device compatibility.
+
+## First stable identity
+
+Old `com.disabledabel.nuvix` testers must install `com.nuvix.player` separately. This is not
+an in-place update; see [migration steps](releases.md#application-id-migration). After that,
+RC → stable and stable → stable retain data when ID/certificate match and versionCode increases.
+Debug and legacy nightly packages remain separate from production. Stable users receive no RC
+updates. The Android installer remains the final signature/installation authority.

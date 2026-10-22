@@ -15,7 +15,7 @@ import org.junit.Test
 
 /** Regression tests for update checker. */
 class UpdateCheckerTest {
-    private val metadata = UpdateMetadata(1, 21, "0.1.0", "com.disabledabel.nuvix", "nuvix.apk", "a".repeat(64), 123, "b".repeat(64))
+    private val metadata = UpdateMetadata(1, 21, "0.1.0", "com.nuvix.player", "nuvix.apk", "a".repeat(64), 123, "b".repeat(64))
     private val release = GitHubRelease("v0.1.0", "Nuvix", "Notes", false, false, "https://github.com/DisabledAbel/Nuvix/releases/tag/v0.1.0",
         listOf(
             GitHubAsset("nuvix.apk", "https://github.com/DisabledAbel/Nuvix/releases/download/v0.1.0/nuvix.apk", 123),
@@ -60,7 +60,7 @@ class UpdateCheckerTest {
     /** Checks: duplicate APK assets and a foreign package are rejected. */
     @Test fun `duplicate APK assets and a foreign package are rejected`() = runTest {
         expectInvalid(checker(release.copy(assets = release.assets + release.assets.first()), metadata))
-        expectInvalid(checker(release, metadata.copy(applicationId = "attacker.app")))
+        assertNull(checker(release, metadata.copy(applicationId = "attacker.app")).check())
     }
 
     /** Checks: release cannot move its metadata asset to another origin. */
@@ -68,6 +68,23 @@ class UpdateCheckerTest {
         expectInvalid(checker(release.copy(assets = release.assets.map {
             if (it.name == "update.json") it.copy(browserDownloadUrl = "https://attacker.example/update.json") else it
         }), metadata))
+    }
+
+    @Test fun `different signer is never advertised as compatible`() = runTest {
+        assertNull(checker(release, metadata.copy(signingCertificateSha256 = "c".repeat(64))).check())
+    }
+
+    @Test fun `old package cannot upgrade to the new production identity`() = runTest {
+        assertNull(checker(release, metadata.copy(applicationId = "com.disabledabel.nuvix")).check())
+    }
+
+    @Test fun `missing installed certificate fails closed before networking`() = runTest {
+        expectInvalid(UpdateChecker(OkHttpClient(), 20, "com.nuvix.player") { emptySet() })
+    }
+
+    @Test fun `RC installation can discover a higher code stable release`() = runTest {
+        // Version name is deliberately not used for installed-version comparison.
+        assertEquals(23L, checker(release, metadata.copy(versionCode = 23), 22).check()?.versionCode)
     }
 
     /** Asserts that the synthetic release is rejected by update validation. */
@@ -80,8 +97,8 @@ class UpdateCheckerTest {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val url = chain.request().url.toString()
             val body = if (url.startsWith("https://api.github.com/")) {
-                assertEquals("https://api.github.com/repos/DisabledAbel/Nuvix/releases/latest", url)
-                UpdateChecker.json.encodeToString(release)
+                assertEquals("https://api.github.com/repos/DisabledAbel/Nuvix/releases?per_page=30&page=1", url)
+                UpdateChecker.json.encodeToString(listOf(release))
             } else {
                 assertEquals("https://github.com/DisabledAbel/Nuvix/releases/download/v0.1.0/update.json", url)
                 UpdateChecker.json.encodeToString(metadata)
@@ -89,6 +106,6 @@ class UpdateCheckerTest {
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                 .code(200).message("OK").body(body.toResponseBody()).build()
         }.build()
-        return UpdateChecker(client, currentCode, "com.disabledabel.nuvix")
+        return UpdateChecker(client, currentCode, "com.nuvix.player") { setOf("b".repeat(64)) }
     }
 }

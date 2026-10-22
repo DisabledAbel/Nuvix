@@ -98,7 +98,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val prefs = UpdatePreferences(applicationContext)
         if (!prefs.automaticChecks) return Result.success()
         return try {
-            val update = UpdateChecker(UpdateNetwork.client, BuildConfig.VERSION_CODE, BuildConfig.APPLICATION_ID).check()
+            val update = UpdateChecker.forInstalledApplication(applicationContext).check()
             prefs.lastCheckTime = System.currentTimeMillis()
             prefs.lastFailure = null
             val previous = prefs.available()

@@ -17,7 +17,7 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.apk = Path(self.directory.name) / "app-release.apk"
         self.apk.write_bytes(b"test APK fixture")
         self.metadata = {"applicationId": release.APPLICATION_ID, "elements": [{"versionCode": 21, "versionName": "0.1.0"}]}
-        self.badging = "package: name='com.disabledabel.nuvix' versionCode='21' versionName='0.1.0'\n"
+        self.badging = "package: name='com.nuvix.player' versionCode='21' versionName='0.1.0'\n"
         self.signature = "Signer #1 certificate DN: CN=Nuvix\nSigner #1 certificate SHA-256 digest: " + "a" * 64 + "\n"
 
     def verify(self):
@@ -51,7 +51,7 @@ class ReleaseVerificationTest(unittest.TestCase):
             self.verify()
 
     def test_wrong_apk_identity_is_rejected(self):
-        with patch.object(release, "run", return_value=self.badging.replace("nuvix'", "nuvix.debug'")):
+        with patch.object(release, "run", return_value=self.badging.replace("player'", "player.debug'")):
             with self.assertRaisesRegex(ValueError, "package identity"):
                 self.verify()
 
@@ -78,9 +78,9 @@ class ReleaseVerificationTest(unittest.TestCase):
                 self.verify()
 
     def nightly_metadata(self):
-        self.metadata["applicationId"] += ".nightly"
+        self.metadata["applicationId"] = release.LEGACY_APPLICATION_ID + ".nightly"
         self.metadata["elements"][0]["versionName"] = "0.1.0-nightly.20261015.1.1"
-        self.badging = self.badging.replace("nuvix'", "nuvix.nightly'").replace("0.1.0'", "0.1.0-nightly.20261015.1.1'")
+        self.badging = self.badging.replace("com.nuvix.player'", "com.disabledabel.nuvix.nightly'").replace("0.1.0'", "0.1.0-nightly.20261015.1.1'")
 
     def test_nightly_checks_real_package_version_and_signing_certificate(self):
         self.nightly_metadata()
