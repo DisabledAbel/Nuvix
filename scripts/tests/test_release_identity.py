@@ -127,6 +127,49 @@ class PackageHistoryTest(unittest.TestCase):
         return ({'tag_name': tag}, {'applicationId': package, 'versionName': tag[1:], 'versionCode': code,
                                   'signingCertificateSha256': 'a' * 64, **extra})
 
+    def test_pr_accepts_exact_published_current_stable_and_rc_versions(self):
+        for version in ('1.0.0', '1.0.0-rc.2'):
+            with self.subTest(version=version):
+                identity.check_pr_history(version, 23, [self.previous('v' + version, 23), self.previous()])
+
+    def test_pr_rejects_current_release_metadata_mismatch_or_draft(self):
+        valid = self.previous('v1.0.0', 23)
+        invalid = [self.previous('v1.0.0', 22), self.previous('v1.0.0', 24),
+                   self.previous('v1.0.0', 23, versionName='1.0.1'),
+                   self.previous('v1.0.0', 23, control.release.LEGACY_APPLICATION_ID),
+                   ({'tag_name': 'v1.0.0'}, None),
+                   ({'tag_name': 'v1.0.0', 'draft': True}, valid[1]),
+                   self.previous('v1.0.0', True)]
+        for previous in invalid:
+            with self.subTest(previous=previous), self.assertRaises(ValueError):
+                identity.check_pr_history('1.0.0', 23, [previous])
+
+    def test_pr_rejects_duplicate_current_release_entries(self):
+        current = self.previous('v1.0.0', 23)
+        with self.assertRaisesRegex(ValueError, 'Duplicate'):
+            identity.check_pr_history('1.0.0', 23, [current, current])
+
+    def test_pr_current_exception_keeps_other_history_checks_strict(self):
+        current = self.previous('v1.0.0', 23)
+        for previous in [self.previous(code=23), self.previous(code=24),
+                         self.previous('v1.0.1', 22), self.previous(package='unknown.app'),
+                         self.previous(versionName='1.0.0'), ({'tag_name': 'v0.9.0'}, None)]:
+            with self.subTest(previous=previous), self.assertRaises(ValueError):
+                identity.check_pr_history('1.0.0', 23, [current, previous])
+
+    def test_release_history_still_rejects_the_exact_published_current_version(self):
+        with self.assertRaisesRegex(ValueError, 'already exists'):
+            control.check_history('v1.0.0', 23, [self.previous('v1.0.0', 23)])
+
+    def test_history_cli_uses_pr_only_current_version_exception(self):
+        with patch('sys.argv', ['release-identity.py', '--metadata', 'metadata.json',
+                                '--android-sdk', 'sdk', '--history']), \
+             patch.object(identity, 'check_source'), patch.object(identity, 'check_workflows'), \
+             patch.object(identity, 'check_unsigned', return_value=('1.0.0', 23)), \
+             patch.object(control, 'published_history', return_value=[self.previous('v1.0.0', 23)]), \
+             patch.dict(identity.os.environ, {}, clear=True):
+            identity.main()
+
     def test_old_package_does_not_constrain_new_code_sequence(self):
         control.check_history('v0.1.0', 21, [self.previous('v0.0.9', 999, control.release.LEGACY_APPLICATION_ID)])
 

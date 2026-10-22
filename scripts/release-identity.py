@@ -136,6 +136,22 @@ def check_unsigned(metadata_path, tools, root=ROOT):
     return version, code
 
 
+def check_pr_history(version, code, history):
+    """Allow an unchanged published current version in PRs; validate all other history strictly."""
+    tag = control.version_tag(version, "rc" if "-rc." in version else "stable")
+    current = [(item, metadata) for item, metadata in history if item.get("tag_name") == tag]
+    require(len(current) <= 1, "Duplicate current release in published history")
+    if current:
+        item, metadata = current[0]
+        require(not item.get("draft") and isinstance(metadata, dict) and
+                metadata.get("applicationId") == PRODUCTION_ID and
+                type(metadata.get("versionCode")) is int and metadata["versionCode"] == code and
+                metadata.get("versionName") == version,
+                "Published current release must match committed package, versionCode and versionName")
+    control.check_history(tag, code, [(item, metadata) for item, metadata in history
+                                    if item.get("tag_name") != tag])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--metadata", type=Path)
@@ -151,8 +167,7 @@ def main():
         require(args.android_sdk is not None, "--android-sdk required for actual APK inspection")
         version, code = check_unsigned(args.metadata, args.android_sdk / "build-tools/36.0.0")
         if args.history:
-            tag = control.version_tag(version, "rc" if "-rc." in version else "stable")
-            control.check_history(tag, code, control.published_history())
+            check_pr_history(version, code, control.published_history())
     else:
         require(not args.history, "History validation requires inspected APK metadata")
     print("Production identity, unsigned build and release policy checks passed")
