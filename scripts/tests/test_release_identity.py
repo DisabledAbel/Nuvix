@@ -84,14 +84,19 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['publish'].pop('environment'),
                        lambda w: w['jobs']['publish'].update(needs=['validate']),
                        lambda w: w['jobs']['publish']['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64),
-                       lambda w: w['jobs']['publish']['steps'].pop(2)]:
+                       lambda w: w['jobs']['publish']['steps'].pop(2),
+                       lambda w: w['jobs']['publish']['steps'][2].update({'if': 'false'}),
+                       lambda w: w['jobs']['publish'].update({'continue-on-error': 'true'}),
+                       lambda w: w['jobs']['publish'].update({'if': w['jobs']['publish']['if'] + ' || true'})]:
             self.mutate('release.yml', change)
 
     def test_pr_secrets_write_permissions_and_nightly_trigger_rejected(self):
         for change in [lambda w: w['jobs']['build'].update(env={'KEYSTORE_PASSWORD': '${{ secrets.KEYSTORE_PASSWORD }}'}),
                        lambda w: w['jobs']['build'].update(permissions={'contents': 'write'}),
                        lambda w: w['on'].update(schedule=[{'cron': '0 0 * * *'}]),
-                       lambda w: w['jobs']['build']['steps'].append({'run': 'gh release create v1.0.0'})]:
+                       lambda w: w['jobs']['build']['steps'].append({'run': 'gh release create v1.0.0'}),
+                       lambda w: w['jobs']['build'].update({'if': 'false'}),
+                       lambda w: w['jobs']['build']['steps'][3].update({'continue-on-error': 'true'})]:
             self.mutate('build.yml', change)
 
     def test_unsigned_apk_inspection_checks_binary_and_committed_versions(self):
