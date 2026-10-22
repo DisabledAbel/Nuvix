@@ -74,7 +74,7 @@ def check_workflows(root=ROOT):
             publisher.get("needs") == ["validate", "security"], "Publisher must require production approval and CI")
     for job in release["jobs"].values():
         condition = job.get("if", "")
-        require(all(value in condition for value in ("refs/heads/main", "workflow_dispatch", "DisabledAbel/Nuvix")),
+        require(condition == "github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'",
                 "Release jobs must run only for manual main requests")
         checkout = [s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")]
         require(len(checkout) == 1 and checkout[0].get("with", {}).get("ref") == "${{ github.sha }}" and
@@ -85,19 +85,31 @@ def check_workflows(root=ROOT):
     require(publisher.get("env", {}).get("EXPECTED_SIGNING_CERT_SHA256") == "${{ vars.SIGNING_CERT_SHA256 }}",
             "Production environment fingerprint is the independent trust baseline")
     require("GH_TOKEN" not in publisher.get("env", {}), "Publisher token must be step-scoped")
+    require(not publisher.get("continue-on-error"), "Publisher failure must block publication")
     for step in commands:
+        require(not step.get("if") and not step.get("continue-on-error"), "Release verification stages cannot be skipped")
         require(step.get("env", {}).get("GH_TOKEN") == "${{ github.token }}" and
                 '--expected-plan-sha256 "$EXPECTED_PLAN_SHA256"' in step["run"], "Verify exact prepared artifacts before publication")
     for step in steps:
+        require("EXPECTED_SIGNING_CERT_SHA256" not in step.get("env", {}), "Steps cannot override the independent signing baseline")
         uses = step.get("uses", "")
         if uses.split("@")[0] in ("actions/setup-java", "android-actions/setup-android"):
             require(re.fullmatch(r"[^@]+@[a-f0-9]{40}", uses), "Signing setup actions must use full commit pins")
         require("upload-artifact@" not in uses, "Signed material must not be uploaded as a CI artifact")
     for name in ("build.yml", "release.yml"):
         validate = workflows[name]["jobs"]["build" if name == "build.yml" else "validate"]
-        runs = "\n".join(s.get("run", "") for s in validate["steps"])
-        require("scripts/release-identity.py" in runs and ":app:assembleRelease" in runs and "--metadata" in runs,
-                "PR and release validation must inspect the unsigned release APK")
+        require(not validate.get("if") if name == "build.yml" else True, "PR identity validation must run")
+        require(not validate.get("continue-on-error"), "Validation failure must block publication")
+        runs = [s.get("run", "") for s in validate["steps"]]
+        inspect = 'python3 scripts/release-identity.py --metadata app/build/outputs/apk/release/output-metadata.json --android-sdk "$ANDROID_HOME"'
+        if name == "build.yml":
+            inspect += " --history"
+        for required in ("python3 scripts/release-identity.py", inspect):
+            matches = [s for s in validate["steps"] if s.get("run") == required]
+            require(len(matches) == 1 and not matches[0].get("if") and not matches[0].get("continue-on-error"),
+                    "PR and release identity checks must run directly and cannot be skipped")
+        require(any(run.startswith("./gradlew ") and ":app:assembleRelease" in run for run in runs),
+                "Validation must build the actual unsigned release APK")
 
 
 def check_unsigned(metadata_path, tools, root=ROOT):

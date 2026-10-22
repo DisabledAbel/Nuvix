@@ -87,6 +87,47 @@ class UpdateCheckerTest {
         assertEquals(23L, checker(release, metadata.copy(versionCode = 23), 22).check()?.versionCode)
     }
 
+    @Test fun `discovery selects highest compatible code across stable releases`() = runTest {
+        fun fixture(version: String, code: Long, signer: String = "b".repeat(64)): Pair<GitHubRelease, UpdateMetadata> {
+            val tag = "v$version"
+            return release.copy(tagName = tag, assets = release.assets.map {
+                it.copy(browserDownloadUrl = it.browserDownloadUrl.replace("v0.1.0", tag))
+            }) to metadata.copy(versionName = version, versionCode = code, signingCertificateSha256 = signer)
+        }
+        val pages = listOf(listOf(fixture("0.4.0", 24, "c".repeat(64)), fixture("0.3.0", 23), fixture("0.2.0", 22)))
+        assertEquals(23L, paginatedChecker(pages).check()?.versionCode)
+    }
+
+    @Test fun `discovery continues beyond a page full of ignored releases`() = runTest {
+        val ignored = release.copy(prerelease = true, assets = emptyList()) to metadata
+        val pages = listOf(List(30) { ignored }, listOf(release to metadata))
+        assertEquals(21L, paginatedChecker(pages).check()?.versionCode)
+    }
+
+    @Test fun `unbounded history fails closed`() = runTest {
+        val ignored = release.copy(draft = true, assets = emptyList()) to metadata
+        expectInvalid(paginatedChecker(List(10) { List(30) { ignored } }))
+    }
+
+    private fun paginatedChecker(pages: List<List<Pair<GitHubRelease, UpdateMetadata>>>): UpdateChecker {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val body = if (request.url.host == "api.github.com") {
+                assertEquals("30", request.url.queryParameter("per_page"))
+                val page = request.url.queryParameter("page")!!.toInt()
+                UpdateChecker.json.encodeToString(pages[page - 1].map { it.first })
+            } else {
+                val entry = pages.flatten().first { pair ->
+                    pair.first.assets.any { it.name == "update.json" && it.browserDownloadUrl == request.url.toString() }
+                }
+                UpdateChecker.json.encodeToString(entry.second)
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(200).message("OK").body(body.toResponseBody()).build()
+        }.build()
+        return UpdateChecker(client, 20, "com.nuvix.player") { setOf("b".repeat(64)) }
+    }
+
     /** Asserts that the synthetic release is rejected by update validation. */
     private suspend fun expectInvalid(checker: UpdateChecker) {
         try { checker.check(); fail("Expected validation failure") } catch (_: UpdateValidationException) { }
