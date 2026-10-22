@@ -11,7 +11,8 @@ android {
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        applicationId = "com.disabledabel.nuvix"
+        // Permanent installed identity; namespace intentionally retains generated R/BuildConfig imports.
+        applicationId = "com.nuvix.player"
         minSdk = 23
         targetSdk = 35
         versionCode = 21

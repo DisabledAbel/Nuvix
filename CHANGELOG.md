@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Establish permanent production application ID `com.nuvix.player`, preserving the existing
+  namespace/source packages and production signing key. Old-package testers install separately;
+  private data and provider credentials are not migrated automatically.
+- Add secret-free PR checks of unsigned APK identity, committed/generated versions, published
+  production version history and the manual approval workflow. Keep signing fingerprint control
+  in the protected production environment and cross-check prior production releases.
+- Select stable updates by compatible installed package/certificate and highest versionCode
+  across bounded release history; ignore drafts, RCs and nightlies. Android approval and APK
+  verification remain mandatory. No version bump, release publication or nightly workflow.
+
 - Add configurable DVR late starts: default Record Remaining, Skip If Late and minimum remaining
   scheduled program time, including inclusive threshold equality and remote custom minutes.
 - Persist live global/series inheritance and episode overrides; share policy checks across alarms,

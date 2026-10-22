@@ -538,3 +538,45 @@ separate save. Existing duration, stale deadline, provider, Multi-View and secur
 Use the [manual Google TV checklist](recording-late-start.md#manual-google-tv-checklist) for focus
 restoration/Back, screen-off/wakeup/boot, provider conflicts, active duration edits, USB/NAS,
 clock/DST changes and populated upgrades. JVM tests do not certify physical-TV/provider behavior.
+
+## Permanent Android identity and signing protection
+
+Run `python3 -m unittest discover -s scripts/tests -v` and `python3 scripts/release-identity.py`.
+The identity mutation tests cover a wrong production ID, namespace separation, hardcoded
+FileProvider authorities, changed startup classes, missing verification tools, alternate workflow
+extensions, removed approval stages, altered fingerprint baselines, PR secret access, write
+permissions and nightly triggers. Synthetic binary-tool outputs test actual-versus-generated
+metadata, unsigned PR outputs and code consistency; signing tests retain real verifier failure
+contracts for debug/unsigned/wrong-certificate APKs. History fixtures cover old-package separation,
+unknown/malformed metadata, code reuse/regression, RC → stable, tag agreement and fingerprint drift.
+
+Build runs the unchanged Android unit/lint/debug tasks plus `:app:assembleRelease`, then inspects
+`app/build/outputs/apk/release/output-metadata.json` and actual APK badging/signature status with
+build-tools 36.0.0, followed by published history checks. No signing credentials are available to
+this job. Release performs the same checks, existing release lint and all approval/signing checks.
+`ApplicationIdentityTest` resolves merged launcher/HOME/recording/installer components and
+FileProvider URIs under the debug derivative of the new ID. It verifies source-class/namespace
+separation; it does not claim to execute native application startup on a real TV.
+`UpdateCheckerTest` covers stable filtering, incompatible packages/signers, missing signer,
+RC-to-stable codes and stable release/manifest agreement. Existing update security tests check
+actual download integrity, archive ID/code and installed-certificate continuity. All existing
+Room, cloud sync, recording and playback tests remain enabled, as do `scripts/test-supabase.sh`
+and the bounded Sports Hub benchmark. Hosted Supabase schemas are not changed by this PR.
+
+Before v1, test the following on Android TV/Google TV and supported Fire TV:
+
+1. Install the new package alongside the old app; launch normally and as opt-in HOME. Verify
+   provider playback, service/receiver alarms, encrypted database setup and new-package permissions.
+2. Reconfigure providers and authenticate optional cloud sync; verify only enabled categories
+   return, including profile/content matching. Check USB/NAS access and recreate desired bookings.
+3. Install two sequential production-signed test builds with increasing codes. Verify the normal
+   Android approval prompt, retained settings/providers/history, playback, DVR and restart behavior.
+4. Repeat RC → stable with identical ID/certificate and a higher stable code. Confirm stable
+   discovery excludes drafts, nightlies, RCs, old packages and wrong-certificate metadata.
+5. Reject same/lower codes, wrong packages/certificates, corrupt downloads and missing fingerprints.
+   Exercise cancellation and unknown-source permission denial without uninstalling existing data.
+
+No production key is used in unit tests and no release is dispatched for validation. Local native
+builds require Gradle/Android downloads; if unavailable, report the blocker and rely on required
+GitHub Actions before review readiness. Physical startup, native SQLCipher and OEM installation
+acceptance remain device checks even after CI passes.

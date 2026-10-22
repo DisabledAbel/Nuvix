@@ -214,7 +214,7 @@ object UpdateHub {
 
 /** Coordinates foreground release checks, downloads and Android-approved installation. */
 class UpdateViewModel(app: Application) : AndroidViewModel(app) {
-    private val checker = UpdateChecker(UpdateNetwork.client, BuildConfig.VERSION_CODE, BuildConfig.APPLICATION_ID)
+    private val checker = UpdateChecker.forInstalledApplication(app)
     private val installer = ApkInstaller()
     private val prefs = UpdatePreferences(app)
     val state = UpdateHub.state.asStateFlow()

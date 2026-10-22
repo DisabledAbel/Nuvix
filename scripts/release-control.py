@@ -126,14 +126,45 @@ def source_metadata(version):
     return code
 
 
-def check_history(tag, code, history):
+def version_key(tag):
+    match = re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-rc\.([1-9][0-9]*))?", tag, re.ASCII)
+    require(match, "Published release has an invalid stable/RC tag")
+    return (*map(int, match.group(1, 2, 3)), 0 if match[4] else 1, int(match[4] or 0))
+
+
+def check_history(tag, code, history, expected_certificate=None):
+    current = version_key(tag)
     for item, metadata in history:
         require(item.get("tag_name") != tag, "Release version already exists (including drafts)")
         if item.get("draft") or item.get("tag_name", "").startswith("nightly-"):
             continue
-        require(isinstance(metadata, dict) and metadata.get("applicationId") == release.APPLICATION_ID
-                and type(metadata.get("versionCode")) is int, "Published release has missing/invalid update metadata")
+        require(isinstance(metadata, dict) and metadata.get("applicationId") in
+                (release.APPLICATION_ID, release.LEGACY_APPLICATION_ID) and
+                type(metadata.get("versionCode")) is int and 1 <= metadata["versionCode"] <= 2_147_483_647,
+                "Published release has missing/invalid update metadata")
+        previous = version_key(item.get("tag_name", ""))
+        require(metadata.get("versionName") == item["tag_name"][1:], "Published tag and update versionName differ")
+        # A different Android package cannot be an in-place upgrade predecessor.
+        # Still validate its metadata; never skip unknown or malformed history.
+        if metadata["applicationId"] == release.LEGACY_APPLICATION_ID:
+            continue
         require(code > metadata["versionCode"], "versionCode must exceed every published stable and RC version")
+        require(current > previous, "Release version must follow every published stable and RC version")
+        if expected_certificate is not None:
+            require(metadata.get("signingCertificateSha256", "").lower() == expected_certificate.lower(),
+                    "Published production certificate differs from the independently configured signing baseline")
+
+
+def published_history():
+    history = []
+    for item in pages(f"{BASE}/releases"):
+        metadata = None
+        if not item.get("draft") and not item.get("tag_name", "").startswith("nightly-"):
+            assets = [a for a in item.get("assets", []) if a["name"] == "update.json"]
+            require(len(assets) == 1 and 1 <= assets[0]["size"] <= 16384, "Published release lacks bounded update metadata")
+            metadata = json.loads(api(f"{BASE}/releases/assets/{int(assets[0]['id'])}", binary=True))
+        history.append((item, metadata))
+    return history
 
 
 def preflight(version, channel):
@@ -151,15 +182,7 @@ def preflight(version, channel):
     check_environment(environment, policies)
     require(api(f"{BASE}/git/ref/tags/{tag}", missing=True) is None, "Tag already exists; never overwrite it")
     code = source_metadata(version)
-    history = []
-    for item in pages(f"{BASE}/releases"):
-        metadata = None
-        if not item.get("draft") and not item.get("tag_name", "").startswith("nightly-"):
-            assets = [a for a in item.get("assets", []) if a["name"] == "update.json"]
-            require(len(assets) == 1 and assets[0]["size"] <= 16384, "Published release lacks bounded update metadata")
-            metadata = json.loads(api(f"{BASE}/releases/assets/{int(assets[0]['id'])}", binary=True))
-        history.append((item, metadata))
-    check_history(tag, code, history)
+    check_history(tag, code, published_history(), os.environ.get("EXPECTED_SIGNING_CERT_SHA256"))
     return tag, code
 
 

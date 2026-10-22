@@ -8,6 +8,57 @@ During this implementation, GitHub reported this repository as **public**. GitHu
 
 References: [GitHub environment protection](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments), [deployment review](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments), [review-history API](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run).
 
+## Application ID migration
+
+The permanent v1 production identity is **`com.nuvix.player`**. The former installed ID
+`com.disabledabel.nuvix` is a different Android app even when signed by the same certificate.
+Android cannot update it in place to the new ID. Namespace `com.disabledabel.nuvix` remains
+for generated R/BuildConfig classes and Kotlin sources remain `app.opentv`; no broad rename
+or database schema change is necessary. FileProvider authorities resolve from `${applicationId}`;
+application, activity, HOME alias, recording and installer classes remain fully qualified.
+Authentication uses an email code, without a package-bound OAuth/deep-link callback.
+
+There is no general settings-file export/import or private-database transfer. Existing supported
+Supabase metadata sync, LAN pairing and NAS sync retain their limited scopes. LAN/NAS bundles
+may contain credential-bearing URLs, so do not publish or attach them as migration exports.
+No automatic private-data copying, token/Keystore export or old-app uninstall is performed.
+
+1. Keep the old installation and credentials privately available. Finish active recordings first.
+2. If already using optional Supabase sync, run Sync Now on the old app for enabled categories.
+3. Install the new package separately. Re-add authorized providers and match profile names;
+   reselect storage permissions, launcher choices and recording settings. Recreate scheduled DVR
+   bookings; old app alarms do not transfer and both apps could otherwise record at once.
+4. To recover supported synced metadata, configure the same Supabase project and account,
+   authenticate again, enable the desired categories, refresh provider catalogs, then Sync Now.
+   Content matching must be unique; providers, tokens, playback tuning and local recording files
+   are not cloud-restored. Verify favorites/groups/progress before making further edits.
+5. Verify playback, settings, recordings and any shared storage access before deciding whether
+   to remove the old app. Uninstalling can delete its private data. No seamless migration is claimed.
+
+At inspection there were **no GitHub Releases**. There is no public production certificate to
+bootstrap from. An administrator must verify the existing keystore's fingerprint against an
+independently trusted record; never generate a replacement or trust a PR-provided fingerprint.
+If no trusted record is available, publication remains blocked until identity is established
+independently. This PR does not provision secrets or change the trust baseline.
+
+## CI identity protection
+
+`scripts/release-identity.py` runs in ordinary PR CI without private keys. It checks the permanent
+ID, unsigned-release signing configuration, provider authority, startup class, required scripts,
+and the allowlisted workflow inventory. It rejects added release workflows, write permissions
+outside the gated publisher, signing secrets in validation jobs, scheduled publishing and removed
+approval/verification stages. Policy edits themselves require protected Code Owner review;
+repository tests cannot defend against an administrator deliberately rewriting tests and policy.
+
+PR CI also builds the unsigned release, compares Gradle output with committed versions, reads
+actual APK badging with `aapt`, rejects debuggable or signed validation outputs using `apksigner`,
+and compares the inspected versionCode against published production stable/RC metadata. API
+errors and malformed or unknown-package history fail closed. Legacy `com.disabledabel.nuvix`
+releases are validated but do not constrain the new package's code sequence; tags remain globally
+unique. Tags must match metadata versions and progress RC → stable or forward. Approved
+production checks also compare historical production certificates to the protected fingerprint.
+The signed APK verifier and checksum/approval transaction from PR #45 remain mandatory.
+
 ## Configure production before enabling publication
 
 1. Open [Settings → Environments](https://github.com/DisabledAbel/Nuvix/settings/environments) and create `production`.
@@ -17,7 +68,7 @@ References: [GitHub environment protection](https://docs.github.com/en/actions/h
 5. Under deployment branches and tags select **Selected branches and tags**. Add exactly one **Branch** rule named `main`. Do not add tag rules or wildcard branches. The workflow uses the immutable dispatch commit from `main`; it does not dispatch from tags.
 6. Move the existing signing credentials into **production environment secrets** using the names below. Remove duplicate repository/organization signing secrets after verifying the environment copy, so ordinary validation or another workflow cannot use those credentials. Preserve the existing key; never create a replacement for an installed production app.
 7. Configure `SIGNING_CERT_SHA256` as a production environment variable, with the independently recorded existing certificate fingerprint (64 hex characters, no colons). Do not copy a fingerprint from an untrusted build as a new trust root.
-8. Retain the repository CI ruleset and review changes to workflows/signing scripts before merging. At inspection, ruleset `CI` required `Compile, test and lint` on the default branch, allowed admin bypass, and required zero PR approvals. This PR does not modify those settings. Consider requiring human PR review, restricting version-tag modification, and limiting who can administer environments and signing credentials.
+8. Retain the repository CI ruleset and review changes to workflows/signing scripts before merging. At inspection, ruleset `CI` required `Compile, test and lint` on the default branch, allowed admin bypass, and required zero PR approvals. This PR does not modify those settings. Require pull requests, at least one independent approval, Code Owner review, dismissal of stale approvals, approval of the latest push, and restrict bypass. Add a trusted collaborator as a code owner if the owner authors these changes (authors cannot approve their own PRs). Require both `Compile, test and lint` and `Supabase migrations and security`. Restrict version-tag modification and who can administer environments and signing credentials. `.github/CODEOWNERS` requests review for release policy, signing/updater code, Gradle and these docs; CODEOWNERS alone does not enforce any approval.
 
 | Production secret | Value |
 | --- | --- |
@@ -56,9 +107,9 @@ If plan/visibility changes make required reviewers unavailable, or approval/API 
 
 ## Compatibility and verification
 
-RC and stable use `com.disabledabel.nuvix`, the same signing identity, and one increasing code sequence. An RC intentionally installed on a device can upgrade to stable only when stable has a higher versionCode and the same certificate. RC installation can change app data; exercise it on a test device first. Existing `.nightly` installations are a different package and cannot migrate in place. The legacy nightly Gradle variant and verification fixtures remain untouched for compatibility; there is no active nightly publishing path and the release CLI only accepts stable/RC.
+RC and stable use `com.nuvix.player`, the same signing identity, and one increasing code sequence. An RC intentionally installed on a device can upgrade to stable only when stable has a higher versionCode and the same certificate. RC installation can change app data; exercise it on a test device first. Existing `.nightly` installations are a different package and cannot migrate in place. The legacy nightly Gradle variant and verification fixtures remain untouched for compatibility; there is no active nightly publishing path and the release CLI only accepts stable/RC.
 
-`UpdateChecker` uses `/releases/latest`, ignores draft/prerelease responses and all nonstable tag formats even if an RC is accidentally marked stable, and requires the stable tag to match the manifest versionName. Existing versionCode, allowed-URL, size, APK checksum, package and signer checks remain. Android installation consent is unchanged. Test stable → newer stable and RC → newer stable on representative devices; confirm no RC is offered to a stable device and that failed/partial draft publication produces no available update. Updater behavior is covered by JVM regression tests.
+`UpdateChecker` scans up to 10 pages of 30 releases (failing closed beyond the bound), ignores draft/prerelease responses and all nonstable tag formats even if an RC is accidentally marked stable, and requires the stable tag to match the manifest versionName. It offers only matching installed packages and certificate fingerprints, selecting the highest compatible versionCode. Existing allowed-URL, size, APK checksum, archive package and signer checks remain. Android installation consent is unchanged. Test stable → newer stable and RC → newer stable on representative devices; confirm no RC is offered to a stable device and that failed/partial draft publication produces no available update. Updater behavior is covered by JVM regression tests.
 
 The release includes `nuvix.apk`, `update.json`, `SHA256SUMS`, `release-notes.md` and the corresponding `nuvix-v…-source.tar.gz` with GPL-3.0-or-later source and attribution. Checksums cover all four other assets. Notes include Android 6.0/API 23 minimum, installation guidance and the authorized-source policy. Nuvix supplies no channels, playlists, credentials or copyrighted media and cannot promise universal device/provider playback or DVR compatibility.
 
@@ -84,6 +135,8 @@ Repository administrators and holders of release-capable tokens can change polic
 
 ## v1.0 readiness checklist
 
+- [ ] Verify fresh installation under `com.nuvix.player`, manifest/provider resolution and old-package migration limits.
+- [ ] Enforce Code Owner approval and both required Build checks without administrator bypass.
 - [ ] Verify `production` protections, main-only deployment rule, another authorized human reviewer, no admin bypass and API visibility.
 - [ ] Securely copy existing signing secrets to `production`, remove broad copies, and independently verify the public certificate fingerprint.
 - [ ] CI is green; retain Android, Python, Supabase and benchmark checks and current branch protections.

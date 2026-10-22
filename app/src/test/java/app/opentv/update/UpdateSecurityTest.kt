@@ -11,15 +11,15 @@ class UpdateSecurityTest {
     @get:Rule val temporary = TemporaryFolder()
     private val trustedSigner = "a".repeat(64)
     private val attackerSigner = "b".repeat(64)
-    private val metadata = UpdateMetadata(1, 21, "0.1.0", "com.disabledabel.nuvix", "nuvix.apk",
+    private val metadata = UpdateMetadata(1, 21, "0.1.0", "com.nuvix.player", "nuvix.apk",
         "c".repeat(64), 12, trustedSigner)
     private val update = UpdateChecker.Update(21, "0.1.0", "Nuvix", "", 
         "https://github.com/DisabledAbel/Nuvix/releases/download/v0.1.0/nuvix.apk", 12,
-        "https://github.com/DisabledAbel/Nuvix/releases/tag/v0.1.0", "c".repeat(64), trustedSigner, "com.disabledabel.nuvix")
+        "https://github.com/DisabledAbel/Nuvix/releases/tag/v0.1.0", "c".repeat(64), trustedSigner, "com.nuvix.player")
 
     /** Checks: valid release metadata is accepted. */
     @Test fun `valid release metadata is accepted`() {
-        UpdateSecurity.validateMetadata(metadata, "com.disabledabel.nuvix", 12)
+        UpdateSecurity.validateMetadata(metadata, "com.nuvix.player", 12)
     }
 
     /** Checks: rejects malformed hashes schema package and asset length. */
@@ -30,7 +30,7 @@ class UpdateSecurityTest {
             metadata.copy(sha256 = "bad"), metadata.copy(signingCertificateSha256 = "bad"),
             metadata.copy(versionCode = 0), metadata.copy(sizeBytes = 600L * 1024 * 1024),
         )) assertThrows(UpdateValidationException::class.java) {
-            UpdateSecurity.validateMetadata(invalid, "com.disabledabel.nuvix", 12)
+            UpdateSecurity.validateMetadata(invalid, "com.nuvix.player", 12)
         }
     }
 
@@ -90,10 +90,10 @@ class UpdateSecurityTest {
     private fun verifyIdentity(
         candidate: UpdateChecker.Update,
         installedVersion: Long = 20,
-        archivePackage: String = "com.disabledabel.nuvix",
+        archivePackage: String = "com.nuvix.player",
         archiveVersion: Long = 21,
         archiveName: String = "0.1.0",
         signers: Set<String> = setOf(trustedSigner),
-    ) = UpdateSecurity.validateIdentity("com.disabledabel.nuvix", installedVersion, setOf(trustedSigner),
+    ) = UpdateSecurity.validateIdentity("com.nuvix.player", installedVersion, setOf(trustedSigner),
         archivePackage, archiveVersion, archiveName, signers, candidate)
 }

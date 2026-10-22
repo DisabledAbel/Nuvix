@@ -80,7 +80,7 @@ class ReleasePolicyTest(unittest.TestCase):
                 control.check_approval(reviews, 1, "initiator")
 
     def test_duplicate_draft_and_versioncode_reuse_are_rejected(self):
-        metadata = {"applicationId": control.release.APPLICATION_ID, "versionCode": 22}
+        metadata = {"applicationId": control.release.APPLICATION_ID, "versionCode": 22, "versionName": "1.0.0-rc.1"}
         for item, data, code in [({"tag_name": "v1.0.0", "draft": True}, None, 23),
                                  ({"tag_name": "v1.0.0-rc.1"}, metadata, 22),
                                  ({"tag_name": "v0.1.0"}, metadata, 21),

@@ -10,11 +10,22 @@ import shutil
 import subprocess
 from pathlib import Path
 
-APPLICATION_ID = "com.disabledabel.nuvix"
+APPLICATION_ID = "com.nuvix.player"
+LEGACY_APPLICATION_ID = "com.disabledabel.nuvix"
 
 
 def run(*command: str) -> str:
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout
+
+
+def verify_package(apk: Path, tools: Path, application_id: str, version_code: int, version_name: str):
+    """Inspect the actual binary manifest independently of Gradle's output metadata."""
+    badging = run(str(tools / "aapt"), "dump", "badging", str(apk))
+    package = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
+    if not package or package.groups() != (application_id, str(version_code), version_name):
+        raise ValueError("APK package identity or version does not match release metadata")
+    if re.search(r"^application-debuggable", badging, re.M):
+        raise ValueError("A debuggable APK cannot be published")
 
 
 def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certificate: str,
@@ -26,7 +37,7 @@ def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certif
         match = re.fullmatch(r"nightly-(\d{8}\.\d+\.\d+)", tag)
         if not match:
             raise ValueError("A nightly-YYYYMMDD.RUN.ATTEMPT release tag is required")
-        application_id += ".nightly"
+        application_id = LEGACY_APPLICATION_ID + ".nightly"
     elif channel not in ("stable", "rc") or not re.fullmatch(
         r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)" +
         (r"-rc\.[1-9][0-9]*" if channel == "rc" else ""), tag, re.ASCII
@@ -55,12 +66,7 @@ def verify_apk(apk: Path, tools: Path, metadata: dict, tag: str, expected_certif
     if not apk.is_file() or not 1 <= apk.stat().st_size <= 512 * 1024 * 1024:
         raise ValueError("The release APK is missing, empty or exceeds 512 MiB")
 
-    badging = run(str(tools / "aapt"), "dump", "badging", str(apk))
-    package = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
-    if not package or package.groups() != (application_id, str(version_code), version_name):
-        raise ValueError("APK package identity or version does not match release metadata")
-    if re.search(r"^application-debuggable", badging, re.M):
-        raise ValueError("A debuggable APK cannot be published")
+    verify_package(apk, tools, application_id, version_code, version_name)
 
     signature = run(str(tools / "apksigner"), "verify", "--verbose", "--print-certs", str(apk))
     if "Android Debug" in signature:
