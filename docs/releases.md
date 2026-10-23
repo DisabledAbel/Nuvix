@@ -4,9 +4,53 @@
 
 Stable releases must never publish on a merge, tag push, schedule, or successful CI run. The Release workflow accepts only a manual dispatch on `main`, with a committed `versionName` and an explicit `rc` or `stable` channel. No nightly workflow is present or introduced.
 
-During this implementation, GitHub reported this repository as **public**. GitHub supports required reviewers for public repositories on current plans, but the connected API did not expose environment administration: the actual `production` protection settings and secret inventory **could not be verified or changed**. Treat them as unconfigured until an administrator verifies them. Publication fails closed if the API cannot confirm every required setting. This PR must remain a draft until these prerequisites and CI are verified. No release was dispatched to test this change.
+**Production signing setup is blocked; publication remains disabled.** The one-time setup change is preparatory infrastructure only and must remain a draft until its security blockers are resolved. `Setup Production Signing` cannot generate a keystore, configure secrets, upload artifacts, or publish. The Release publisher additionally requires the certificate-bound recovery gate described below; that gate deliberately fails even with a matching confirmation variable while recovery is unimplemented. Do not remove the gate to make a release pass.
+
+Inspection on October 23, 2026 confirmed the repository is **public**, `main` is protected and there are no GitHub Releases. The current connected GitHub API rejects environment administration reads; an authenticated CLI read also returned Forbidden. **The current production environment configuration and secret inventory could not be verified or changed.** PR #46 records an earlier browser inspection: only the owner was a reviewer, Prevent self-review was off, admin bypass was off, deployment branches were unrestricted and signing secrets/variables were absent. Those are historical findings, not proof of today's settings. An administrator must verify them in Safari before any future signing setup.
+
+The current `CI` ruleset was inspected: zero required PR approvals, no required Code Owner review, no stale-review dismissal or latest-push approval, administrator bypass enabled, and only `Compile, test and lint` required. These do not meet signing setup requirements. This change does not alter GitHub security settings. No setup, signing or publication workflow was dispatched during implementation.
 
 References: [GitHub environment protection](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments), [deployment review](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments), [review-history API](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run).
+
+## One-time signing setup from an iPad — blocked preparation
+
+No iSH, local Java, Android Studio, terminal or second computer is required to use the eventual setup. **There is currently no approved iPad backup/recovery implementation. Stop before generating a production key.** A browser download of a keystore, an obscure artifact URL, a password shown in a log, or an encryption password generated only in an ephemeral runner does not meet the recovery requirement. A new workflow cannot retrieve secret values later from GitHub Settings: secrets are write-only.
+
+### What the preparatory workflow does
+
+After a future reviewed merge makes the workflow available on `main`, open [Actions → Setup Production Signing](https://github.com/DisabledAbel/Nuvix/actions/workflows/setup-production-signing.yml) in Safari, choose **Run workflow**, and select **main**. Do not dispatch this workflow as part of PR validation. It has no inputs and no generation mode. It checks the exact dispatch SHA against current protected main, the workflow identity, current actor permissions, independent PR review rules and required CI checks, absence of ruleset bypass, production protection and a different authorized human reviewer. It checks complete, paginated signing-secret/variable **names** and existing release history before refusing an existing or partial identity. It then stops at the recovery blocker. API denial, incomplete inventory, a rerun, a moved main or an unexpected workflow/ref is a failure, never permission to proceed.
+
+The workflow has only `contents: read` and `actions: read`, uses a pinned checkout without persisted credentials, serializes all setup attempts, receives no signing secrets and has no upload or publishing steps. A branch's workflow can always be maliciously rewritten by someone able to bypass review; enforcement therefore also requires the real GitHub ruleset and independent Code Owner review. Repository contract tests cannot replace that protection.
+
+### Required backup and restore design before implementation
+
+No encryption product or recovery service has been selected, integrated or tested for this owner. Consequently **there is no production backup to download, decrypt or restore in this draft**. Do not generate a production keystore to experiment with a recovery app. A separately reviewed implementation must first demonstrate all of the following with a disposable key on the owner's iPad:
+
+1. Select a supported encryption format and maintained iPad application with a documented recovery process. Establish and durably preserve the owner's recovery credential **before** the signing runner starts, independently of GitHub and the ephemeral runner. Keep an additional protected recovery copy; losing GitHub access must not also lose the only decryption credential.
+2. Demonstrate authenticated encryption and decryption of a complete recovery bundle: keystore, store/key passwords, alias, public certificate, certificate SHA-256, format/version and integrity manifest. Password protection of a JKS alone is not the backup encryption mechanism. The runner may receive only the material needed to encrypt, never the owner's private decryption credential.
+3. Demonstrate Safari/iPad delivery and durable storage of the encrypted bundle, expiration handling, and a restore drill that recovers the same certificate and a functioning signing key. Treat Actions artifacts in this public repository as public/untrusted ciphertext distribution, never as private storage or a durable backup. Do not upload plaintext key/password files, even temporarily; no recovery information belongs in an issue, PR, chat, log or public link.
+4. Demonstrate a supported browser-only way to restore the same key and securely populate protected GitHub environment secrets. The owner must not need a terminal, ad-hoc decryption website or local Base64 command. A reviewed secret-entry UI or supported app export must handle this; no such integration exists here yet. Securely preserve the actual keystore/password bundle outside GitHub; saving only an encrypted archive without working recovery credentials is insufficient.
+5. Independently compare the restored public certificate fingerprint with the original generation record, test a disposable signature, and check the certificate's validity dates. Record the public fingerprint separately from the backup. Have a different authorized human verify the drill and preserve its non-secret evidence. Only then review/implement real generation (recommended alias `nuvix-release`, RSA at least 3072 bits, long validity, cryptographically random credentials, noninteractive supported Java/Android tools). No production generation command is included in this draft.
+
+If any step cannot be performed on the iPad with supported tools, leave setup and publication blocked. Do not create an improvised recovery service or generate a replacement key. Absence of a GitHub release or secret does not prove a compatible APK was never distributed privately; confirm that separately before first-key authorization.
+
+### Safari Settings checklist and independent fingerprint
+
+1. In [Settings → Rules → Rulesets](https://github.com/DisabledAbel/Nuvix/settings/rules), require independent PR approval and Code Owner review on main, dismiss stale approvals, require latest-push approval, disallow bypass, and require **both** `Compile, test and lint` and `Supabase migrations and security`. Select an independent trusted collaborator as a Code Owner when the owner authors policy changes.
+2. In [Settings → Environments → production](https://github.com/DisabledAbel/Nuvix/settings/environments), configure the reviewer, no-self-review, no-admin-bypass and main-only deployment rules below. A second authorized human is mandatory; if unavailable, leave publication disabled. Never turn off protection for setup or restore.
+3. After a reviewed recovery integration exists and its drill succeeds, use **production → Environment secrets → Add secret** for `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`. Receive values only through the approved encrypted recovery/app flow. If the browser-only export/entry path is unavailable, stop. Do not use a PR, issue, Actions input, log or chat to transfer values. Any partial signing configuration reserves the identity and blocks new setup.
+4. Use **production → Environment variables → Add variable** for `SIGNING_CERT_SHA256` (64 hex characters, no colons). The existing release pipeline intentionally reads this **variable**, not a same-named secret. It is the single independent trust baseline; do not introduce another trusted fingerprint in the repository or silently bootstrap it from an arbitrary APK. For an existing app, compare against the independently trusted original certificate. For a truly first identity, record the public certificate at generation and independently recompute the fingerprint from the recovered certificate; never approve only a workflow's self-reported fingerprint.
+5. Only after the owner has durably saved the encrypted backup **and** recovery information, and another authorized person has verified recovery and certificate agreement, set production variable `SIGNING_KEY_BACKUP_CONFIRMED_SHA256` to that same fingerprint. This records recovery confirmation, not a new identity. It cannot enable publication in this preparatory implementation: the code-level recovery blocker must also be resolved through an independently reviewed PR with evidence of the supported iPad restore flow.
+
+An ordinary `GITHUB_TOKEN` cannot write environment secrets. Read-only prerequisite checks may also be denied secret-name inventory or environment administration APIs; failure is a blocker, not an empty inventory. Automatic installation would require a separately authorized GitHub App installation token or fine-grained credential with the documented environment-secret write permission and appropriate variable access, plus GitHub's encrypted-secret API. This draft requests no such token, grants no additional write permissions and implements no secret-writing endpoint. The connected integration's repository admin metadata does not prove those sensitive API capabilities. The minimal supported fallback is Safari Settings **after** a reviewed browser-only recovery/export path exists. Do not paste a PAT or private encryption key into chat.
+
+### Readiness and failed setup recovery
+
+At present the correct result is **blocked**, even if all GitHub settings have been repaired. The setup workflow summary explains the blocker without showing inventory values, credentials or tool output. Do not rerun a production setup to obtain a fresh identity. In this draft no key can have been generated; repair only the reported prerequisites and review the backup implementation separately.
+
+Before any future production publication, require complete protected credentials, the independent fingerprint, matching recovery confirmation, a successful recovery drill, current environment protection and actual independent approval. The existing Release workflow remains the only publication route. Its APK/application ID, non-debug release build, versionCode history, verified signature, certificate continuity, prepared-artifact and release-asset checksum checks remain mandatory. Explicit certificate-validity checking and the recoverable first-key lifecycle still require the future implementation; they are not claimed complete here.
+
+If a future generation attempt stops after creating a key, preserve its encrypted bundle and non-secret identity record and treat the identity as reserved. Never delete partial secrets/fingerprints as a way to pass the duplicate check. Recover and install the **same** identity through the reviewed restore flow, reverify its fingerprint and obtain new human approval. If the bundle or recovery credential is missing, stop publication and investigate; silently regenerating a signing key can permanently break Android updates. No signing setup or recovery action may publish an APK or release.
 
 ## Application ID migration
 
@@ -36,10 +80,11 @@ No automatic private-data copying, token/Keystore export or old-app uninstall is
    to remove the old app. Uninstalling can delete its private data. No seamless migration is claimed.
 
 At inspection there were **no GitHub Releases**. There is no public production certificate to
-bootstrap from. An administrator must verify the existing keystore's fingerprint against an
-independently trusted record; never generate a replacement or trust a PR-provided fingerprint.
-If no trusted record is available, publication remains blocked until identity is established
-independently. This PR does not provision secrets or change the trust baseline.
+bootstrap from. If a production key already exists (including for private distribution), an
+administrator must verify its fingerprint against an independently trusted record; never generate
+a replacement or trust a PR-provided fingerprint. If no key has ever existed, follow the blocked
+first-identity prerequisites above. Publication remains blocked until identity and recoverability
+are established independently. This draft does not provision secrets or change the trust baseline.
 
 ## CI identity protection
 
@@ -79,17 +124,7 @@ The signed APK verifier and checksum/approval transaction from PR #45 remain man
 
 No PAT is needed in the workflow. Validation uses `contents: read` and `actions: read`; only the approved publishing job uses `contents: write` with `actions: read` for run/approval checks. GitHub CLI, Python, Java and Android tools run on GitHub-hosted Ubuntu runners. No local computer is needed to initiate or approve releases.
 
-An administrator can inspect the non-secret configuration through the following commands (each runs separately in a trusted authenticated GitHub CLI session). The workflow itself checks the same endpoints using its job token. A denied endpoint is a blocker, never a reason to remove a check.
-
-```sh
-gh api repos/DisabledAbel/Nuvix/environments/production
-```
-
-```sh
-gh api repos/DisabledAbel/Nuvix/environments/production/deployment-branch-policies
-```
-
-Expected: a nonempty `required_reviewers` rule with `prevent_self_review: true`, `can_admins_bypass: false`, `deployment_branch_policy.custom_branch_policies: true`, and exactly the `branch`/`main` policy. Signing-secret values are deliberately never queried or logged.
+In Safari, inspect and save the non-secret protection settings directly in **Settings → Environments → production**: at least one independent required user reviewer, **Prevent self-review** enabled, administrator bypass disabled, and **Selected branches and tags** containing exactly the **Branch / main** rule. The Release workflow checks those same settings through GitHub's environment and deployment-branch-policy APIs. A denied endpoint is a blocker, never a reason to remove a check. No terminal is needed. Signing-secret values are deliberately never queried or logged.
 
 If plan/visibility changes make required reviewers unavailable, or approval/API access cannot be verified, **leave stable publication disabled**. This implementation provides no weaker fallback. Restore supported reviewer protection before enabling the workflow. A future alternative must use a separately authorized publishing action bound to the exact run, commit and artifacts and receive its own review; a confirmation string in the initial dispatch is insufficient.
 

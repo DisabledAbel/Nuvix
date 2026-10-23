@@ -1,0 +1,39 @@
+name: Setup Production Signing
+
+# Preparatory checks only. Key generation is intentionally not implemented until
+# an independently recoverable, reviewed iPad backup path has been demonstrated.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nuvix-production-signing-setup
+  cancel-in-progress: false
+
+jobs:
+  prerequisites:
+    name: Check signing setup prerequisites (no key generation)
+    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check protected main, production rules and existing identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/production-signing.py preflight
+      - name: Explain the recovery blocker
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Production signing setup is blocked. This workflow only checks prerequisites;
+          it cannot generate a key, change secrets, upload artifacts or publish releases.
+          A reviewed iPad-accessible encrypted backup and tested recovery path is required.
+          See docs/releases.md. Do not weaken production protection to pass these checks.
+          SUMMARY

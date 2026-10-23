@@ -8,6 +8,8 @@
 /scripts/create-release.py @DisabledAbel
 /scripts/release-control.py @DisabledAbel
 /scripts/release-identity.py @DisabledAbel
+/scripts/production-signing.py @DisabledAbel
+/scripts/tests/test_production_signing.py @DisabledAbel
 /scripts/tests/test*release* @DisabledAbel
 /docs/releases.md @DisabledAbel
 /docs/signing.md @DisabledAbel
