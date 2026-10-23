@@ -1,9 +1,6 @@
 # Nuvix
 
 **Your television. Your way.**
-
-[![Nuvix Discord](https://img.shields.io/discord/1560178893116284991?style=for-the-badge&logo=discord&logoColor=white&label=Nuvix%20Discord&color=5865F2)](https://discord.gg/9tyVjwyNbq)
-
 Nuvix is a free, open-source IPTV player and optional home launcher for Android TV, Google TV, and compatible Fire TV devices. Bring your own authorized provider—no channels, accounts, playlists, or media are included.
 
 An independent modified version of [OpenTV](https://github.com/opentvproject/opentv),  Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
