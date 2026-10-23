@@ -24,7 +24,7 @@ class IdentityContractsTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         for name in ("app/build.gradle.kts", "app/src/main/AndroidManifest.xml", "scripts/create-release.py",
-                     "scripts/release-control.py", "scripts/release-identity.py"):
+                     "scripts/release-control.py", "scripts/release-identity.py", "scripts/production-signing.py"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, path)
@@ -88,6 +88,22 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['publish']['steps'][2].update({'if': 'false'}),
                        lambda w: w['jobs']['publish'].update({'continue-on-error': 'true'}),
                        lambda w: w['jobs']['publish'].update({'if': w['jobs']['publish']['if'] + ' || true'})]:
+            self.mutate('release.yml', change)
+
+    def test_backup_gate_cannot_be_removed_skipped_reordered_or_rebased(self):
+        def gate(w):
+            return next(s for s in w['jobs']['publish']['steps']
+                        if s.get('run') == 'python3 scripts/production-signing.py release-readiness')
+        def remove(w):
+            w['jobs']['publish']['steps'].remove(gate(w))
+        def reorder(w):
+            step = gate(w)
+            w['jobs']['publish']['steps'].remove(step)
+            w['jobs']['publish']['steps'].append(step)
+        for change in [remove, reorder, lambda w: gate(w).update({'if': 'false'}),
+                       lambda w: gate(w).update({'continue-on-error': 'true'}),
+                       lambda w: gate(w)['env'].update(SIGNING_KEY_BACKUP_CONFIRMED_SHA256='a' * 64),
+                       lambda w: gate(w)['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64)]:
             self.mutate('release.yml', change)
 
     def test_pr_secrets_write_permissions_and_nightly_trigger_rejected(self):

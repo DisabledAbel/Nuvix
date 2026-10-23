@@ -37,7 +37,7 @@ jobs:
       - name: Validate Gradle configuration
         run: ./gradlew help --stacktrace
       - name: Compile, run unit and diagnostics UI tests, lint and assemble debug
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --stacktrace
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease --stacktrace
       - name: Inspect unsigned release package and published version history
         env:
           GH_TOKEN: ${{ github.token }}

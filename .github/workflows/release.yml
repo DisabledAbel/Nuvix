@@ -128,6 +128,10 @@ jobs:
         with:
           name: nuvix-release-prepared
           path: prepared
+      - name: Require independently recoverable signing backup
+        env:
+          SIGNING_KEY_BACKUP_CONFIRMED_SHA256: ${{ vars.SIGNING_KEY_BACKUP_CONFIRMED_SHA256 }}
+        run: python3 scripts/production-signing.py release-readiness
       - name: Revalidate approval protection, commit, history and artifact checksums
         env:
           GH_TOKEN: ${{ github.token }}

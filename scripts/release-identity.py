@@ -32,7 +32,8 @@ def check_source(root=ROOT):
     require('signingConfig = if (signingConfigured) signingConfigs.getByName("upload") else null' in gradle,
             "Release builds must use the production key or stay unsigned")
     require(not re.search(r'signingConfigs(?:\.getByName\(|\[)"debug"', gradle), "Release must never use debug signing")
-    for path in ("scripts/create-release.py", "scripts/release-control.py", "scripts/release-identity.py"):
+    for path in ("scripts/create-release.py", "scripts/release-control.py", "scripts/release-identity.py",
+                 "scripts/production-signing.py"):
         require((root / path).is_file(), "Required release verifier missing: " + path)
     manifest = ET.parse(root / "app/src/main/AndroidManifest.xml").getroot()
     app = manifest.find("application")
@@ -45,7 +46,7 @@ def check_source(root=ROOT):
 
 def check_workflows(root=ROOT):
     paths = list((root / ".github/workflows").iterdir())
-    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml"},
+    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml", "setup-production-signing.yml"},
             "Workflow inventory changed; review release capability before updating the allowlist")
     workflows = {p.name: yaml.load(p.read_text(), Loader=yaml.BaseLoader) for p in paths}
     for name, workflow in workflows.items():
@@ -80,6 +81,14 @@ def check_workflows(root=ROOT):
         require(len(checkout) == 1 and checkout[0].get("with", {}).get("ref") == "${{ github.sha }}" and
                 checkout[0]["with"].get("persist-credentials") == "false", "Release must use exact commit without persisted credentials")
     steps = publisher["steps"]
+    readiness = [s for s in steps if s.get("run") == "python3 scripts/production-signing.py release-readiness"]
+    require(len(readiness) == 1 and not readiness[0].get("if") and not readiness[0].get("continue-on-error") and
+            readiness[0].get("env") == {
+                "SIGNING_KEY_BACKUP_CONFIRMED_SHA256": "${{ vars.SIGNING_KEY_BACKUP_CONFIRMED_SHA256 }}"},
+            "Publication requires the protected certificate-bound backup and recovery gate")
+    require(steps.index(readiness[0]) < next(i for i, s in enumerate(steps)
+            if s.get("run", "").startswith("python3 scripts/release-control.py ")),
+            "Backup readiness must precede release verification, signing and publication")
     commands = [s for s in steps if s.get("run", "").startswith("python3 scripts/release-control.py ")]
     require([s["run"].split()[2] for s in commands] == ["verify", "sign", "publish"], "Keep all release verification stages in order")
     require(publisher.get("env", {}).get("EXPECTED_SIGNING_CERT_SHA256") == "${{ vars.SIGNING_CERT_SHA256 }}",
@@ -110,6 +119,40 @@ def check_workflows(root=ROOT):
                     "PR and release identity checks must run directly and cannot be skipped")
         require(any(run.startswith("./gradlew ") and ":app:assembleRelease" in run for run in runs),
                 "Validation must build the actual unsigned release APK")
+    check_signing_setup(workflows["setup-production-signing.yml"])
+
+
+def check_signing_setup(workflow):
+    require(workflow.get("name") == "Setup Production Signing" and
+            workflow.get("on") == {"workflow_dispatch": ""}, "Signing setup must be manual-only with no inputs")
+    require(workflow.get("permissions") == {"contents": "read", "actions": "read"},
+            "Signing prerequisite checks require only read permissions")
+    require(workflow.get("concurrency") == {"group": "nuvix-production-signing-setup", "cancel-in-progress": "false"},
+            "Signing setup attempts must serialize without canceling an earlier attempt")
+    require(not workflow.get("env") and set(workflow.get("jobs", {})) == {"prerequisites"},
+            "Setup must remain a secret-free prerequisite check")
+    job = workflow["jobs"]["prerequisites"]
+    require(job.get("if") == "github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'",
+            "Signing setup requires manual dispatch on main")
+    require(job.get("runs-on") == "ubuntu-latest" and job.get("timeout-minutes") == "5" and
+            not any(k in job for k in ("environment", "env", "permissions", "continue-on-error", "outputs", "strategy")),
+            "Prerequisites must not acquire signing credentials or bypass errors")
+    steps = job.get("steps", [])
+    require(len(steps) == 3, "Signing setup must not add generation, secret writes or artifact handling")
+    checkout, preflight, summary = steps
+    require(checkout.get("uses") == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" and
+            checkout.get("with") == {"ref": "${{ github.sha }}", "persist-credentials": "false"} and
+            not any(k in checkout for k in ("if", "env", "continue-on-error")),
+            "Setup must check out the exact reviewed commit with pinned checkout and no persisted credentials")
+    require(preflight.get("run") == "python3 scripts/production-signing.py preflight" and
+            preflight.get("env") == {"GH_TOKEN": "${{ github.token }}"} and
+            not any(k in preflight for k in ("if", "continue-on-error", "uses", "with")),
+            "Signing prerequisite checks cannot be skipped or replaced")
+    require(summary.get("if") == "always()" and not summary.get("uses") and not summary.get("env") and
+            summary.get("run", "").startswith('cat >> "$GITHUB_STEP_SUMMARY" <<\'SUMMARY\'\n') and
+            summary["run"].endswith("SUMMARY\n") and "${{" not in summary["run"] and
+            summary["run"].count("SUMMARY\n") == 1 and not summary.get("continue-on-error"),
+            "Setup output must be a static, secret-free recovery-blocker summary")
 
 
 def check_unsigned(metadata_path, tools, root=ROOT):
