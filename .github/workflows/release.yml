@@ -139,6 +139,14 @@ jobs:
           path: prepared
       - name: Resolve release version and channel
         run: python3 scripts/release-control.py request
+      - name: Install encrypted signing key support
+        run: python3 -m pip install -r scripts/requirements-signing.txt
+      - name: Load permanent signing key
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
+          LEGACY_SIGNING_CONFIGURED: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' }}
+        run: python3 scripts/production-signing.py load
       - name: Revalidate publisher, commit, history and artifact checksums
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,7 +174,9 @@ jobs:
         run: python3 scripts/release-control.py publish --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL" --expected-plan-sha256 "$EXPECTED_PLAN_SHA256"
       - name: Clean signing material
         if: always()
-        run: rm -f "$RUNNER_TEMP/nuvix-release.jks"
+        run: |
+          rm -f "$RUNNER_TEMP/nuvix-release.jks"
+          rm -rf "$RUNNER_TEMP/nuvix-release-key"
       - name: Report failure or cancellation
         if: failure() || cancelled()
         run: echo 'Release did not complete. Inspect existing tags/drafts before redispatching; no overwrite or automatic retry is allowed.' >> "$GITHUB_STEP_SUMMARY"

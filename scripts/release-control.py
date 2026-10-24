@@ -261,6 +261,16 @@ def verify_prepared(version, channel, expected):
 def sign(version, channel, expected):
     tag, _ = verify_prepared(version, channel, expected)
     names = ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
+    if not all(os.environ.get(name, "").strip() for name in names) and os.environ.get("RUNNER_TEMP"):
+        record_path = Path(os.environ["RUNNER_TEMP"]) / "nuvix-release-key/credentials.json"
+        if record_path.is_file():
+            record = json.loads(record_path.read_text())
+            require(record.get("repository") == REPO and record.get("fingerprint") ==
+                    os.environ.get("EXPECTED_SIGNING_CERT_SHA256"), "Loaded signing identity differs from the pinned certificate")
+            credentials = record.get("secrets", {})
+            require(set(credentials) == set(names) and all(isinstance(value, str) and value.strip()
+                    for value in credentials.values()), "Loaded signing credentials are incomplete")
+            os.environ.update(credentials)
     require(all(os.environ.get(name, "").strip() for name in names), "Required signing credentials missing")
     fingerprint = os.environ.get("EXPECTED_SIGNING_CERT_SHA256", "")
     require(re.fullmatch(r"[a-fA-F0-9]{64}", fingerprint), "Missing pinned signing certificate fingerprint")

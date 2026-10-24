@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 # Serialize first-key setup with every release using that identity.
@@ -28,8 +28,9 @@ jobs:
           persist-credentials: false
       - name: Verify first-release prerequisites without changing signing credentials
         env:
-          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
+          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' }}
         run: python3 scripts/production-signing.py preflight
       - name: Set up JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -40,23 +41,15 @@ jobs:
         run: python3 -m pip install -r scripts/requirements-signing.txt
       - name: Reserve identity, generate permanent key and verify encrypted backup recovery
         env:
-          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
+          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' }}
         run: python3 scripts/production-signing.py generate
-      - name: Save encrypted signing backup before installing credentials
-        id: backup
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: nuvix-first-signing-backup-${{ github.run_id }}
-          path: ${{ runner.temp }}/nuvix-first-signing/backup/nuvix-signing-backup.zip
-          if-no-files-found: error
-          retention-days: 7
-      - name: Install repository signing secrets and public certificate fingerprint
+      - name: Save permanent encrypted key and backup using the workflow token
         env:
-          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
-          BACKUP_ARTIFACT_ID: ${{ steps.backup.outputs.artifact-id }}
-        run: python3 scripts/production-signing.py install
+        run: python3 scripts/production-signing.py save
       - name: Remove runner signing material
         if: always()
         run: rm -rf "$RUNNER_TEMP/nuvix-first-signing"
