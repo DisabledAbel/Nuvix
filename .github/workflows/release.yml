@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Committed versionName (1.0.0-rc.1 or 1.0.0), without v'
+        description: 'Committed versionName: rc = X.Y.Z-rc.N (e.g. 1.0.0-rc.1); stable = X.Y.Z (e.g. 1.0.0). No v prefix or leading zeros; N >= 1.'
         required: true
+        type: string
+      release_name:
+        description: 'Release title (any text). Leave blank for Nuvix <version>.'
+        required: false
         type: string
       channel:
         description: 'Release channel'
@@ -26,6 +30,7 @@ concurrency:
 env:
   RELEASE_VERSION: ${{ inputs.version }}
   RELEASE_CHANNEL: ${{ inputs.channel }}
+  RELEASE_NAME: ${{ inputs.release_name }}
 
 jobs:
   validate:

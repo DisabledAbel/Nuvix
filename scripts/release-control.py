@@ -30,7 +30,9 @@ def version_tag(version, channel):
     suffix = r"-rc\.[1-9][0-9]*" if channel == "rc" else ""
     require(channel in ("rc", "stable") and len(version) <= 100 and
             re.fullmatch(rf"{number}\.{number}\.{number}{suffix}", version, re.ASCII),
-            "Version must be X.Y.Z for stable or X.Y.Z-rc.N for rc (no leading zeros)")
+            "Version must be X.Y.Z for stable or X.Y.Z-rc.N for rc (N >= 1; no leading zeros). "
+            "Enter the committed versionName without a leading 'v'; "
+            "the release tag adds that prefix automatically.")
     return "v" + version
 
 
@@ -47,8 +49,10 @@ def api(path, *, method="GET", data=None, missing=False, binary=False):
     if result.returncode:
         if missing and b"(HTTP 404)" in result.stderr:
             return None
-        # Do not include API responses or tokens in errors.
-        raise RuntimeError(f"GitHub API {method} {path.split('?')[0]} failed; check permissions/service status")
+        # Report only the status, never raw API responses or tokens.
+        status = re.search(rb"\(HTTP ([0-9]{3})\)", result.stderr)
+        detail = f" (HTTP {status[1].decode('ascii')})" if status else ""
+        raise RuntimeError(f"GitHub API {method} {path.split('?')[0]} failed{detail}; check permissions/service status")
     return result.stdout if binary else json.loads(result.stdout or b"null")
 
 
@@ -293,7 +297,8 @@ def publish(version, channel, expected):
     # From here onward, failures reserve this version. No automatic delete, overwrite or retry.
     api(f"{BASE}/git/refs", method="POST", data={"ref": f"refs/tags/{tag}", "sha": os.environ["GITHUB_SHA"]})
     draft = api(f"{BASE}/releases", method="POST", data={"tag_name": tag,
-                "target_commitish": os.environ["GITHUB_SHA"], "name": f"Nuvix {version}",
+                "target_commitish": os.environ["GITHUB_SHA"],
+                "name": os.environ.get("RELEASE_NAME") or f"Nuvix {version}",
                 "body": (ROOT / "dist/release-notes.md").read_text(), "draft": True,
                 "prerelease": channel == "rc", "make_latest": "false"})
     release_id = int(draft["id"])
