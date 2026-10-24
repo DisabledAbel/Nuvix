@@ -18,6 +18,7 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 REPO = "DisabledAbel/Nuvix"
 BASE = f"repos/{REPO}"
+ACTIVE_RUN_STATUSES = {"queued", "requested", "waiting", "pending", "in_progress"}
 
 
 def require(condition, message):
@@ -119,10 +120,14 @@ def check_context(env, run):
     if tag_push:
         version_key(ref[len("refs/tags/"):])
     require(env.get("GITHUB_RUN_ATTEMPT") == "1", "Start a fresh release instead of rerunning a release")
-    require(run.get("event") == event and run.get("head_branch") == ("main" if manual else ref[len("refs/tags/"):])
-            and run.get("head_sha") == env.get("GITHUB_SHA")
-            and run.get("status") == "in_progress" and run.get("conclusion") is None,
-            "Run canceled, completed or inconsistent with the requested commit")
+    require(run.get("event") == event, "Run event differs from the requested event")
+    require(run.get("head_branch") == ("main" if manual else ref[len("refs/tags/"):]),
+            "Run branch/tag differs from the requested ref")
+    require(run.get("head_sha") == env.get("GITHUB_SHA"), "Run commit differs from the requested commit")
+    # Check the workflow's lifecycle, rather than requiring one particular active state.
+    status, conclusion = run.get("status"), run.get("conclusion")
+    require(isinstance(status, str) and status in ACTIVE_RUN_STATUSES and conclusion is None,
+            f"Run is not active (status={status!r}, conclusion={conclusion!r})")
 
 
 def source_metadata(version):
