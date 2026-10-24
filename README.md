@@ -5,17 +5,6 @@ Nuvix is a free, open-source IPTV player and optional home launcher for Android 
 
 An independent modified version of [OpenTV](https://github.com/opentvproject/opentv),  Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
 
-## v1.0 beta preparation
-
-Community beta testing is being prepared; **no release candidate APK is available yet**.
-The first planned candidate is `v1.0.0-rc.1`. Signing recovery and production approval
-prerequisites remain blocked, and no release date is guaranteed. Physical-device/provider
-acceptance is still required. See the [beta testing guide](docs/BETA-TESTING.md),
-[feedback and issue workflow](docs/BETA-FEEDBACK.md) and
-[v1 release readiness tracker](docs/V1-RELEASE-CHECKLIST.md). Candidates will use official
-GitHub prereleases and manual installation; the in-app updater continues to discover stable
-releases only. Nightly publishing remains removed.
-
 ## Features
 
 - Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
