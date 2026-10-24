@@ -49,8 +49,14 @@ benchmarks (2,000 channels / 96,000 programmes), and `git diff --check`. Android
 debug/release lint and both APK builds were attempted locally but could not start: the Gradle
 wrapper download failed with `UnknownHostException: services.gradle.org`. PR CI remains
 required for actual APK/package/history and Android validation; results belong in the PR.
-A source check is not
-a signed APK inspection; passing CI does not authorize production or physical-device checks.
+A source check is not a signed APK inspection; passing CI does not authorize production
+or complete physical-device checks.
+
+Initial [Build #183](https://github.com/DisabledAbel/Nuvix/actions/runs/40132047303) passed
+Python/identity and Supabase checks but was canceled during the combined Android step,
+before unsigned APK/history inspection. It is not an Android CI pass. Initial preparation is
+recorded in [PR #50](https://github.com/DisabledAbel/Nuvix/pull/50), which was merged outside
+this preparation session before CI completed. Final validation remains reviewable in a follow-up PR.
 
 ## Scope and release control
 
@@ -119,8 +125,8 @@ Record device coverage gaps explicitly; do not fill them with host test results.
 - [ ] Documentation complete: installation/update limits, supported scope, known issues and
       provider authorization/privacy guidance match observed results.
 - [ ] GPL license, attribution and third-party notices retained; corresponding source prepared.
-- [ ] Candidate release notes prepared from the matching changelog with beta warnings, tested
-      devices, known limitations, manual install/update instructions and feedback links.
+- [x] Candidate release notes prepared from the matching changelog with beta warnings,
+      unverified device coverage, known limitations, manual install/update instructions and feedback links.
 - [ ] Stable release notes and final go/no-go reviewed separately after candidate feedback;
       no guaranteed date or unverified production-readiness claim.
 

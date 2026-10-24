@@ -5,8 +5,9 @@ acceptance evidence; this document remains the signing/approval/publication runb
 See [beta instructions](BETA-TESTING.md), [feedback triage](BETA-FEEDBACK.md) and the
 [Discord preparation draft](BETA-DISCORD-ANNOUNCEMENT.md). The first planned candidate is
 `v1.0.0-rc.1`, not yet available. This preparation sets versionName `1.0.0-rc.1` and
-versionCode `22`, retaining package `com.nuvix.player` and the existing workflows,
-and must not dispatch signing setup or Release. Complete the blockers before any future request.
+versionCode `22`, retaining package `com.nuvix.player` and the existing workflows.
+Do not dispatch signing setup or Release as part of preparation. Complete the blockers before
+any future request.
 
 ## Current status and prerequisites
 

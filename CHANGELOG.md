@@ -8,8 +8,8 @@ No changes queued after the prepared first release candidate.
 
 ### Nuvix v1.0.0 Release Candidate 1
 
-**Prerelease for public beta testing after approval; no candidate APK is available yet.**
-This preparation does not authorize signing, tagging or publication. Beta software may
+**Prerelease for public beta testing.**
+Preparing these notes does not authorize signing, tagging or publication. Beta software may
 crash or change stored data; use a test device and finish active recordings before updating.
 
 ### What's Included
