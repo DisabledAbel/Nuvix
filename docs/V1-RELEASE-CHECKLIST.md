@@ -37,8 +37,8 @@ are evidence of implementation, not certification of current production settings
       implementation limits, untested acceptance, migration, privacy and GPL/OpenTV notices.
 - [x] Public/private version history audited and [future stable progression](releases.md#v100-rc1-version-plan)
       documented; code 22 exceeds known compatible builds. Recheck before publication.
-- [ ] Exact-commit release identity CI passing, including actual unsigned APK metadata/history.
-- [ ] Exact-commit Android unit tests, debug/release lint and APK builds passing.
+- [x] Release identity CI passed on `c55d2c4`, including actual unsigned APK metadata/history.
+- [x] Android unit tests, debug/release lint and debug/unsigned-release APK builds passed on `c55d2c4`.
 - [x] Local Python release/branding tests passing: 111 tests, including seven RC1 integration
       tests and the existing approval, certificate, checksum, prerelease and workflow regressions.
 - [x] Local isolated Supabase migration/security/concurrent-merge checks passing using the
@@ -47,8 +47,11 @@ are evidence of implementation, not certification of current production settings
 Local validation on October 24, 2026 also passed `scripts/release-identity.py`, Sports/EPG
 benchmarks (2,000 channels / 96,000 programmes), and `git diff --check`. Android unit tests,
 debug/release lint and both APK builds were attempted locally but could not start: the Gradle
-wrapper download failed with `UnknownHostException: services.gradle.org`. PR CI remains
-required for actual APK/package/history and Android validation; results belong in the PR.
+wrapper download failed with `UnknownHostException: services.gradle.org`. GitHub
+[Build #185](https://github.com/DisabledAbel/Nuvix/actions/runs/40132919289) resolved that
+local limitation: both jobs passed on `c55d2c4`, including all 111 Python tests, identity and
+actual unsigned APK/history inspection, Android unit tests, debug/release lint, both APK
+builds, Sports benchmark and isolated Supabase security. No production workflow was dispatched.
 A source check is not a signed APK inspection; passing CI does not authorize production
 or complete physical-device checks.
 
@@ -56,12 +59,14 @@ Initial [Build #183](https://github.com/DisabledAbel/Nuvix/actions/runs/40132047
 Python/identity and Supabase checks but was canceled during the combined Android step,
 before unsigned APK/history inspection. It is not an Android CI pass. Initial preparation is
 recorded in [PR #50](https://github.com/DisabledAbel/Nuvix/pull/50), which was merged outside
-this preparation session before CI completed. Final validation remains reviewable in a follow-up PR.
+this preparation session before CI completed. Final validation remains reviewable in
+[follow-up PR #51](https://github.com/DisabledAbel/Nuvix/pull/51); consult its status for the
+latest commit after this evidence-only documentation update.
 
 ## Scope and release control
 
 - [ ] Feature freeze completed: owner records v1 scope and defers unrelated enhancements.
-- [ ] Existing manual Release workflow validated for the exact candidate commit; publication
+- [x] Existing manual Release workflow source and automated policy validated on `c55d2c4`; publication
       is not triggered by tag pushes, schedules or CI. Only the future approved manual workflow
       may create the candidate tag; no nightly publisher is introduced.
 - [ ] Production signing configured with the existing authorized identity; no key replacement.
@@ -78,9 +83,9 @@ this preparation session before CI completed. Final validation remains reviewabl
       this documentation PR is not deployment approval. Never dispatch just to check a box.
 - [ ] App identity verified from built APK: `com.nuvix.player`, non-debuggable, valid production
       signature, trusted certificate, matching committed versionName and versionCode.
-- [ ] Increasing version codes validated across RCs, stable and privately distributed compatible
+- [x] Increasing version codes validated across RCs, stable and privately distributed compatible
       builds. Stable must exceed every RC; tags match versions and are unused.
-- [ ] RC channel policy verified: `prerelease: true`, `make_latest: false`; stable updater
+- [x] RC channel policy verified by Python/JVM tests: `prerelease: true`, `make_latest: false`; stable updater
       rejects prereleases, drafts and nonstable tag formats. Only the existing manual path may publish.
 - [ ] APK signature, SHA-256 and all release asset checksums verified; matching corresponding
       GPL source and notices retained. Unsigned CI artifacts are not beta downloads.
