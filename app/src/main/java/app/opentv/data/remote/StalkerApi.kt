@@ -245,9 +245,8 @@ class StalkerApi(
             .addQueryParameter("JsHttpRequest", "1-xml")
             .build()
         val profile = (execute(source, url, token) as? JsonObject)?.get("js") as? JsonObject
-            ?: throw StalkerException("The portal rejected the device identity. Verify your settings with your provider.")
-        if (profile.str("blocked") in setOf("1", "true") ||
-            profile.str("error")?.let { it !in setOf("0", "false") } == true) {
+            ?: return // Some authorized portals omit or do not implement get_profile.
+        if (profile.str("blocked") in setOf("1", "true")) {
             throw StalkerException("The portal rejected the device identity. Verify your settings with your provider.")
         }
     }
