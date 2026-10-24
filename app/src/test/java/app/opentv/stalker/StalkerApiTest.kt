@@ -79,15 +79,50 @@ class StalkerApiTest {
         assertEquals(6, server.requestCount)
     }
 
-    @Test fun profileRejectionStopsWithoutTryingOtherEndpointsOrIdentities() = runBlocking<Unit> {
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest) = if (request.requestUrl!!.queryParameter("action") == "get_profile")
-                MockResponse().setResponseCode(403) else response(request)
+    @Test fun unexpectedProfilesKeepFirstHandshakeAndCachedSession() = runBlocking<Unit> {
+        val profiles = listOf(
+            MockResponse().setResponseCode(403),
+            MockResponse().setResponseCode(404),
+            MockResponse().setResponseCode(204),
+            *listOf("", "{broken", "not-json", "null", "[]", "true", "\"unexpected\"", "{}",
+                """{"js":null}""", """{"js":[]}""", """{"js":true}""", """{"js":"unexpected"}""",
+                """{"js":{}}""", """{"js":{"error":"unexpected"}}""",
+                """{"js":{"blocked":false}}""", """{"js":{"blocked":"0"}}""",
+                """{"js":{"blocked":{"unexpected":true}}}""")
+                .map { MockResponse().setBody(it) }.toTypedArray(),
+        )
+        profiles.forEachIndexed { index, profile ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.requestUrl!!.queryParameter("action") == "get_profile") profile else response(request)
+            }
+            val saved = source().copy(id = index.toLong() + 100)
+            assertEquals(1, api.liveCategories(saved).size)
+            assertEquals("handshake", next().requestUrl!!.queryParameter("action"))
+            assertEquals("get_profile", next().requestUrl!!.queryParameter("action"))
+            assertEquals("get_genres", next().requestUrl!!.queryParameter("action"))
+            assertEquals(1, api.liveCategories(saved).size)
+            val cached = next()
+            assertEquals("get_genres", cached.requestUrl!!.queryParameter("action"))
+            assertEquals("Bearer synthetic-token", cached.getHeader("Authorization"))
+            assertEquals("/portal.php", cached.requestUrl!!.encodedPath)
+            assertEquals((index + 1) * 4, server.requestCount)
         }
-        try { api.liveCategories(source()); fail("Rejected profile must fail") } catch (_: StalkerApi.StalkerException) { }
-        assertEquals(2, server.requestCount)
-        assertTrue(next().getHeader("Cookie")!!.contains("00%3A1A%3A79%3AAA%3ABB%3ACC"))
-        next()
+    }
+
+    @Test fun explicitBlockedProfileStopsWithoutTryingOtherEndpointsOrIdentities() = runBlocking<Unit> {
+        listOf("1", "true", "\"1\"", "\"true\"").forEachIndexed { index, blocked ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.requestUrl!!.queryParameter("action") == "get_profile")
+                        MockResponse().setBody("""{"js":{"blocked":$blocked}}""") else response(request)
+            }
+            try { api.liveCategories(source().copy(id = index.toLong() + 200)); fail("Blocked identity must fail") }
+            catch (_: StalkerApi.StalkerException) { }
+            assertEquals((index + 1) * 2, server.requestCount)
+            assertTrue(next().getHeader("Cookie")!!.contains("00%3A1A%3A79%3AAA%3ABB%3ACC"))
+            next()
+        }
     }
 
     @Test fun inFlightOldAuthenticationCannotPublishOrRetryAfterSave() = runBlocking<Unit> {
