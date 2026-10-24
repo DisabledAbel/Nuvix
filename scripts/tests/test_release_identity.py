@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
 from subprocess import CompletedProcess
@@ -117,22 +118,25 @@ class IdentityContractsTest(unittest.TestCase):
 
     def test_unsigned_apk_inspection_checks_binary_and_committed_versions(self):
         path = self.root / "output-metadata.json"
+        gradle = (self.root / 'app/build.gradle.kts').read_text()
+        version = re.search(r'^\s*versionName = "([^"]+)"', gradle, re.M)[1]
+        code = int(re.search(r'^\s*versionCode = ([0-9]+)', gradle, re.M)[1])
         metadata = {'applicationId': identity.PRODUCTION_ID,
-                    'elements': [{'versionName': '0.1.0', 'versionCode': 21, 'outputFile': 'app-release-unsigned.apk'}]}
+                    'elements': [{'versionName': version, 'versionCode': code, 'outputFile': 'app-release-unsigned.apk'}]}
         path.write_text(json.dumps(metadata))
         (self.root / 'app-release-unsigned.apk').write_bytes(b'fixture')
-        badging = "package: name='com.nuvix.player' versionCode='21' versionName='0.1.0'\n"
+        badging = f"package: name='com.nuvix.player' versionCode='{code}' versionName='{version}'\n"
         unsigned = CompletedProcess([], 1, b'', b'DOES NOT VERIFY\nERROR: Missing signature')
         with patch.object(control.release, 'run', return_value=badging), \
              patch.object(identity.subprocess, 'run', return_value=unsigned):
-            self.assertEqual(('0.1.0', 21), identity.check_unsigned(path, Path('sdk'), self.root))
+            self.assertEqual((version, code), identity.check_unsigned(path, Path('sdk'), self.root))
             with patch.object(control.release, 'run', return_value=badging.replace('com.nuvix.player', 'wrong.app')):
                 with self.assertRaises(ValueError):
                     identity.check_unsigned(path, Path('sdk'), self.root)
             with patch.object(identity.subprocess, 'run', return_value=CompletedProcess([], 0, b'Signed', b'')):
                 with self.assertRaisesRegex(ValueError, 'unsigned'):
                     identity.check_unsigned(path, Path('sdk'), self.root)
-            metadata['elements'][0]['versionCode'] = 20
+            metadata['elements'][0]['versionCode'] = code - 1
             path.write_text(json.dumps(metadata))
             with self.assertRaisesRegex(ValueError, 'version'):
                 identity.check_unsigned(path, Path('sdk'), self.root)

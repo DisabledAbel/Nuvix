@@ -1,7 +1,9 @@
 # Nuvix v1.0 community beta
 
 **Status: preparation only. No release candidate APK is available.** The first planned
-candidate is `v1.0.0-rc.1`; it has not been published. Production signing recovery and
+candidate is `v1.0.0-rc.1` (versionCode `22`, package `com.nuvix.player`); its metadata and
+[release notes](../CHANGELOG.md#100-rc1) are prepared, but it has not been published.
+Production signing recovery and
 GitHub approval prerequisites remain blocked; see the [release readiness tracker](V1-RELEASE-CHECKLIST.md).
 There is no guaranteed release date. Do not run a signing or release workflow to test this guide.
 

@@ -8,7 +8,9 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 ## v1.0 beta preparation
 
 Community beta testing is being prepared; **no release candidate APK is available yet**.
-The first planned candidate is `v1.0.0-rc.1`. Signing recovery and production approval
+Version metadata is prepared for `v1.0.0-rc.1` (code `22`, package `com.nuvix.player`).
+The [candidate notes](CHANGELOG.md#100-rc1) are the release workflow's notes source.
+Signing recovery and production approval
 prerequisites remain blocked, and no release date is guaranteed. Physical-device/provider
 acceptance is still required. See the [beta testing guide](docs/BETA-TESTING.md),
 [feedback and issue workflow](docs/BETA-FEEDBACK.md) and

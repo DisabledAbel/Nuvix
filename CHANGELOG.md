@@ -2,149 +2,102 @@
 
 ## Unreleased
 
-- Prepare the v1.0 community beta process: tester installation/privacy instructions, authorized
-  Stalker, Multi-View, DVR and update checklists, release readiness and feedback triage, and a
-  preparation-only Discord announcement. Refresh Nuvix bug/feature forms and add a beta report form.
-  Configure beta/feature/blocker labels, reusing existing labels. Keep unverified device tests
-  and manual GitHub approval/form setup outstanding. No version bump, signing,
-  release publication, application behavior change or nightly publisher is included.
+No changes queued after the prepared first release candidate.
 
-- Add Stalker Advanced Configuration with a confirmed portal MAC editor, independent Automatic/
-  provider-supplied serial, device IDs and signature, and per-field Restore Automatic.
-- Preserve legacy derivation, encrypted provider settings, account connection associations and
-  active consumers. Add Room 16→17, atomic revision-checked saves and stale-session protection.
-- Encode opaque overrides in portal requests, redact provider object diagnostics and keep identities
-  outside cloud sync. Add synthetic portal, migration, persistence and TV remote tests and beta guidance.
-- Keep Sports/EPG benchmark fixtures compatible with omitted empty Room index metadata and additive column defaults.
+## [1.0.0-rc.1]
 
-- Establish permanent production application ID `com.nuvix.player`, preserving the existing
-  namespace/source packages and production signing key. Old-package testers install separately;
-  private data and provider credentials are not migrated automatically.
-- Add secret-free PR checks of unsigned APK identity, committed/generated versions, published
-  production version history and the manual approval workflow. Keep signing fingerprint control
-  in the protected production environment and cross-check prior production releases.
-- Select stable updates by compatible installed package/certificate and highest versionCode
-  across bounded release history; ignore drafts, RCs and nightlies. Android approval and APK
-  verification remain mandatory. No version bump, release publication or nightly workflow.
+### Nuvix v1.0.0 Release Candidate 1
 
-- Add configurable DVR late starts: default Record Remaining, Skip If Late and minimum remaining
-  scheduled program time, including inclusive threshold equality and remote custom minutes.
-- Persist live global/series inheritance and episode overrides; share policy checks across alarms,
-  reconciliation, admission/account waits and first validated media. Retain configured capture ends,
-  active duration edits, protected/locked bookings, independent accounts and unrelated Multi-View.
-- Add Room 15→16 without replacing saved recordings/providers/history, atomic credential-free
-  decision events and actual useful-capture metadata; avoid persistent empty outputs on skips.
-- Add fake-clock/Room/provider/capture and TV remote regression tests plus Google TV acceptance guidance.
+**Prerelease for public beta testing after approval; no candidate APK is available yet.**
+This preparation does not authorize signing, tagging or publication. Beta software may
+crash or change stored data; use a test device and finish active recordings before updating.
 
-- Restore the compatible SDK 35/API 23 compiler and AndroidX dependency matrix after the
-  grouped update introduced incompatible KSP/AGP APIs and SDK 37 library requirements.
-  Keep the Gradle wrapper update and compatible independent dependency updates.
+### What's Included
 
-- Require a fresh explicit stop review when an active recording's proposed end passes during
-  confirmation, including clock corrections during validation. Normal end-time confirmation
-  preserves the running capture; duplicate/stale revision protection remains unchanged.
+- Live IPTV playback with M3U/M3U8 playlists, Xtream Codes and authorized Stalker portals;
+  XMLTV guide support, movies, series, favorites, search and retained live playback while browsing.
+- Stalker Advanced Configuration: confirmed portal MAC editing and independent Automatic or
+  provider-supplied serial number, device IDs and signature, with per-field resets. Identity
+  stays in encrypted local storage; edits preserve account connection limits.
+- Advanced EPG with Standard/Compact/Expanded layouts, filters, sorting, timeline navigation,
+  bounded program search, details, reminders and recording actions.
+- Sports Hub with EPG-derived game grouping, provider stream choices, favorite teams/leagues,
+  manual match corrections and game reminders. No external live-score service is enabled.
+- Smart Multi-View with up to four live panels where hardware and provider capacity allow,
+  balanced/focused layouts, remote audio selection, compact Guide/Sports actions and local presets.
+- Background DVR with account-aware conflict review, independent recording protection/padding
+  locks, pre-recording Multi-View warnings, recording history and recoverable partial captures.
+- Active recording duration controls: additions, custom end time, shortening, restore and explicit
+  stop review. Late starts support Record Remaining, Skip If Late and Minimum Time Remaining.
+- Customizable Home shelves, layouts, cards and backgrounds; optional TV HOME launcher and
+  installed-app shortcuts, with manufacturer-dependent default-home selection.
+- Optional category-controlled Supabase cloud sync, plus existing LAN/NAS sync. Provider credentials,
+  stream URLs and Stalker identities are excluded from Supabase sync; categories require opt-in.
+- Stream Information diagnostics, adjustable playback buffering and provider connection management
+  shared by live playback, previews, Multi-View and DVR.
+- In-app stable update discovery with package, signer, version-code and checksum validation,
+  followed by Android installation approval. Candidates require manual installation.
 
-- Preview saved Multi-View presets against the next 24 hours of effective DVR windows, including
-  padded/locked/protected capture, overlapping jobs and independent or shared account capacity.
-- Add one-time panel exclusion/replacement/primary edits, explicit preset saving, trusted provider
-  alternatives, current/upcoming/unknown-capacity explanations and Continue With Warning.
-- Revalidate confirmation and per-stream startup (including after Unknown consent); retain atomic
-  allocation, stable generations, primary-first startup and independent pre-recording warnings.
-- Keep preview catalog-only, bound schedule reads, reject stale/duplicate actions and expose
-  remote-accessible focus-bordered actions. Provider-side future availability remains uncertain.
+### Beta Testing Focus
 
-- Add configurable two-minute pre-recording Multi-View conflict review before padded starts,
-  account-aware simultaneous demand, remote-accessible actions and stable schedule-bound dismissal.
-- Offer explicit independent-account exact-guide/confirmed-Sports alternatives with fresh capacity
-  checks, request-specific Unknown consent and original-player retention until successful playback.
-- Expire stale warning actions and retain independent unattended DVR priority/reclamation, paused
-  panel slots, layout/audio roles, notifications and recording activity history.
+Use the [beta testing guide](https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-TESTING.md) and report Pass/Fail/Partial/Not Tested:
 
-- Add lifecycle-owned Smart Multi-View with up to four live panels, shared account reservations,
-  incremental decoder admission, stable panel identities and independent failed-panel actions.
-- Add balanced two/three/four-channel and focused layouts, D-pad panel selection, explicit panel
-  controls, Edit Layout, duplicate choices and resource-aware channel replacement.
-- Coordinate one Android audio-focus owner with cancelable 150 ms focus-follow selection or
-  OK-only audio; keep Guide navigation independent of the selected audio panel.
-- Add compact Guide browsing and explicit Sports Hub broadcast actions, reusing authorized local
-  catalog associations and provider choice. Enter fullscreen with the selected player and review
-  secondary restoration against current provider and hardware availability.
-- Add credential-free local preset CRUD, disconnected resource previews, interrupted-session
-  review and local Multi-View settings. Restore primary first and never reconnect after a crash
-  without confirmation. Physical-TV playback, PiP, audio focus and decoder acceptance remain
-  separate from deterministic policy and UI tests.
+1. Authorized Stalker authentication, portal MAC and advanced identity configuration.
+2. Live TV playback stability, reconnects and provider connection allowances.
+3. Multi-View performance, audio selection and decoder/memory limits.
+4. EPG navigation, search, details and remote focus.
+5. Background DVR, conflicts, duration changes, late starts and storage interruptions.
+6. Physical remote D-pad/OK/Back, text entry and focus restoration.
+7. Opt-in cloud sync across two devices and offline merges.
+8. Fresh installation, old-package separation and compatible in-place updates.
 
-- Add one account-aware local connection allocator for retained live playback, optional Guide
-  preview and the existing recording service, with explicit shared-account links, local/provider
-  allowance controls and one-request consent for additional unknown-capacity connections.
-- Preserve exclusive live surfaces and use safe connection replacement; do not infer subscription
-  limits from generic errors or claim capacity on other devices is known. Multi-View reuses
-  the same allocator and keeps DVR capture ownership independent of visible playback.
-- Add independent Protect Recording/Lock Padding controls, scheduled padding overrides,
-  account-aware conflict review, deterministic deadline fallback and readable recording history.
-  Use two-minute early/five-minute late defaults without replacing existing stored preferences.
-- Add Preparing/Finalizing/Partial/Missed/Canceled lifecycle states and additive Room migration
-  14, preserving existing providers, schedules, series rules and capture locators. Automatic
-  deletion remains absent; active duration extension and alternate-provider selection remain future work.
-- Harden existing capture with durable duplicate-start claims, recoverable partial content,
-  collision-resistant destinations, local storage headroom checks, bounded empty reconnects
-  and terminal storage failures. Validate direct MPEG-TS and reject playlists/nonmedia responses.
-- Keep the selected recording provider authoritative and remove heuristic silent provider
-  substitution. Default recording auto-navigation to Off while preserving explicit saved On;
-  eligible background capture remains independent of visible playback.
-- Declare DVR capture as an Android 14+ specialUse foreground service with an explicit subtype,
-  add unattended-readiness checks and record denied/missed starts. Store approval and real-device
-  background execution still require verification. Use user-granted SCHEDULE_EXACT_ALARM access
-  and remove the restricted automatically granted USE_EXACT_ALARM declaration.
+### Known Limitations
 
-- Replace the basic Sports presentation with My Sports, Live/Upcoming games, favorite teams/leagues,
-  All Sports and the existing category-based channel fallback in the same destination.
-- Group enabled provider streams using exact league-scoped team evidence and time windows; distinguish
-  confirmed matches from reviewable likely/possible suggestions and verified events from inferred EPG.
-- Add local persistent favorites/order, preferred broadcasts, manual association/removal/restore,
-  bounded search/filtering, game details and explicit stream switching through retained live playback.
-- Deduplicate Sports/Guide reminders by game; preserve existing reminders in additive Room migration 13.
-  Add stale/offline labels, optional verified-source score fields and replaceable schedule interfaces.
-- Add synthetic matching, Room, persistence, reminder, timezone/DST and remote UI regressions, large
-  catalog query validation in existing CI, source-terms review and physical-TV acceptance documentation.
+Verified implementation limits:
 
-- Add Standard, Compact and Expanded guide layouts, local guide customization, filters using
-  existing channel organization, stable channel sorting, timeline controls and remembered position.
-- Add bounded local EPG search and a remote-friendly program details panel with optional
-  feed artwork, metadata-based categories and the existing reminder/recording/playback actions.
-  Preserve automatic EPG discovery, atomic refresh and persistent live ownership.
-- Add deterministic guide preference, navigation, database and Compose regressions to the existing
-  test workflow; document remaining Android TV, Google TV and Fire TV hardware acceptance.
-- Add remote-friendly home shelf ordering/visibility, Classic/Compact/Cinema layouts,
-  card sizing/corners/metadata, solid/gradient/artwork backgrounds and featured-content
-  selection. Preserve existing preferences, UUID groups and persistent live playback.
-- Extend the opt-in home-preferences cloud category with validated whole-list order and
-  versioned presentation records; add forward-only SQL migration, JVM/Compose and RLS tests.
-- Add passive real-time playback diagnostics to live TV, movies, episodes and supported
-  recordings, with remote-accessible Compact/Detailed panels, local preferences, bounded
-  session history, documented health rules and sanitized playback errors.
-- Add fake-player and Robolectric Compose diagnostics tests to the existing JVM/CI suite.
-  Device playback, PiP and 720p/1080p/4K remote acceptance still require hardware testing.
+- DVR capture requires a direct MPEG transport stream; playlist/nonmedia responses are rejected.
+  Playback support does not imply that the same stream can be recorded. Automatic sports
+  recording extensions and automatic recording deletion are absent.
+- Sports schedules depend on supplied EPG and local matching; suggestions are not verified
+  broadcasts or live scores. Future provider capacity and usage on other devices are unknown.
+- Supabase sync does not restore provider credentials, local recording files, device permissions
+  or playback tuning. There is no general private database/settings export or guaranteed downgrade.
+- The stable updater excludes prereleases, drafts and nonstable tags. Nightly publishing is removed.
+- Publication remains blocked by the deliberately unimplemented signing-key backup/recovery gate,
+  unverified production credentials/certificate/approval settings and required main review protection.
 
-- Extend optional Supabase sync with separate opt-ins for channel visibility, names and
-  ordering; UUID custom groups and ordered membership; home shelf visibility; ordered
-  pinned apps; and allowlisted appearance, subtitle, guide and startup preferences.
-- Add an explicit favorite-removal opt-in while preserving existing additive favorites
-  and watch-progress records. Retain missing channel/app references for reconciliation.
-- Add a versioned advanced-record protocol, forward-only migration, owner-only RLS and
-  atomic deterministic merges, durable encrypted account-bound pending changes, and
-  per-category status controls. Keep email-code sign-in, WorkManager and LAN/NAS sync.
-- Document migration rollout, conflict/deletion semantics, privacy boundaries, isolated
-  SQL validation and a two-TV acceptance checklist. Hardware verification remains required.
-- Retain one lifecycle-owned live TV player across main navigation, transfer its video
-  surface between fullscreen and a current-channel preview, and add local persistence,
-  preview, and browsing-audio preferences. Preserve guide-preview, channel-list, PiP,
-  buffer, subtitle, recording, and VOD ownership paths; add playback regression tests.
-- Add automatic keyless TVmaze TV metadata, full season/episode listings, cast and
-  crew photos/characters, clickable actor profiles and credits, and CC BY-SA attribution.
-- Prefer TVmaze, use IMDbAPI.dev secondarily, and retain optional TMDb fallback;
-  label external ratings separately and preserve provider playback/cloud identities.
-- Add bounded local metadata caches, throttling and HTTP 429 backoff plus regression tests.
+Untested acceptance: physical Android TV/Google TV/Fire TV remotes, authorized live providers,
+codecs/decoder counts, Multi-View, OEM background execution, USB/NAS capture, cloud sync and
+installation/update data retention still need per-device reports. No universal compatibility or
+uninterrupted recording guarantee is claimed. See the [readiness tracker](https://github.com/DisabledAbel/Nuvix/blob/main/docs/V1-RELEASE-CHECKLIST.md).
+
+### Installation
+
+Requires Android 6.0/API 23 or newer. After an independently approved publication, use the exact
+`v1.0.0-rc.1` GitHub **Pre-release**, verify `SHA256SUMS` and the independently trusted signing
+certificate, and install `nuvix.apk` through Android's installation prompt. CI debug/unsigned APKs
+are validation artifacts, not the beta. See [installation instructions](https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-TESTING.md#obtain-and-verify-a-candidate--after-publication).
+
+The package is **`com.nuvix.player`**, versionName **`1.0.0-rc.1`**, versionCode **`22`**.
+Existing `com.disabledabel.nuvix` installations are a separate app and cannot update in place;
+private data, credentials and recording alarms do not migrate automatically. Future compatible
+versions, including stable, can update the new package only with the same signing identity and
+a higher versionCode. See the [version plan](https://github.com/DisabledAbel/Nuvix/blob/main/docs/releases.md#v100-rc1-version-plan) and
+[migration guidance](https://github.com/DisabledAbel/Nuvix/blob/main/docs/releases.md#application-id-migration).
+
+### Reporting Bugs
+
+Report reproducible problems at <https://github.com/DisabledAbel/Nuvix/issues> using the bug
+or beta report form. Include candidate/build, model/OS, steps, expected/actual behavior and
+sanitized diagnostics. Do not share private provider credentials, portal URLs, MAC addresses,
+tokens or device identifiers; redact screenshots and logs before attaching them.
+
+### Licensing
+
+GPL-3.0-or-later; original OpenTV copyright and attribution are retained. Nuvix is an independent
+modified version of OpenTV, with no official affiliation with OpenTV or DIRECTV. The approved
+release must include corresponding source and notices. Nuvix includes no IPTV channels,
+subscriptions, playlists or media. Use only authorized sources and provider-assigned identities.
 
 ## 0.1.0 — Nuvix development foundation
 
@@ -381,18 +334,3 @@ First public release.
 - Favourites, categories, search
 - In-app self-update for sideloaded installs
 - Single APK for Android TV, Fire TV, phones and tablets
-
-
-## Active DVR duration controls
-
-Active recordings now offer a shared Recording Duration editor with 5/10/15/30/60-minute
-additions, custom date/time, shortening, restore and explicit stop confirmation. Revision-checked
-Room updates and a live deadline watcher preserve the existing capture connection and file.
-Conflict review reuses DVR priority and independent-provider alternatives for scheduled bookings;
-protection, locked padding, two/five-minute defaults and Multi-View admission remain authoritative.
-See [duration behavior, architecture and device checklist](docs/recording-duration.md).
-
-Automated tests cover arithmetic, Room commit/deadline races, duplicate/stale confirmations,
-transport continuity, conflict/preset projection and Compose remote action semantics. Physical
-Android TV/Google TV/Fire TV validation remains required, including date/hour/minute steppers,
-USB/NAS behavior, alarms and process interruption. Automatic sports extensions remain disabled.

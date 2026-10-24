@@ -1,13 +1,13 @@
 # Nuvix v1.0 release readiness
 
 **Decision: blocked. No beta or stable release is authorized by this checklist.**
-Planned first candidate: `v1.0.0-rc.1`. Current committed metadata remains
-`0.1.0` / versionCode `21`, production package `com.nuvix.player`, minimum API 23.
-This preparation does not bump versions, create tags, sign APKs, dispatch workflows or publish.
+Prepared first candidate: `v1.0.0-rc.1`, versionName `1.0.0-rc.1` / versionCode `22`,
+production package `com.nuvix.player`, minimum API 23. This preparation updates metadata
+and notes; it does not create tags, sign APKs, dispatch production workflows or publish.
 
 This is the canonical v1 tracker. Use [tester instructions](BETA-TESTING.md),
 [feedback triage](BETA-FEEDBACK.md) and the existing [release runbook](releases.md).
-Every box starts incomplete. A maintainer records candidate/build and commit, test device/OS,
+A maintainer records candidate/build and commit, test device/OS,
 date, evidence link, owner and result before checking it. CI/JVM/emulator results cannot close
 physical-TV or live-provider rows. Not Tested/Not Supported results require review, not a pass.
 Repeat affected checks after fixes and record explicit acceptance of any remaining limitations.
@@ -19,19 +19,45 @@ Repeat affected checks after fixes and record explicit acceptance of any remaini
 | Production signing recovery | PR [#47](https://github.com/DisabledAbel/Nuvix/pull/47) deliberately stops signing setup and publication. Reviewed iPad-accessible encrypted backup/recovery and an independent restore/certificate drill remain unimplemented. Preserve the hard stop. |
 | Production identity and approval | Environment protection, signing-secret inventory, independent production certificate and reviewer availability are unverified. Connected tools cannot establish them. Administrator must follow [Safari setup](releases.md#safari-settings-checklist-and-independent-fingerprint); API denial blocks release. |
 | Main review protection | October 24, 2026 inspection of [CI ruleset](https://github.com/DisabledAbel/Nuvix/rules/25127172): zero required approvals, no required Code Owner/stale/latest-push approval, admin bypass allowed and only Android CI required. Enforce independent review, no bypass and both existing CI jobs. |
-| Candidate metadata | A separate reviewed version/changelog change is required before any future RC dispatch. Audit public and privately distributed compatible versionCodes; do not assume code 22 is unused. |
+| Candidate review | RC1 metadata/code 22, changelog and generated notes are prepared here. Review this PR and its exact-commit CI before any future dispatch; repeat history checks immediately before publication. See the [version audit](releases.md#v100-rc1-version-plan). |
 | Real-device/provider acceptance | Stalker, live playback, Multi-View, DVR, Google TV remote, cloud sync and compatible updates remain unverified by this program. Gather sanitized per-candidate reports. |
 | GitHub form activation and triage ownership | All requested labels now exist, reusing `bug` and `enhancement`. After merge, preview the forms/default labels and assign a triage owner using [GitHub setup](BETA-FEEDBACK.md#labels-and-one-time-github-setup) before recruiting testers. |
 
-No GitHub Releases existed at the October 24, 2026 inspection. This does not prove that no
-compatible APK or signing identity has ever been distributed privately. Historical PR findings
+No GitHub Releases or remote tags existed at the October 24, 2026 preparation audit.
+The owner confirmed no private `com.nuvix.player` APK above code 21 was distributed.
+This does not establish the signing identity or replace a fresh pre-publication audit. Historical PR findings
 are evidence of implementation, not certification of current production settings.
+
+## RC1 preparation evidence
+
+- [x] Version metadata prepared: `1.0.0-rc.1` / `22`, replacing `0.1.0` / `21`.
+- [x] Source application ID validated as `com.nuvix.player`; namespace remains unchanged.
+- [x] [Candidate changelog](../CHANGELOG.md#100-rc1) prepared from implemented code.
+- [x] Release notes prepared in the workflow's changelog source, with testing priorities,
+      implementation limits, untested acceptance, migration, privacy and GPL/OpenTV notices.
+- [x] Public/private version history audited and [future stable progression](releases.md#v100-rc1-version-plan)
+      documented; code 22 exceeds known compatible builds. Recheck before publication.
+- [ ] Exact-commit release identity CI passing, including actual unsigned APK metadata/history.
+- [ ] Exact-commit Android unit tests, debug/release lint and APK builds passing.
+- [x] Local Python release/branding tests passing: 111 tests, including seven RC1 integration
+      tests and the existing approval, certificate, checksum, prerelease and workflow regressions.
+- [x] Local isolated Supabase migration/security/concurrent-merge checks passing using the
+      unchanged PostgreSQL 16.15 runner; no hosted database was accessed.
+
+Local validation on October 24, 2026 also passed `scripts/release-identity.py`, Sports/EPG
+benchmarks (2,000 channels / 96,000 programmes), and `git diff --check`. Android unit tests,
+debug/release lint and both APK builds were attempted locally but could not start: the Gradle
+wrapper download failed with `UnknownHostException: services.gradle.org`. PR CI remains
+required for actual APK/package/history and Android validation; results belong in the PR.
+A source check is not
+a signed APK inspection; passing CI does not authorize production or physical-device checks.
 
 ## Scope and release control
 
 - [ ] Feature freeze completed: owner records v1 scope and defers unrelated enhancements.
-- [ ] Existing manual Release workflow validated for the exact candidate commit; no automatic
-      tag/push/scheduled/CI publication and no nightly publisher introduced.
+- [ ] Existing manual Release workflow validated for the exact candidate commit; publication
+      is not triggered by tag pushes, schedules or CI. Only the future approved manual workflow
+      may create the candidate tag; no nightly publisher is introduced.
 - [ ] Production signing configured with the existing authorized identity; no key replacement.
 - [ ] Reviewed recovery implementation and encrypted certificate-bound backup restore drill verified
       independently, including the supported iPad flow. Resolve the hard stop through reviewed work.
