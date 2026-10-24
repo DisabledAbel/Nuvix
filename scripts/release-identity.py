@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Secret-free PR checks for the permanent production package and release gate.
+"""Secret-free PR checks for the permanent production package and release policy.
 
 These repository contracts catch accidental changes. Required code-owner review and
-protected environments are the independent controls against deliberate policy edits.
+repository access controls are the independent controls against deliberate policy edits.
 """
 import argparse
 import importlib.util
@@ -59,7 +59,7 @@ def check_workflows(root=ROOT):
             require(not job.get("uses"), "Reusable workflows require explicit release-policy review")
             permissions = job.get("permissions", workflow["permissions"])
             require(permissions.get("contents", "none") == ("write" if publisher else "read"),
-                    "Only the approved publisher may write repository contents")
+                    "Only the trusted publisher may write repository contents")
             if not publisher:
                 require("secrets." not in json.dumps(job), "Validation/PR jobs must not access secrets")
             for step in job.get("steps", []):
@@ -67,36 +67,36 @@ def check_workflows(root=ROOT):
                 require(publisher or not re.search(r'gh\s+release|action-gh-release|release-control\.py\s+(?:sign|publish)',
                                                   command + " " + step.get("uses", "")), "Alternate release publisher detected")
     release = workflows["release.yml"]
-    require(set(release["on"]) == {"workflow_dispatch"}, "Release must be explicitly dispatched")
+    require(set(release["on"]) == {"workflow_dispatch", "push"} and
+            release["on"]["push"] == {"tags": ["v*.*.*"]}, "Release accepts only manual requests or version tags")
+    require(release.get("env", {}).get("TRUSTED_RELEASE_ACTORS") ==
+            "${{ vars.TRUSTED_RELEASE_ACTORS || 'DisabledAbel' }}", "Keep the explicit trusted-publisher allowlist")
     require(release.get("concurrency") == {"group": "nuvix-release-publication", "cancel-in-progress": "false"},
             "Stable and RC publication must serialize")
     publisher = release["jobs"]["publish"]
-    require(publisher.get("environment") == {"name": "production"} and
-            publisher.get("needs") == ["validate", "security"], "Publisher must require production approval and CI")
+    require(not publisher.get("environment") and
+            publisher.get("needs") == ["validate", "security"], "Direct publisher must require both validation jobs")
     for job in release["jobs"].values():
         condition = job.get("if", "")
-        require(condition == "github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'",
-                "Release jobs must run only for manual main requests")
+        require(condition == "github.repository == 'DisabledAbel/Nuvix' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !github.event.deleted))",
+                "Release jobs must run only for manual main requests or version-tag creation")
         checkout = [s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")]
         require(len(checkout) == 1 and checkout[0].get("with", {}).get("ref") == "${{ github.sha }}" and
                 checkout[0]["with"].get("persist-credentials") == "false", "Release must use exact commit without persisted credentials")
     steps = publisher["steps"]
-    readiness = [s for s in steps if s.get("run") == "python3 scripts/production-signing.py release-readiness"]
-    require(len(readiness) == 1 and not readiness[0].get("if") and not readiness[0].get("continue-on-error") and
-            readiness[0].get("env") == {
-                "SIGNING_KEY_BACKUP_CONFIRMED_SHA256": "${{ vars.SIGNING_KEY_BACKUP_CONFIRMED_SHA256 }}"},
-            "Publication requires the protected certificate-bound backup and recovery gate")
-    require(steps.index(readiness[0]) < next(i for i, s in enumerate(steps)
-            if s.get("run", "").startswith("python3 scripts/release-control.py ")),
-            "Backup readiness must precede release verification, signing and publication")
+    require(not any("production-signing.py" in s.get("run", "") for s in steps),
+            "Direct publication must not depend on the legacy signing-setup gate")
     commands = [s for s in steps if s.get("run", "").startswith("python3 scripts/release-control.py ")]
-    require([s["run"].split()[2] for s in commands] == ["verify", "sign", "publish"], "Keep all release verification stages in order")
+    require([s["run"].split()[2] for s in commands] == ["request", "verify", "sign", "publish"],
+            "Keep request resolution and all release verification stages in order")
     require(publisher.get("env", {}).get("EXPECTED_SIGNING_CERT_SHA256") == "${{ vars.SIGNING_CERT_SHA256 }}",
-            "Production environment fingerprint is the independent trust baseline")
+            "Repository signing fingerprint is the independent trust baseline")
     require("GH_TOKEN" not in publisher.get("env", {}), "Publisher token must be step-scoped")
     require(not publisher.get("continue-on-error"), "Publisher failure must block publication")
     for step in commands:
         require(not step.get("if") and not step.get("continue-on-error"), "Release verification stages cannot be skipped")
+        if step["run"] == "python3 scripts/release-control.py request":
+            continue
         require(step.get("env", {}).get("GH_TOKEN") == "${{ github.token }}" and
                 '--expected-plan-sha256 "$EXPECTED_PLAN_SHA256"' in step["run"], "Verify exact prepared artifacts before publication")
     for step in steps:
@@ -175,7 +175,7 @@ def check_unsigned(metadata_path, tools, root=ROOT):
     # No signing key (including the debug key) belongs in the validation job.
     result = subprocess.run([str(tools / "apksigner"), "verify", "--print-certs", str(apk)], capture_output=True)
     require(result.returncode != 0 and b"DOES NOT VERIFY" in result.stderr,
-            "Validation release must be unsigned; signing is reserved for approved production")
+            "Validation release must be unsigned; signing is reserved for the trusted publisher")
     return version, code
 
 

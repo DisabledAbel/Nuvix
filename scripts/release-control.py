@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed release policy and atomic draft-to-public publication (manual runs only)."""
+"""Trusted-publisher release policy and atomic draft-to-public publication."""
 from __future__ import annotations
 
 import argparse
@@ -68,6 +68,7 @@ def pages(path):
 
 
 def check_environment(environment, policies):
+    """Legacy signing-setup prerequisite; the direct release path does not call this."""
     rules = environment.get("protection_rules", [])
     reviewers = next((r for r in rules if r.get("type") == "required_reviewers"), {})
     require(reviewers.get("reviewers") and reviewers.get("prevent_self_review") is True,
@@ -82,35 +83,43 @@ def check_environment(environment, policies):
             "production must allow only branch main, with no tag deployment rules")
 
 
-def check_approval(reviews, environment_id, initiator):
-    relevant = [r for r in reviews if any(e.get("id") == environment_id for e in r.get("environments", []))]
-    require(relevant and not any(r.get("state") == "rejected" for r in relevant),
-            "No unrejected production approval is recorded for this run")
-    approvers = [r["user"]["login"] for r in relevant if r.get("state") == "approved"
-                 and r.get("user", {}).get("type") == "User"
-                 and r["user"]["login"].lower() != initiator.lower()]
-    require(approvers, "Production requires approval by another authorized human")
-    return approvers
+def configure_request():
+    """Resolve dispatch input or a pushed version tag without shell interpolation."""
+    env = os.environ
+    if env.get("GITHUB_EVENT_NAME") == "push":
+        ref = env.get("GITHUB_REF", "")
+        require(ref.startswith("refs/tags/v"), "Release push must be a version tag")
+        version = ref[len("refs/tags/v"):]
+        channel = "rc" if "-rc." in version else "stable"
+    else:
+        require(env.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Unsupported release event")
+        version = env.get("RELEASE_VERSION", "").removeprefix("v")
+        channel = env.get("RELEASE_CHANNEL", "")
+    version_tag(version, channel)
+    with open(env["GITHUB_ENV"], "a") as stream:
+        stream.write(f"RELEASE_VERSION={version}\nRELEASE_CHANNEL={channel}\n")
 
 
-def approved_run():
-    environment = api(f"{BASE}/environments/production")
-    reviews = api(f"{BASE}/actions/runs/{int(os.environ['GITHUB_RUN_ID'])}/approvals")
-    approvers = check_approval(reviews, environment["id"], os.environ["GITHUB_ACTOR"])
-    authorized = {r["reviewer"]["login"].lower() for rule in environment["protection_rules"]
-                  if rule["type"] == "required_reviewers" for r in rule["reviewers"] if r["type"] == "User"}
-    for login in approvers:
-        permission = api(f"{BASE}/collaborators/{quote(login, safe='')}/permission")
-        if login.lower() in authorized and permission.get("permission") in ("admin", "maintain", "write"):
-            return
-    raise ValueError("Production approval must come from a configured user reviewer with repository write access")
+def authorize_publisher(env):
+    trusted = {actor.strip().lower() for actor in env.get("TRUSTED_RELEASE_ACTORS", "DisabledAbel").split(",")
+               if actor.strip()}
+    require(trusted and all(env.get(key, "").lower() in trusted
+                           for key in ("GITHUB_ACTOR", "GITHUB_TRIGGERING_ACTOR")),
+            "Release actor must be listed in TRUSTED_RELEASE_ACTORS (defaults to DisabledAbel)")
+    permission = api(f"{BASE}/collaborators/{quote(env['GITHUB_TRIGGERING_ACTOR'], safe='')}/permission")
+    require(permission.get("permission") in ("admin", "maintain", "write"), "Release actor needs repository write access")
 
 
 def check_context(env, run):
-    require(env.get("GITHUB_REPOSITORY") == REPO and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-            and env.get("GITHUB_REF") == "refs/heads/main", "Release dispatch must target this repository's main")
-    require(env.get("GITHUB_RUN_ATTEMPT") == "1", "Redispatch instead of rerunning a release")
-    require(run.get("event") == "workflow_dispatch" and run.get("head_branch") == "main"
+    event, ref = env.get("GITHUB_EVENT_NAME"), env.get("GITHUB_REF", "")
+    manual = event == "workflow_dispatch" and ref == "refs/heads/main"
+    tag_push = event == "push" and ref.startswith("refs/tags/v")
+    require(env.get("GITHUB_REPOSITORY") == REPO and (manual or tag_push),
+            "Release must be a manual main request or a version-tag push in this repository")
+    if tag_push:
+        version_key(ref[len("refs/tags/"):])
+    require(env.get("GITHUB_RUN_ATTEMPT") == "1", "Start a fresh release instead of rerunning a release")
+    require(run.get("event") == event and run.get("head_branch") == ("main" if manual else ref[len("refs/tags/"):])
             and run.get("head_sha") == env.get("GITHUB_SHA")
             and run.get("status") == "in_progress" and run.get("conclusion") is None,
             "Run canceled, completed or inconsistent with the requested commit")
@@ -120,11 +129,11 @@ def source_metadata(version):
     gradle = (ROOT / "app/build.gradle.kts").read_text()
     names = re.findall(r'^\s*versionName = "([^"]+)"\s*$', gradle, re.M)
     codes = re.findall(r'^\s*versionCode = ([0-9]+)\s*$', gradle, re.M)
-    require(names == [version] and len(codes) == 1, "Commit versionName must match dispatch version")
+    require(names == [version] and len(codes) == 1, "Commit versionName must match release version")
     code = int(codes[0])
     require(1 <= code <= 2_147_483_647, "Invalid Android versionCode")
     changelog = ROOT / "CHANGELOG.md"
-    require(changelog.is_file(), "CHANGELOG.md is required before release approval")
+    require(changelog.is_file(), "CHANGELOG.md is required before release")
     require(re.search(r"^## \[?" + re.escape(version) + r"\]?(?:\s|$)", changelog.read_text(), re.M),
             "CHANGELOG.md must contain a heading for the requested release version")
     return code
@@ -171,20 +180,32 @@ def published_history():
     return history
 
 
+def tag_commit(tag):
+    """Peel lightweight or annotated tags to the commit they identify."""
+    obj = api(f"{BASE}/git/ref/tags/{tag}")["object"]
+    for _ in range(10):
+        if obj.get("type") == "commit":
+            return obj["sha"]
+        require(obj.get("type") == "tag" and re.fullmatch(r"[a-f0-9]{40}", obj.get("sha", "")),
+                "Release tag must identify a commit")
+        obj = api(f"{BASE}/git/tags/{obj['sha']}")["object"]
+    raise ValueError("Release tag nesting limit exceeded")
+
+
 def preflight(version, channel):
     tag = version_tag(version, channel)
     env = os.environ
     run = api(f"{BASE}/actions/runs/{int(env['GITHUB_RUN_ID'])}")
     check_context(env, run)
-    permission = api(f"{BASE}/collaborators/{quote(env['GITHUB_TRIGGERING_ACTOR'], safe='')}/permission")
-    require(permission.get("permission") in ("admin", "maintain", "write"), "Release actor needs repository write access")
+    authorize_publisher(env)
     head = api(f"{BASE}/git/ref/heads/main")["object"]["sha"]
     require(head == env["GITHUB_SHA"] == release.run("git", "rev-parse", "HEAD").strip(),
             "main changed; dispatch a fresh release from the reviewed commit")
-    environment = api(f"{BASE}/environments/production")
-    policies = api(f"{BASE}/environments/production/deployment-branch-policies")["branch_policies"]
-    check_environment(environment, policies)
-    require(api(f"{BASE}/git/ref/tags/{tag}", missing=True) is None, "Tag already exists; never overwrite it")
+    if env["GITHUB_EVENT_NAME"] == "push":
+        require(env["GITHUB_REF"] == f"refs/tags/{tag}" and tag_commit(tag) == env["GITHUB_SHA"],
+                "Pushed release tag does not match the requested version and commit")
+    else:
+        require(api(f"{BASE}/git/ref/tags/{tag}", missing=True) is None, "Tag already exists; never overwrite it")
     code = source_metadata(version)
     check_history(tag, code, published_history(), os.environ.get("EXPECTED_SIGNING_CERT_SHA256"))
     return tag, code
@@ -221,12 +242,11 @@ def prepare(version, channel):
         stream.write(f"plan_sha256={digest(output / 'plan.json')}\n")
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
         stream.write(f"Prepared {tag}, versionCode {code}, commit `{plan['commit']}`. "
-                     "Unsigned artifact only. Production approval is required to sign and publish.\n")
+                     "Unsigned artifact only. The trusted publisher signs after all validation jobs pass.\n")
 
 
 def verify_prepared(version, channel, expected):
     tag, code = preflight(version, channel)
-    approved_run()
     directory = ROOT / "prepared"
     require(re.fullmatch(r"[a-f0-9]{64}", expected), "Missing validation-job artifact digest")
     require(digest(directory / "plan.json") == expected, "Prepared plan checksum mismatch")
@@ -243,7 +263,7 @@ def sign(version, channel, expected):
     names = ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
     require(all(os.environ.get(name, "").strip() for name in names), "Required signing credentials missing")
     fingerprint = os.environ.get("EXPECTED_SIGNING_CERT_SHA256", "")
-    require(re.fullmatch(r"[a-fA-F0-9]{64}", fingerprint), "Missing approved signing certificate fingerprint")
+    require(re.fullmatch(r"[a-fA-F0-9]{64}", fingerprint), "Missing pinned signing certificate fingerprint")
     import base64
     tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/36.0.0"
     keystore = Path(os.environ["RUNNER_TEMP"]) / "nuvix-release.jks"
@@ -295,7 +315,10 @@ def publish(version, channel, expected):
     tag, _ = verify_prepared(version, channel, expected)
     verify_distribution(version, channel)
     # From here onward, failures reserve this version. No automatic delete, overwrite or retry.
-    api(f"{BASE}/git/refs", method="POST", data={"ref": f"refs/tags/{tag}", "sha": os.environ["GITHUB_SHA"]})
+    if os.environ["GITHUB_EVENT_NAME"] == "push":
+        require(tag_commit(tag) == os.environ["GITHUB_SHA"], "Release tag moved")
+    else:
+        api(f"{BASE}/git/refs", method="POST", data={"ref": f"refs/tags/{tag}", "sha": os.environ["GITHUB_SHA"]})
     draft = api(f"{BASE}/releases", method="POST", data={"tag_name": tag,
                 "target_commitish": os.environ["GITHUB_SHA"],
                 "name": os.environ.get("RELEASE_NAME") or f"Nuvix {version}",
@@ -316,27 +339,27 @@ def publish(version, channel, expected):
         asset = remote[path.name]
         require(asset["state"] == "uploaded" and asset["size"] == path.stat().st_size and
                 asset.get("digest") == "sha256:" + digest(path), "Uploaded asset checksum mismatch")
-    # Check cancellation, main movement and environment protection once more before going public.
+    # Check cancellation, publisher access and commit/tag identity once more before going public.
     check_context(os.environ, api(f"{BASE}/actions/runs/{int(os.environ['GITHUB_RUN_ID'])}"))
     require(api(f"{BASE}/git/ref/heads/main")["object"]["sha"] == os.environ["GITHUB_SHA"], "main changed during publishing")
-    require(api(f"{BASE}/git/ref/tags/{tag}")["object"]["sha"] == os.environ["GITHUB_SHA"], "Release tag moved")
-    check_environment(api(f"{BASE}/environments/production"),
-                      api(f"{BASE}/environments/production/deployment-branch-policies")["branch_policies"])
-    approved_run()
+    require(tag_commit(tag) == os.environ["GITHUB_SHA"], "Release tag moved")
+    authorize_publisher(os.environ)
     result = api(f"{BASE}/releases/{release_id}", method="PATCH", data={"draft": False,
                  "make_latest": "true" if channel == "stable" else "false"})
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
-        stream.write(f"Published [{tag}]({result['html_url']}) from `{os.environ['GITHUB_SHA']}` after production approval.\n")
+        stream.write(f"Published [{tag}]({result['html_url']}) from `{os.environ['GITHUB_SHA']}` by a trusted publisher.\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("preflight", "prepare", "verify", "sign", "publish"))
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--channel", choices=("stable", "rc"), required=True)
+    parser.add_argument("command", choices=("request", "preflight", "prepare", "verify", "sign", "publish"))
+    parser.add_argument("--version", default="")
+    parser.add_argument("--channel", choices=("stable", "rc"))
     parser.add_argument("--expected-plan-sha256", default="")
     args = parser.parse_args()
-    if args.command == "preflight":
+    if args.command == "request":
+        configure_request()
+    elif args.command == "preflight":
         preflight(args.version, args.channel)
     elif args.command == "prepare":
         prepare(args.version, args.channel)

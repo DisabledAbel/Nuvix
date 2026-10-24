@@ -80,9 +80,9 @@ class IdentityContractsTest(unittest.TestCase):
         finally:
             path.write_text(original)
 
-    def test_approval_verifier_and_independent_fingerprint_cannot_be_removed(self):
+    def test_publisher_checks_and_independent_fingerprint_cannot_be_removed(self):
         for change in [lambda w: w['on'].update(push={}),
-                       lambda w: w['jobs']['publish'].pop('environment'),
+                       lambda w: w['jobs']['publish'].update(environment='production'),
                        lambda w: w['jobs']['publish'].update(needs=['validate']),
                        lambda w: w['jobs']['publish']['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64),
                        lambda w: w['jobs']['publish']['steps'].pop(3),
@@ -91,20 +91,12 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['publish'].update({'if': w['jobs']['publish']['if'] + ' || true'})]:
             self.mutate('release.yml', change)
 
-    def test_backup_gate_cannot_be_removed_skipped_reordered_or_rebased(self):
-        def gate(w):
-            return next(s for s in w['jobs']['publish']['steps']
-                        if s.get('run') == 'python3 scripts/production-signing.py release-readiness')
-        def remove(w):
-            w['jobs']['publish']['steps'].remove(gate(w))
-        def reorder(w):
-            step = gate(w)
-            w['jobs']['publish']['steps'].remove(step)
-            w['jobs']['publish']['steps'].append(step)
-        for change in [remove, reorder, lambda w: gate(w).update({'if': 'false'}),
-                       lambda w: gate(w).update({'continue-on-error': 'true'}),
-                       lambda w: gate(w)['env'].update(SIGNING_KEY_BACKUP_CONFIRMED_SHA256='a' * 64),
-                       lambda w: gate(w)['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64)]:
+    def test_trusted_actor_allowlist_and_direct_publication_contract(self):
+        for change in [lambda w: w['env'].pop('TRUSTED_RELEASE_ACTORS'),
+                       lambda w: w['env'].update(TRUSTED_RELEASE_ACTORS='anyone'),
+                       lambda w: w['jobs']['publish']['steps'].append({
+                           'run': 'python3 scripts/production-signing.py release-readiness'}),
+                       lambda w: w['on']['push'].update(branches=['main'])]:
             self.mutate('release.yml', change)
 
     def test_pr_secrets_write_permissions_and_nightly_trigger_rejected(self):

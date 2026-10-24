@@ -1,6 +1,6 @@
 # Release signing and update continuity
 
-Every stable Nuvix update must retain the release application ID `com.nuvix.player` and the same private signing key. Increment Android `versionCode` for every distributed update; the current source retains code 21 (after OpenTV's source baseline of 20), versionName `0.1.0`. The `vX.Y.Z` Git tag must match `versionName` exactly. The updater uses `versionCode` to prevent downgrades.
+Every stable Nuvix update must retain the release application ID `com.nuvix.player` and the same private signing key. Increment Android `versionCode` for every distributed update; the prepared first candidate uses code 22, versionName `1.0.0-rc.1`. The `vX.Y.Z` Git tag must match `versionName` exactly. The updater uses `versionCode` to prevent downgrades.
 
 ## Signing key
 
@@ -12,7 +12,7 @@ For a local signed build set `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, 
 
 ## GitHub Actions secrets
 
-Configure these **production environment secrets** only after setting the protection rules in [the release guide](releases.md):
+Configure these **repository secrets** in Settings → Secrets and variables → Actions, as described in [the release guide](releases.md):
 
 | Secret | Contents |
 | --- | --- |
@@ -21,11 +21,11 @@ Configure these **production environment secrets** only after setting the protec
 | `KEY_ALIAS` | Alias of the release key |
 | `KEY_PASSWORD` | Private-key password |
 
-Also set the public production environment **variable** `SIGNING_CERT_SHA256` to the 64-character SHA-256 fingerprint of the long-lived release certificate (hexadecimal without colons). Obtain it with `keytool -list -v -keystore nuvix-release.jks -alias nuvix`, which prompts for the password. Verify it against an independently trusted record before setup. Missing or unknown fingerprints block publication; never substitute a PR-provided fingerprint or a newly generated key. Keep this fingerprint stable: publication rejects a different certificate before uploading an unusable update.
+Also set the public repository **variable** `SIGNING_CERT_SHA256` to the 64-character SHA-256 fingerprint of the long-lived release certificate (hexadecimal without colons). Obtain it with `keytool -list -v -keystore nuvix-release.jks -alias nuvix`, which prompts for the password. Verify it against an independently trusted record before setup. Missing or unknown fingerprints block publication; never substitute a PR-provided fingerprint or a newly generated key. Keep this fingerprint stable: publication rejects a different certificate before uploading an unusable update.
 
-Validation has no signing secrets and prepares an unsigned release APK. After a different maintainer approves `production`, the publishing job verifies the recorded approval and artifact digests, decodes the keystore temporarily with restrictive permissions, signs with `apksigner`, verifies the final APK, and removes the key. Signed APKs are not exposed as Actions artifacts. Only the gated publishing job has `contents: write`.
+Validation has no signing secrets and prepares an unsigned release APK. After Android and database-security validation pass, the trusted publisher verifies actor permissions and artifact digests, decodes the keystore temporarily with restrictive permissions, signs with `apksigner`, verifies the final APK, and removes the key. Signed APKs are not exposed as Actions artifacts. Only the trusted publishing job has `contents: write`.
 
-Update the committed `versionCode`/`versionName` and changelog, merge reviewed changes into `main`, and manually dispatch Release with a matching version and `rc` or `stable` channel. Do not precreate tags. RCs use the production package and signer, so stable needs a higher code than every candidate. See [manual releases](releases.md) for approval, environment verification, failure recovery and the v1.0 checklist.
+Update the committed `versionCode`/`versionName` and changelog, merge reviewed changes into `main`, and manually dispatch Release with a matching version and `rc` or `stable` channel, or push the matching `v<version>` tag at current main. Do not precreate tags for a manual dispatch. RCs use the production package and signer, so stable needs a higher code than every candidate. See [releases](releases.md) for the trusted-actor allowlist, repository signing configuration, failure recovery and the v1.0 checklist. The direct release path requires no production environment or second-reviewer approval.
 
 ## Release verification and assets
 
@@ -33,7 +33,7 @@ Update the committed `versionCode`/`versionName` and changelog, merge reviewed c
 
 - `nuvix.apk`: verified universal release APK.
 - `update.json`: schema 1 metadata containing `versionCode`, `versionName`, `applicationId`, `apkAsset`, APK `sha256`, `sizeBytes`, and `signingCertificateSha256`.
-- `SHA256SUMS`: integrity checksums for the APK, manifest, notes and corresponding source in the approved workflow (standalone `create-release.py` emits the APK checksum).
+- `SHA256SUMS`: integrity checksums for the APK, manifest, notes and corresponding source in the release workflow (standalone `create-release.py` emits the APK checksum).
 - Release notes extracted from the matching changelog section.
 
 The workflow attaches a `nuvix-vX.Y.Z-source.tar.gz` archive from the exact tagged commit, including the GPL license, to meet corresponding-source obligations. GitHub Releases also exposes that commit's source archives. Preserve third-party copyright notices and licenses when distributing binaries.
