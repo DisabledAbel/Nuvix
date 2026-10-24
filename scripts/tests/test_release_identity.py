@@ -84,8 +84,8 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['publish'].pop('environment'),
                        lambda w: w['jobs']['publish'].update(needs=['validate']),
                        lambda w: w['jobs']['publish']['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64),
-                       lambda w: w['jobs']['publish']['steps'].pop(2),
-                       lambda w: w['jobs']['publish']['steps'][2].update({'if': 'false'}),
+                       lambda w: w['jobs']['publish']['steps'].pop(3),
+                       lambda w: w['jobs']['publish']['steps'][3].update({'if': 'false'}),
                        lambda w: w['jobs']['publish'].update({'continue-on-error': 'true'}),
                        lambda w: w['jobs']['publish'].update({'if': w['jobs']['publish']['if'] + ' || true'})]:
             self.mutate('release.yml', change)
