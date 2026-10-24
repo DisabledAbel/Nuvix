@@ -27,7 +27,7 @@ def main():
     db = sqlite3.connect(":memory:")
     for entity in schema["entities"]:
         db.execute(entity["createSql"].replace("${TABLE_NAME}", entity["tableName"]))
-        for index in entity["indices"]:
+        for index in entity.get("indices", []):
             db.execute(index["createSql"].replace("${TABLE_NAME}", entity["tableName"]))
     db.execute("""INSERT INTO sources
         (id,name,kind,url,username,password,macAddress,epgUrl,userAgent,liveFormat,enabled,lastCatalogSyncMillis)

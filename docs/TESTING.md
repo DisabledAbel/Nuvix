@@ -16,6 +16,8 @@ confirmation/cancel, per-field restore, validation and Back.
 Run `./gradlew :app:testDebugUnitTest`, `./gradlew :app:lintDebug`,
 `./gradlew :app:assembleDebug`, `python3 -m unittest discover -s scripts/tests -v` and
 `bash scripts/test-supabase.sh`. Keep the existing Build workflow and production release checks.
+`test_benchmark_schema.py` verifies that Sports/EPG host fixtures accept omitted empty index metadata
+and let SQLite apply additive Room column defaults.
 Use the [hardware checklist](stalker-configuration.md#beta-and-hardware-acceptance) for TV IME,
 native encrypted storage and actual concurrent playback/recording. Tests use synthetic identities;
 no live subscriber credentials or third-party identities are needed.
