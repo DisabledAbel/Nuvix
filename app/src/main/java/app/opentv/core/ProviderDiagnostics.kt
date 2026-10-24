@@ -19,7 +19,7 @@ object ProviderDiagnostics {
             causes.any { it is SSLException } -> "A secure connection could not be established. Check the provider's HTTPS address and certificate."
             error is XtreamApi.XtreamException && error.message == "Username or password rejected by the server." ->
                 "The provider rejected the username or password."
-            error is StalkerApi.StalkerException -> "The portal did not accept this request. Check the portal address and authorized MAC."
+            error is StalkerApi.StalkerException -> "The portal did not accept this request. Verify the portal address, authorized MAC and identity settings with your provider."
             error is IllegalArgumentException -> "The source address or settings are invalid."
             causes.any { it is IOException } -> "The provider connection failed. Check the network and try again."
             else -> "The provider request failed. Check account access, source type, and server settings."

@@ -39,6 +39,7 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 
 ## Setup
 
+- **Stalker portal identity:** Edit your authorized portal MAC and independently select Automatic or provider-supplied Serial Number, Device ID 1, Device ID 2 and Signature under **Settings → Providers → Advanced Configuration**. Saved locally in encrypted storage; the physical network MAC and account connection limits are preserved. See the [configuration and beta guide](docs/stalker-configuration.md).
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
 - **Connections:** Open a provider's **Connection Management** to set its local allowance,
   keep it Unknown, use a provider-reported allowance, or explicitly link shared-account

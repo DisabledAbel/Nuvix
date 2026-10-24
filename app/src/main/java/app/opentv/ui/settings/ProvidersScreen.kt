@@ -57,6 +57,16 @@ fun ProvidersScreen(
     val ui by viewModel.ui.collectAsState()
     var pendingRemove by remember { mutableStateOf<Source?>(null) }
     var connectionSettings by remember { mutableStateOf<Source?>(null) }
+    var advancedConfiguration by remember { mutableStateOf<Source?>(null) }
+    var identitySaved by remember { mutableStateOf(false) }
+    advancedConfiguration?.let { source ->
+        StalkerConfigurationScreen(source, onCancel = { advancedConfiguration = null },
+            onSave = viewModel::saveStalkerConfiguration, onSaved = {
+                advancedConfiguration = null
+                identitySaved = true
+            })
+        return
+    }
     connectionSettings?.let { source ->
         ConnectionManagementDialog(source, ui.sources, onDismiss = { connectionSettings = null })
     }
@@ -75,6 +85,7 @@ fun ProvidersScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        if (identitySaved) Text("Provider configuration saved. Reconnect on the next channel open or provider refresh. Current playback and recordings continue.")
 
         if (ui.sources.isEmpty()) {
             Text(
@@ -95,6 +106,7 @@ fun ProvidersScreen(
                     confirming = pendingRemove?.id == source.id,
                     onEdit = { onEditSource(source) },
                     onConnections = { connectionSettings = source },
+                    onAdvanced = { advancedConfiguration = source },
                     onAskRemove = { pendingRemove = source },
                     onCancelRemove = { pendingRemove = null },
                     onConfirmRemove = {
@@ -115,6 +127,7 @@ private fun ProviderRow(
     confirming: Boolean,
     onEdit: () -> Unit,
     onConnections: () -> Unit,
+    onAdvanced: () -> Unit,
     onAskRemove: () -> Unit,
     onCancelRemove: () -> Unit,
     onConfirmRemove: () -> Unit,
@@ -150,6 +163,10 @@ private fun ProviderRow(
                     TextButton(onClick = onEdit) { Text(stringResource(R.string.common_edit)) }
                     TextButton(onClick = onAskRemove) { Text(stringResource(R.string.common_remove)) }
                 }
+            }
+
+            if (source.kind == SourceKind.STALKER) {
+                OutlinedButton(onClick = onAdvanced) { Text("Advanced Configuration") }
             }
 
             // Stream format is an Xtream-panel concept — M3U sources carry their own URLs, so the

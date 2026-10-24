@@ -60,6 +60,14 @@ interface SourceDao {
     @Update
     suspend fun update(source: Source)
 
+    /** One atomic, revision-checked update; catalog timestamps and unrelated settings stay intact. */
+    @Query("""UPDATE sources SET macAddress = :mac, stalkerSerialNumber = :serial,
+        stalkerDeviceId1 = :device1, stalkerDeviceId2 = :device2, stalkerSignature = :signature,
+        stalkerAccountKey = :accountKey, stalkerRevision = stalkerRevision + 1
+        WHERE id = :id AND kind = 'STALKER' AND stalkerRevision = :expectedRevision""")
+    suspend fun updateStalkerIdentity(id: Long, expectedRevision: Long, mac: String, serial: String?,
+        device1: String?, device2: String?, signature: String?, accountKey: String): Int
+
     /** Deletes the source row with the supplied local ID. */
     @Query("DELETE FROM sources WHERE id = :id")
     suspend fun delete(id: Long)

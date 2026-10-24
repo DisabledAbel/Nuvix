@@ -11,8 +11,14 @@ import app.opentv.data.db.SourceDao
 import app.opentv.core.ProviderDiagnostics
 import app.opentv.data.model.Source
 import app.opentv.data.model.SourceKind
+import app.opentv.data.model.StalkerIdentity
+import app.opentv.connections.AccountConnectionManager
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import app.opentv.data.remote.StalkerApi
 import app.opentv.data.remote.XtreamApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -26,6 +32,8 @@ class SourceRepository(
     private val stalkerApi: StalkerApi,
     private val onAccountVerified: (Source, XtreamApi.AccountInfo) -> Unit = { _, _ -> },
 ) {
+    private val editLocks = ConcurrentHashMap<Long, Mutex>()
+
     /** Observes saved provider configurations in local ID order. */
     fun observeAll(): Flow<List<Source>> = dao.observeAll()
 
@@ -37,18 +45,66 @@ class SourceRepository(
 
     /** Validates and inserts or updates a provider configuration, returning its local ID. */
     suspend fun save(source: Source): Long = withContext(Dispatchers.IO) {
-        val normalised = validatedSource(source)
-        if (source.id == 0L) dao.insert(normalised)
-        else {
-            dao.update(normalised)
-            source.id
+        editLocks.getOrPut(source.id) { Mutex() }.withLock {
+            var normalised = validatedSource(source)
+            if (source.id == 0L) dao.insert(normalised)
+            else {
+                val old = requireNotNull(dao.byId(source.id)) { "Provider no longer exists." }
+                require(old.stalkerRevision == source.stalkerRevision) { "Provider changed. Reopen its settings." }
+                if (old.kind == SourceKind.STALKER && normalised.kind == SourceKind.STALKER) {
+                    // Preserve legacy casing unless the user actually edited the MAC.
+                    if (source.macAddress == old.macAddress) normalised = normalised.copy(macAddress = old.macAddress)
+                    normalised = normalised.copy(
+                        stalkerAccountKey = old.stalkerAccountKey ?: AccountConnectionManager.accountIdentity(old),
+                        stalkerRevision = old.stalkerRevision + 1,
+                    )
+                }
+                withContext(NonCancellable) {
+                    dao.update(normalised)
+                    stalkerApi.configurationSaved(normalised)
+                }
+                source.id
+            }
+        }
+    }
+
+    /** Saves only explicitly confirmed identity edits. No authentication, sync or playback restart. */
+    suspend fun saveStalkerConfiguration(draft: Source): Source = withContext(Dispatchers.IO) {
+        editLocks.getOrPut(draft.id) { Mutex() }.withLock {
+            require(draft.id > 0 && draft.kind == SourceKind.STALKER)
+            StalkerIdentity.validate(draft)
+            val old = requireNotNull(dao.byId(draft.id)) { "Provider no longer exists." }
+            require(old.kind == SourceKind.STALKER && old.stalkerRevision == draft.stalkerRevision) {
+                "Provider changed. Reopen its settings."
+            }
+            val canonical = StalkerIdentity.canonicalMac(draft.macAddress.orEmpty())
+            // An identity-only save on a legacy lowercase MAC must not change automatic hashes.
+            val mac = if (canonical == old.macAddress?.uppercase(java.util.Locale.ROOT)) old.macAddress!! else canonical
+            if (mac == old.macAddress && draft.stalkerSerialNumber == old.stalkerSerialNumber &&
+                draft.stalkerDeviceId1 == old.stalkerDeviceId1 && draft.stalkerDeviceId2 == old.stalkerDeviceId2 &&
+                draft.stalkerSignature == old.stalkerSignature) return@withLock old
+            val key = old.stalkerAccountKey ?: AccountConnectionManager.accountIdentity(old)
+            val saved = old.copy(macAddress = mac, stalkerSerialNumber = draft.stalkerSerialNumber,
+                stalkerDeviceId1 = draft.stalkerDeviceId1, stalkerDeviceId2 = draft.stalkerDeviceId2,
+                stalkerSignature = draft.stalkerSignature, stalkerAccountKey = key, stalkerRevision = old.stalkerRevision + 1)
+            withContext(NonCancellable) {
+                check(dao.updateStalkerIdentity(old.id, old.stalkerRevision, mac, saved.stalkerSerialNumber,
+                    saved.stalkerDeviceId1, saved.stalkerDeviceId2, saved.stalkerSignature, key) == 1) {
+                    "Provider changed. Reopen its settings."
+                }
+                stalkerApi.configurationSaved(saved)
+            }
+            saved
         }
     }
 
     /** Checks details without persisting them; provider authorization is always required. */
     suspend fun test(source: Source): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val validated = validatedSource(source)
+            var validated = validatedSource(source)
+            if (source.kind == SourceKind.STALKER && source.id > 0 && dao.byId(source.id)?.macAddress == source.macAddress) {
+                validated = validated.copy(macAddress = source.macAddress)
+            }
             val message = when (validated.kind) {
                 SourceKind.XTREAM -> {
                     val info = api.authenticate(validated)
@@ -88,13 +144,12 @@ class SourceRepository(
                         "Xtream sources require a username and password."
                     }
                 }
-                SourceKind.STALKER -> require(source.macAddress?.matches(Regex("(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}")) == true) {
-                    "Enter the MAC address authorized by your portal, using six colon-separated pairs."
-                }
+                SourceKind.STALKER -> StalkerIdentity.validate(source)
                 SourceKind.M3U -> Unit
             }
             return source.copy(
                 name = source.name.trim().ifBlank { "IPTV source" }.take(120),
+                macAddress = if (source.kind == SourceKind.STALKER) StalkerIdentity.canonicalMac(source.macAddress.orEmpty()) else source.macAddress,
                 url = normalized, epgUrl = source.epgUrl?.trim()?.takeIf { it.isNotEmpty() },
             )
         }

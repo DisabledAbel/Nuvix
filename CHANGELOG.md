@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add Stalker Advanced Configuration with a confirmed portal MAC editor, independent Automatic/
+  provider-supplied serial, device IDs and signature, and per-field Restore Automatic.
+- Preserve legacy derivation, encrypted provider settings, account connection associations and
+  active consumers. Add Room 16→17, atomic revision-checked saves and stale-session protection.
+- Encode opaque overrides in portal requests, redact provider object diagnostics and keep identities
+  outside cloud sync. Add synthetic portal, migration, persistence and TV remote tests and beta guidance.
+
 - Establish permanent production application ID `com.nuvix.player`, preserving the existing
   namespace/source packages and production signing key. Old-package testers install separately;
   private data and provider credentials are not migrated automatically.

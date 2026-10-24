@@ -2,6 +2,10 @@
 
 Developer utilities. Not part of the app, not shipped in the APK.
 
+Authorized portal MAC editing and Automatic/provider-supplied identities are documented in the
+[Stalker configuration guide](../docs/stalker-configuration.md), including beta and hardware checks.
+Only use synthetic identities with this request-logging mock; never enter live subscriber credentials.
+
 ## stalker_mock.py
 
 A tiny, dependency-free mock **Stalker / Ministra portal** for testing OpenTV's Stalker

@@ -182,6 +182,20 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Identity edits are local-only and never trigger catalog sync or restart consumers. */
+    fun saveStalkerConfiguration(draft: Source, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                graph.sourceRepository.saveStalkerConfiguration(draft)
+                onResult(null)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                onResult("Could not save provider configuration. Reopen the provider settings and verify your values.")
+            }
+        }
+    }
+
     /** Deletes the selected provider and refreshes dependent catalog state. */
     fun delete(source: Source) {
         viewModelScope.launch { graph.catalogRepository.deleteSource(source.id) }
