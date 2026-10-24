@@ -1,5 +1,12 @@
 # Manual Nuvix releases and v1.0 checklist
 
+The canonical [v1 release readiness tracker](V1-RELEASE-CHECKLIST.md) records blockers and
+acceptance evidence; this document remains the signing/approval/publication runbook.
+See [beta instructions](BETA-TESTING.md), [feedback triage](BETA-FEEDBACK.md) and the
+[Discord preparation draft](BETA-DISCORD-ANNOUNCEMENT.md). The first planned candidate is
+`v1.0.0-rc.1`, not yet available. This preparation leaves versions and workflows unchanged
+and must not dispatch signing setup or Release. Complete the blockers before any future request.
+
 ## Current status and prerequisites
 
 Stable releases must never publish on a merge, tag push, schedule, or successful CI run. The Release workflow accepts only a manual dispatch on `main`, with a committed `versionName` and an explicit `rc` or `stable` channel. No nightly workflow is present or introduced.
@@ -170,15 +177,8 @@ Repository administrators and holders of release-capable tokens can change polic
 
 ## v1.0 readiness checklist
 
-- [ ] Verify fresh installation under `com.nuvix.player`, manifest/provider resolution and old-package migration limits.
-- [ ] Enforce Code Owner approval and both required Build checks without administrator bypass.
-- [ ] Verify `production` protections, main-only deployment rule, another authorized human reviewer, no admin bypass and API visibility.
-- [ ] Securely copy existing signing secrets to `production`, remove broad copies, and independently verify the public certificate fingerprint.
-- [ ] CI is green; retain Android, Python, Supabase and benchmark checks and current branch protections.
-- [ ] Commit the intended RC or stable version/changelog and a fresh code greater than every distributed compatible build.
-- [ ] Verify signing continuity, install/update consent and data retention on representative Android/Google TV devices.
-- [ ] Confirm stable devices ignore RCs and source/license/third-party notices accompany the APK.
-- [ ] Manually request the desired release and have another maintainer approve the exact commit after validation.
-- [ ] Verify published assets, tag SHA, signatures, checksums, release notes and updater operation.
-
-This implementation PR does not complete these manual steps, merge itself, create version tags or publish v1.0.0.
+Use [V1-RELEASE-CHECKLIST.md](V1-RELEASE-CHECKLIST.md) as the single editable tracker for
+feature freeze, signing/recovery/approval, CI, version identity, beta hardware acceptance,
+blocker triage, licenses and release notes. Keep unverified rows incomplete. Future publication
+and post-publication verification are separate work; this beta preparation does not merge,
+create version tags or publish an APK, release candidate or v1.0.0.

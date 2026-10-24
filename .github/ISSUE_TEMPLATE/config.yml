@@ -1,5 +1,13 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Provider or subscription problems
-    url: https://github.com/DisabledAbel/Nuvix/blob/main/README.md
-    about: Nuvix is a player and supplies no channels. Problems with your IPTV service are between you and that provider.
+- name: Beta testing guide
+  url: https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-TESTING.md
+  about: Installation, device checklists, privacy and reporting instructions; candidate availability is
+    documented here.
+- name: Provider or subscription problems
+  url: https://github.com/DisabledAbel/Nuvix/blob/main/README.md
+  about: Nuvix supplies no channels, subscriptions or media. Contact your authorized provider privately
+    for account/service problems.
+- name: Security and sensitive reports
+  url: https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-FEEDBACK.md#security-and-sensitive-reports
+  about: Do not post vulnerabilities, credentials or private device/provider information in public issues.

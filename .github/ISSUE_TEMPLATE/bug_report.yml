@@ -1,54 +1,147 @@
 name: Bug report
-description: Something is broken
-labels: [bug]
+description: Report a reproducible Nuvix problem. Keep all provider information private.
+title: '[Bug]: '
+labels:
+- bug
 body:
-  - type: markdown
-    attributes:
-      value: |
-        **Never paste your provider's URL, username or password here.** Issues are public and
-        permanent. Redact them.
-  - type: input
-    id: device
-    attributes:
-      label: Device and Android version
-      description: The single most useful field in this form. Most bugs here are device-specific.
-      placeholder: "Ugoos AM9 Pro, Android 14 / Fire TV Stick 4K, Fire OS 7"
-    validations:
+- type: markdown
+  attributes:
+    value: 'Issues are public. Never share IPTV credentials, private portal/playlist/stream URLs, MAC
+      addresses, serial numbers, Device ID 1/2, signatures, other device identity fields, tokens, cloud
+      keys or personal information. Review and sanitize screenshots and logs before attaching; use [REDACTED]
+      or synthetic examples. Nuvix supplies no channels, subscriptions or media. Use only provider-authorized
+      accounts and identities.
+
+
+      Search existing issues first. Use one report per bug. For session summaries use the Beta test report
+      form. For suspected vulnerabilities, see [private reporting guidance](https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-FEEDBACK.md#security-and-sensitive-reports).'
+- type: input
+  id: summary
+  attributes:
+    label: Short description
+    placeholder: A brief, specific summary of the problem
+  validations:
+    required: true
+- type: input
+  id: version
+  attributes:
+    label: Nuvix version and build number
+    description: Settings → About → Nuvix version. Include the exact release candidate if applicable.
+    placeholder: Version name and build number as displayed
+  validations:
+    required: true
+- type: input
+  id: manufacturer
+  attributes:
+    label: TV / device manufacturer
+    placeholder: Manufacturer only; no serial number or device identifier
+  validations:
+    required: true
+- type: input
+  id: model
+  attributes:
+    label: TV / device model
+    placeholder: Exact public model name; no MAC or serial number
+  validations:
+    required: true
+- type: input
+  id: os
+  attributes:
+    label: Operating system and version
+    placeholder: Android TV / Google TV Android version, or Fire OS version
+  validations:
+    required: true
+- type: dropdown
+  id: feature
+  attributes:
+    label: Relevant feature
+    options:
+    - Installation / update
+    - Stalker configuration / authentication
+    - Live playback
+    - EPG / Compact Guide
+    - Multi-View
+    - DVR / recording
+    - Sports Hub
+    - Remote navigation / accessibility
+    - Cloud sync
+    - Other
+  validations:
+    required: true
+- type: dropdown
+  id: provider_type
+  attributes:
+    label: Provider type
+    description: Type only; never include a portal URL, provider login or device identity.
+    options:
+    - M3U / M3U8
+    - Xtream Codes
+    - Authorized Stalker portal
+    - Multiple types (describe without private details)
+    - Not Tested
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: Steps to reproduce
+    description: Include numbered remote actions and safe/synthetic setup details.
+    placeholder: '1. Open …
+
+      2. Press …
+
+      3. Observe …'
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: Expected behavior
+  validations:
+    required: true
+- type: textarea
+  id: actual
+  attributes:
+    label: Actual behavior
+    description: Include the sanitized error text, if any.
+  validations:
+    required: true
+- type: dropdown
+  id: frequency
+  attributes:
+    label: Frequency
+    options:
+    - Every time
+    - Often
+    - Sometimes
+    - Once
+    - Unknown
+  validations:
+    required: true
+- type: textarea
+  id: screenshots
+  attributes:
+    label: Screenshots (optional)
+    description: Crop or redact credentials, private URLs, MACs, device identities, tokens and personal
+      information before attaching.
+  validations:
+    required: false
+- type: textarea
+  id: logs
+  attributes:
+    label: Sanitized logs (optional)
+    description: No raw logs, databases or provider exports. Check every line and replace sensitive values
+      before pasting. Logs are not required.
+    render: text
+  validations:
+    required: false
+- type: checkboxes
+  id: privacy
+  attributes:
+    label: Privacy and authorization
+    options:
+    - label: I have removed credentials, private URLs, MAC addresses, device identity fields, tokens and
+        personal information from this report and attachments.
       required: true
-  - type: input
-    id: version
-    attributes:
-      label: OpenTV version
-      placeholder: "0.1.0"
-    validations:
+    - label: Any provider/account/device identity used in this test is authorized by that provider.
       required: true
-  - type: dropdown
-    id: source_kind
-    attributes:
-      label: Source type
-      options:
-        - Xtream Codes login
-        - M3U playlist
-        - Both
-    validations:
-      required: true
-  - type: textarea
-    id: what_happened
-    attributes:
-      label: What happened, and what did you expect?
-    validations:
-      required: true
-  - type: textarea
-    id: steps
-    attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. Open Live TV
-        2. Press channel-up five times quickly
-        3. Playback stops and does not recover
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs (optional)
-      description: "adb logcat -s OpenTV:* EpgRepository:* SyncWorker:* — check for credentials before pasting"
-      render: shell

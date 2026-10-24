@@ -2,6 +2,33 @@
 
 # Testing Nuvix
 
+## v1.0 beta program
+
+Start with the [beta testing guide](BETA-TESTING.md) for availability, installation,
+authorized Stalker, Multi-View, background DVR, remote, cloud and update checklists.
+Use [feedback triage](BETA-FEEDBACK.md) and the [release readiness tracker](V1-RELEASE-CHECKLIST.md)
+to record candidate/device evidence. A Not Tested result is not a pass; host/emulator results
+cannot establish hardware acceptance. Production signing/publication remain blocked.
+
+Run the existing PR checks without dispatching Release or Setup Production Signing:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/release-identity.py
+./gradlew help --stacktrace
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease --stacktrace
+python3 scripts/benchmark_sports_queries.py
+bash scripts/test-supabase.sh
+git diff --check
+```
+
+The existing Build workflow also inspects actual unsigned release APK metadata/signature
+and published-version history using `release-identity.py --metadata ... --android-sdk ... --history`.
+Python tests validate workflow/release policy and stable-only release classification; keep both
+existing CI jobs. The isolated PostgreSQL runner applies Supabase migrations and tests RLS,
+typed validation and concurrent merges without contacting a hosted database. No signing keys
+are needed for PR validation. Record actual CI results on the PR separately from device evidence.
+
 ## Stalker advanced configuration
 
 `StalkerIdentityTest` checks canonical MAC validation, legacy derivation, independent overrides,
