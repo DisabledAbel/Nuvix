@@ -101,6 +101,24 @@ class ReleasePolicyTest(unittest.TestCase):
             with self.subTest(ref=ref), self.assertRaises(ValueError):
                 control.check_context(dict(self.env, GITHUB_EVENT_NAME="push", GITHUB_REF=ref), self.run)
 
+    def test_nonterminal_workflow_status_does_not_reject_a_running_job(self):
+        for status in ("queued", "requested", "waiting", "pending", "in_progress"):
+            with self.subTest(status=status):
+                control.check_context(self.env, dict(self.run, status=status, conclusion=None))
+            for conclusion in ("cancelled", "failure", "success", "timed_out"):
+                with self.subTest(status=status, conclusion=conclusion), self.assertRaisesRegex(ValueError, "not active"):
+                    control.check_context(self.env, dict(self.run, status=status, conclusion=conclusion))
+        for status in ("completed", "cancelled", "failure", "success", "timed_out", "unknown", None):
+            with self.subTest(status=status), self.assertRaisesRegex(ValueError, "not active"):
+                control.check_context(self.env, dict(self.run, status=status, conclusion=None))
+
+    def test_run_context_error_identifies_mismatched_field_or_terminal_status(self):
+        for change, message in [({"event": "push"}, "Run event"), ({"head_branch": "feature"}, "Run branch/tag"),
+                                ({"head_sha": "b" * 40}, "Run commit"),
+                                ({"status": "completed", "conclusion": "cancelled"}, "status='completed', conclusion='cancelled'")]:
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, message):
+                control.check_context(self.env, dict(self.run, **change))
+
     def test_request_resolves_optional_dispatch_prefix_and_tag_channel(self):
         requests = [
             ({"GITHUB_EVENT_NAME": "workflow_dispatch", "RELEASE_VERSION": "v1.0.0", "RELEASE_CHANNEL": "stable"}, "1.0.0", "stable"),
