@@ -49,9 +49,12 @@ Use **Secrets → New repository secret** for each of the four signing values, t
 `TRUSTED_RELEASE_ACTORS`. Compare the public fingerprint with the existing trusted certificate.
 No environment reviewer, Prevent self-review or administrator-bypass setting is required.
 
-The separate `Setup Production Signing` workflow from PR #47 remains a legacy, read-only
-prerequisite inspection with an unimplemented key-recovery design. It is not called by
-Release and does not provision the repository secrets above. Release uses an existing key.
+If no key exists and no signed Nuvix build has ever been distributed, follow the browser-only
+[first-release signing setup](signing.md#first-release-setup-in-github). It generates the
+first permanent key, verifies an encrypted recovery backup, saves that backup as an artifact,
+then installs the repository secrets and fingerprint. It requires a short-lived setup PAT
+and a separately saved backup password entered directly in GitHub Settings. Existing or
+partial signing identities stop setup. Release never generates keys or calls setup itself.
 
 ## Prepare and request a candidate or stable release
 

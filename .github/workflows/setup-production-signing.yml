@@ -1,7 +1,5 @@
 name: Setup Production Signing
 
-# Preparatory checks only. Key generation is intentionally not implemented until
-# an independently recoverable, reviewed iPad backup path has been demonstrated.
 on:
   workflow_dispatch:
 
@@ -9,31 +7,56 @@ permissions:
   contents: read
   actions: read
 
+# Serialize first-key setup with every release using that identity.
 concurrency:
-  group: nuvix-production-signing-setup
+  group: nuvix-release-publication
   cancel-in-progress: false
 
+env:
+  TRUSTED_RELEASE_ACTORS: ${{ vars.TRUSTED_RELEASE_ACTORS || 'DisabledAbel' }}
+
 jobs:
-  prerequisites:
-    name: Check signing setup prerequisites (no key generation)
+  setup:
+    name: Create first signing key and encrypted backup
     if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Check protected main, production rules and existing identity
+      - name: Verify first-release prerequisites without changing signing credentials
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
         run: python3 scripts/production-signing.py preflight
-      - name: Explain the recovery blocker
+      - name: Set up JDK 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install signing backup dependencies
+        run: python3 -m pip install -r scripts/requirements-signing.txt
+      - name: Reserve identity, generate permanent key and verify encrypted backup recovery
+        env:
+          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
+        run: python3 scripts/production-signing.py generate
+      - name: Save encrypted signing backup before installing credentials
+        id: backup
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nuvix-first-signing-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/nuvix-first-signing/backup/nuvix-signing-backup.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Install repository signing secrets and public certificate fingerprint
+        env:
+          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
+          BACKUP_ARTIFACT_ID: ${{ steps.backup.outputs.artifact-id }}
+        run: python3 scripts/production-signing.py install
+      - name: Remove runner signing material
         if: always()
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
-          Production signing setup is blocked. This workflow only checks prerequisites;
-          it cannot generate a key, change secrets, upload artifacts or publish releases.
-          A reviewed iPad-accessible encrypted backup and tested recovery path is required.
-          See docs/releases.md. Do not weaken production protection to pass these checks.
-          SUMMARY
+        run: rm -rf "$RUNNER_TEMP/nuvix-first-signing"

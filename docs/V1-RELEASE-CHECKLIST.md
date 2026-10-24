@@ -16,7 +16,7 @@ Repeat affected checks after fixes and record explicit acceptance of any remaini
 
 | Blocker | Current evidence / action required |
 | --- | --- |
-| Production signing recovery | Preserve and verify a secure backup of the existing long-lived key and passwords. The direct release workflow no longer depends on the legacy PR #47 setup/recovery gate; that setup utility remains unimplemented and is not called by Release. |
+| Production signing recovery | Preserve and verify a secure backup of the long-lived key and passwords. For the confirmed first signed release only, [one-time setup](signing.md#first-release-setup-in-github) can create the key, verify and upload an encrypted backup, then install signing secrets. Download the backup before its 7-day artifact expiration. Release never regenerates keys. |
 | Production identity and publisher | Repository signing secrets, independently trusted certificate fingerprint and trusted-actor configuration must be verified using [Safari setup](releases.md#safari-settings-checklist-and-independent-fingerprint). No production environment or second reviewer is required. |
 | Repository access protection | Review workflow/signing changes and restrict write access: trusted actors now publish directly after both validation jobs pass. Existing branch settings are not changed by the workflow. |
 | Candidate review | RC1 metadata/code 22, changelog and generated notes are prepared here. Review this PR and its exact-commit CI before any future dispatch; repeat history checks immediately before publication. See the [version audit](releases.md#v100-rc1-version-plan). |

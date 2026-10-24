@@ -1,26 +1,27 @@
-"""Deterministic, secret-free signing preparation tests; no production/test keys needed."""
+"""First-key setup contracts and disposable-key backup recovery; no real secrets or API writes."""
 import copy
 import importlib.util
 import os
 from pathlib import Path
-import subprocess
+import shutil
+import tempfile
 import unittest
 from unittest.mock import patch
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("production_signing", ROOT / "scripts/production-signing.py")
+spec = importlib.util.spec_from_file_location('first_signing', ROOT / 'scripts/production-signing.py')
 signing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(signing)
-spec = importlib.util.spec_from_file_location("setup_identity", ROOT / "scripts/release-identity.py")
+spec = importlib.util.spec_from_file_location('setup_identity', ROOT / 'scripts/release-identity.py')
 identity = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(identity)
 
 
 class SetupPolicyTest(unittest.TestCase):
     def setUp(self):
-        self.workflow = yaml.load((ROOT / ".github/workflows/setup-production-signing.yml").read_text(), Loader=yaml.BaseLoader)
+        self.workflow = yaml.load((ROOT / '.github/workflows/setup-production-signing.yml').read_text(), Loader=yaml.BaseLoader)
 
     def reject(self, mutate):
         workflow = copy.deepcopy(self.workflow)
@@ -28,189 +29,224 @@ class SetupPolicyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             identity.check_signing_setup(workflow)
 
-    def test_manual_only_no_inputs_and_no_nightly_path(self):
+    def test_current_setup_workflow_is_valid(self):
         identity.check_signing_setup(self.workflow)
-        for event in ("push", "pull_request", "pull_request_target", "schedule", "workflow_call", "workflow_run"):
-            with self.subTest(event=event):
-                self.reject(lambda w: w["on"].update({event: {}}))
-        self.reject(lambda w: w["on"].update(workflow_dispatch={"inputs": {"ref": {"type": "string"}}}))
-        self.assertFalse(any("nightly" in p.name for p in (ROOT / ".github/workflows").iterdir()))
+        identity.check_workflows()
 
-    def test_branch_commit_and_action_pin_are_mandatory(self):
-        self.reject(lambda w: w["jobs"]["prerequisites"].update({"if": "true"}))
-        for change in ({"ref": "main"}, {"ref": "${{ inputs.ref }}"}, {"persist-credentials": "true"}):
-            self.reject(lambda w: w["jobs"]["prerequisites"]["steps"][0]["with"].update(change))
-        self.reject(lambda w: w["jobs"]["prerequisites"]["steps"][0].update(uses="actions/checkout@v7"))
+    def test_setup_is_manual_main_only_and_serialized_with_releases(self):
+        for event in ('push', 'pull_request', 'pull_request_target', 'schedule', 'workflow_call'):
+            self.reject(lambda w: w['on'].update({event: {}}))
+        self.reject(lambda w: w['jobs']['setup'].update({'if': 'true'}))
+        self.reject(lambda w: w['concurrency'].update(group='separate-from-releases'))
+        self.reject(lambda w: w['concurrency'].update({'cancel-in-progress': 'true'}))
+        self.reject(lambda w: w['permissions'].update(contents='write'))
+        self.reject(lambda w: w['env'].update(TRUSTED_RELEASE_ACTORS='anyone'))
 
-    def test_concurrency_cannot_be_disabled_or_cancel_inflight_setup(self):
-        self.reject(lambda w: w.pop("concurrency"))
-        self.reject(lambda w: w["concurrency"].update({"cancel-in-progress": "true"}))
-        self.reject(lambda w: w["concurrency"].update(group="${{ github.run_id }}"))
+    def test_no_plaintext_backup_or_secret_in_dependencies(self):
+        self.reject(lambda w: w['jobs']['setup']['steps'][5]['with'].update(path='${{ runner.temp }}/nuvix-first-signing/**'))
+        self.reject(lambda w: w['jobs']['setup']['steps'][3].update(env={'TOKEN': '${{ secrets.SIGNING_SETUP_TOKEN }}'}))
+        self.reject(lambda w: w['jobs']['setup'].update(env={'TOKEN': '${{ secrets.SIGNING_SETUP_TOKEN }}'}))
 
-    def test_no_signing_secrets_writes_artifacts_or_extra_steps(self):
-        for step in ({"run": "keytool -genkeypair"}, {"uses": "actions/upload-artifact@v7"},
-                     {"run": "gh release create v1.0.0"}, {"run": "gh secret set KEYSTORE_BASE64"}):
-            self.reject(lambda w: w["jobs"]["prerequisites"]["steps"].append(step))
-        self.reject(lambda w: w["permissions"].update(contents="write"))
-        self.reject(lambda w: w["permissions"].update(actions="write"))
-        self.reject(lambda w: w["jobs"]["prerequisites"].update(environment="production"))
-        self.reject(lambda w: w["jobs"]["prerequisites"]["steps"][1]["env"].update(KEYSTORE_BASE64="${{ secrets.KEYSTORE_BASE64 }}"))
-
-    def test_preflight_cannot_be_skipped_or_replaced(self):
-        for change in ({"if": "false"}, {"continue-on-error": "true"}, {"run": "true"}):
-            self.reject(lambda w: w["jobs"]["prerequisites"]["steps"][1].update(change))
-
-    def test_summary_cannot_expand_inputs_or_terminate_heredoc_early(self):
-        for content in ("echo $KEYSTORE_PASSWORD", "echo '${{ secrets.KEYSTORE_PASSWORD }}'",
-                        'cat >> "$GITHUB_STEP_SUMMARY" <<\'SUMMARY\'\nSUMMARY\necho secret\nSUMMARY\n'):
-            self.reject(lambda w: w["jobs"]["prerequisites"]["steps"][2].update(run=content))
+    def test_backup_cannot_be_skipped_or_installed_after_credentials(self):
+        for index in (1, 4, 5, 6):
+            self.reject(lambda w: w['jobs']['setup']['steps'][index].update({'if': 'false'}))
+            self.reject(lambda w: w['jobs']['setup']['steps'][index].update({'continue-on-error': 'true'}))
+        def reorder(w):
+            steps = w['jobs']['setup']['steps']
+            steps[5], steps[6] = steps[6], steps[5]
+        self.reject(reorder)
+        self.reject(lambda w: w['jobs']['setup']['steps'][6]['env'].pop('BACKUP_ARTIFACT_ID'))
+        self.reject(lambda w: w['jobs']['setup']['steps'][7].pop('if'))
+        self.reject(lambda w: w['jobs']['setup']['steps'].append({'run': 'gh release create v1.0.0'}))
 
 
 class SetupPreflightTest(unittest.TestCase):
     def setUp(self):
-        self.env = {"GITHUB_REPOSITORY": signing.control.REPO, "GITHUB_EVENT_NAME": "workflow_dispatch",
-                    "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "a" * 40,
-                    "GITHUB_RUN_ID": "10", "GITHUB_ACTOR": "owner", "GITHUB_TRIGGERING_ACTOR": "owner",
-                    "GITHUB_WORKFLOW_REF": f"{signing.control.REPO}/.github/workflows/setup-production-signing.yml@refs/heads/main"}
-        self.environment = {"id": 1, "can_admins_bypass": False,
-                            "protection_rules": [{"type": "required_reviewers", "prevent_self_review": True,
-                                "reviewers": [{"type": "User", "reviewer": {"login": "approver", "type": "User"}}]}],
-                            "deployment_branch_policy": {"custom_branch_policies": True, "protected_branches": False}}
-        self.rules = [{"type": "pull_request", "parameters": {"required_approving_review_count": 1,
-                          "require_code_owner_review": True, "dismiss_stale_reviews_on_push": True, "require_last_push_approval": True}},
-                      {"type": "required_status_checks", "parameters": {"required_status_checks": [
-                          {"context": "Compile, test and lint"}, {"context": "Supabase migrations and security"}]}}]
+        self.env = {'GITHUB_REPOSITORY': signing.control.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+                    'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40,
+                    'GITHUB_RUN_ID': '10', 'GITHUB_ACTOR': 'DisabledAbel', 'GITHUB_TRIGGERING_ACTOR': 'DisabledAbel',
+                    'GH_TOKEN': 'disposable-test-token', 'SIGNING_BACKUP_PASSWORD': 'disposable-backup-password-for-tests'}
         base = signing.control.BASE
         self.responses = {
-            f"{base}/actions/runs/10": {"event": "workflow_dispatch", "head_branch": "main", "head_sha": "a" * 40,
-                "status": "in_progress", "conclusion": None, "path": ".github/workflows/setup-production-signing.yml"},
-            f"{base}/branches/main": {"protected": True, "commit": {"sha": "a" * 40}},
-            f"{base}/rules/branches/main": self.rules,
-            f"{base}/rulesets?per_page=100&page=1": [{"id": 1}],
-            f"{base}/rulesets/1": {"target": "branch", "enforcement": "active", "bypass_actors": []},
-            f"{base}/collaborators/owner/permission": {"permission": "admin"},
-            f"{base}/collaborators/approver/permission": {"permission": "write"},
-            f"{base}/environments/production": self.environment,
-            f"{base}/environments/production/deployment-branch-policies": {"branch_policies": [{"type": "branch", "name": "main"}]},
-            f"{base}/releases?per_page=100&page=1": []}
-        for scope in ("environments/production", "actions"):
-            for kind in ("variables", "secrets"):
-                self.responses[f"{base}/{scope}/{kind}?per_page=100&page=1"] = {kind: []}
+            f'{base}/actions/runs/10': {'event': 'workflow_dispatch', 'head_branch': 'main', 'head_sha': 'a' * 40,
+                'status': 'in_progress', 'conclusion': None, 'path': '.github/workflows/setup-production-signing.yml'},
+            f'{base}/git/ref/heads/main': {'object': {'sha': 'a' * 40}},
+            f'{base}/collaborators/DisabledAbel/permission': {'permission': 'admin'},
+            f'{base}/actions/secrets?per_page=30&page=1': {'secrets': []},
+            f'{base}/actions/variables?per_page=30&page=1': {'variables': []},
+            f'{base}/releases?per_page=1': [],
+        }
 
-    def run_preflight(self, pattern):
-        def api(path, **kwargs):
-            self.assertEqual({}, kwargs, "Setup must use GET only")
-            return self.responses[path]
-        with patch.dict(os.environ, self.env, clear=True), patch.object(signing.control, "api", side_effect=api), \
-             patch.object(signing.control.release, "run", return_value="a" * 40) as tool, \
-             self.assertRaisesRegex(ValueError, pattern):
+    def preflight(self):
+        with patch.dict(os.environ, self.env, clear=True), \
+             patch.object(signing.control, 'api', side_effect=lambda path: self.responses[path]), \
+             patch.object(signing.control.release, 'run', return_value='a' * 40):
             signing.preflight()
-        # No keytool, encryption tool, secret-write CLI or other mutation may run.
-        tool.assert_called_once_with("git", "rev-parse", "HEAD")
 
-    def test_even_complete_prerequisites_stop_before_key_generation(self):
-        self.run_preflight("no reviewed iPad-accessible encrypted backup")
+    def test_first_identity_preflight_is_read_only(self):
+        self.preflight()
 
-    def test_untrusted_events_refs_repository_workflow_and_reruns_fail_before_api(self):
-        for key, value in [("GITHUB_EVENT_NAME", "pull_request"), ("GITHUB_EVENT_NAME", "push"),
-                           ("GITHUB_REF", "refs/heads/feature"), ("GITHUB_REF", "refs/tags/v1.0.0"),
-                           ("GITHUB_REPOSITORY", "fork/Nuvix"), ("GITHUB_RUN_ATTEMPT", "2"),
-                           ("GITHUB_WORKFLOW_REF", "DisabledAbel/Nuvix/.github/workflows/evil.yml@refs/heads/main")]:
-            with self.subTest(key=key, value=value), patch.dict(os.environ, dict(self.env, **{key: value}), clear=True), \
-                 patch.object(signing.control, "api") as api, self.assertRaises(ValueError):
+    def test_missing_token_and_untrusted_context_stop_before_api(self):
+        for key, value in [('GH_TOKEN', ''), ('GITHUB_REF', 'refs/heads/feature'),
+                           ('GITHUB_EVENT_NAME', 'push'), ('GITHUB_RUN_ATTEMPT', '2'),
+                           ('GITHUB_REPOSITORY', 'other/Nuvix')]:
+            with self.subTest(key=key), patch.dict(os.environ, dict(self.env, **{key: value}), clear=True), \
+                 patch.object(signing.control, 'api') as api, self.assertRaises(ValueError):
                 signing.preflight()
             api.assert_not_called()
 
-    def test_stale_or_unprotected_main_and_review_bypass_are_rejected(self):
-        for branch in ({"protected": False, "commit": {"sha": "a" * 40}},
-                       {"protected": True, "commit": {"sha": "b" * 40}}):
-            with self.subTest(branch=branch), patch.dict(os.environ, self.env, clear=True), \
-                 patch.object(signing.control, "api", side_effect=lambda path: branch if path.endswith("branches/main") else self.responses[path]), \
-                 patch.object(signing.control.release, "run", return_value="a" * 40), self.assertRaises(ValueError):
-                signing.preflight()
-        self.responses[f"{signing.control.BASE}/rulesets/1"]["bypass_actors"] = [{"actor_type": "RepositoryRole", "actor_id": 5}]
-        self.run_preflight("disallow bypass")
+    def test_stale_main_and_other_workflow_are_rejected(self):
+        self.responses[f'{signing.control.BASE}/git/ref/heads/main'] = {'object': {'sha': 'b' * 40}}
+        with self.assertRaisesRegex(ValueError, 'main changed'):
+            self.preflight()
+        self.responses[f'{signing.control.BASE}/git/ref/heads/main'] = {'object': {'sha': 'a' * 40}}
+        self.responses[f'{signing.control.BASE}/actions/runs/10']['path'] = '.github/workflows/release.yml'
+        with self.assertRaisesRegex(ValueError, 'Unexpected signing'):
+            self.preflight()
 
-    def test_independent_review_and_both_required_checks_cannot_be_omitted(self):
-        for rules in ([], self.rules[:1], self.rules[1:]):
-            with self.assertRaises(ValueError):
-                signing.check_main_protection({"protected": True}, rules)
-        self.rules[0]["parameters"]["required_approving_review_count"] = 0
-        self.run_preflight("independent PR")
+    def test_short_backup_password_is_rejected(self):
+        self.env['SIGNING_BACKUP_PASSWORD'] = 'too-short'
+        with self.assertRaisesRegex(ValueError, 'at least 24'):
+            self.preflight()
 
-    def test_missing_environment_protection_or_independent_reviewer_blocks_setup(self):
-        self.environment["can_admins_bypass"] = True
-        self.run_preflight("administrator bypass")
-        self.environment["can_admins_bypass"] = False
-        self.environment["protection_rules"][0]["reviewers"][0]["reviewer"]["login"] = "owner"
-        self.run_preflight("different authorized human")
+    def test_existing_partial_identity_and_reservation_prevent_generation(self):
+        for name in signing.SIGNING_NAMES | {signing.RESERVATION}:
+            for kind in ('secrets', 'variables'):
+                key = f'{signing.control.BASE}/actions/{kind}?per_page=30&page=1'
+                self.responses[key] = {kind: [{'name': name}]}
+                with self.subTest(name=name, kind=kind), self.assertRaises(ValueError):
+                    self.preflight()
+                self.responses[key] = {kind: []}
+        self.responses[f'{signing.control.BASE}/releases?per_page=1'] = [{'draft': True}]
+        with self.assertRaisesRegex(ValueError, 'release already exists'):
+            self.preflight()
 
-    def test_every_partial_or_complete_signing_configuration_prevents_regeneration(self):
-        for name in signing.SIGNING_NAMES | {signing.BACKUP_RECEIPT}:
-            for scope in ("environments/production", "actions"):
-                for kind in ("variables", "secrets"):
-                    path = f"{signing.control.BASE}/{scope}/{kind}?per_page=100&page=1"
-                    self.responses[path] = {kind: [{"name": name}]}
-                    with self.subTest(name=name, scope=scope, kind=kind):
-                        self.run_preflight("already exists or is partial")
-                    self.responses[path] = {kind: []}
+    def test_inventory_checks_later_pages_and_rejects_api_failure(self):
+        with patch.object(signing.control, 'api', side_effect=[{'secrets': [{'name': 'OTHER'}] * 30},
+                                                              {'secrets': [{'name': 'KEYSTORE_BASE64'}]}]):
+            self.assertIn('KEYSTORE_BASE64', signing.inventory('secrets'))
+        with patch.object(signing.control, 'api', side_effect=RuntimeError('denied')), self.assertRaises(ValueError):
+            signing.inventory('secrets')
+        with patch.object(signing.control, 'api', return_value={}), self.assertRaises(ValueError):
+            signing.inventory('variables')
 
-    def test_inventory_permission_failure_never_becomes_an_empty_inventory(self):
-        with patch.dict(os.environ, self.env, clear=True), patch.object(signing.control, "api", side_effect=RuntimeError("denied")), \
-             patch.object(signing, "require_backup_implementation") as backup, self.assertRaises(RuntimeError):
-            signing.preflight()
-        backup.assert_not_called()
-
-    def test_paginated_inventory_finds_existing_key_on_later_page(self):
-        with patch.object(signing.control, "api", side_effect=[{"secrets": [{"name": "OTHER"}] * 100},
-                                                               {"secrets": [{"name": "KEYSTORE_BASE64"}]}]) as api:
-            secrets = signing.inventory("unused", "secrets")
-        self.assertEqual(2, api.call_count)
-        with self.assertRaisesRegex(ValueError, "already exists"):
-            signing.check_absent_identity([], secrets, [])
-
-    def test_unverified_inventory_history_and_drafts_preserve_existing_identity(self):
-        for variables in (None, {}, [{}], [{"name": None}]):
-            with self.assertRaises(ValueError):
-                signing.check_absent_identity(variables, [], [])
-        for item, metadata in [({"tag_name": "v1.0.0"}, {"applicationId": "com.nuvix.player"}),
-                               ({"tag_name": "v1.0.0"}, None),
-                               ({"tag_name": "v1.0.0"}, {"applicationId": "unknown"}),
-                               ({"tag_name": "v1.0.0", "draft": True}, None)]:
-            with self.assertRaises(ValueError):
-                signing.check_absent_identity([], [], [(item, metadata)])
+    def test_api_failure_reports_only_status_without_private_response(self):
+        with patch.object(signing.control, 'api', side_effect=RuntimeError('PRIVATE-CANARY (HTTP 403)')):
+            with self.assertRaises(ValueError) as error:
+                signing.api(f'{signing.control.BASE}/actions/variables')
+        self.assertIn('HTTP 403', str(error.exception))
+        self.assertNotIn('PRIVATE-CANARY', str(error.exception))
 
 
-class ReleaseReadinessTest(unittest.TestCase):
-    def test_missing_mismatching_or_malformed_fingerprint_and_receipt_block_publication(self):
-        for fingerprint, receipt in [("", ""), ("a" * 64, ""), ("a" * 64, "b" * 64),
-                                     ("a" * 64, "true"), ("invalid", "a" * 64)]:
-            with self.subTest(fingerprint=fingerprint, receipt=receipt), patch.dict(os.environ, {
-                "EXPECTED_SIGNING_CERT_SHA256": fingerprint, signing.BACKUP_RECEIPT: receipt}, clear=True), \
-                 self.assertRaises(ValueError):
-                signing.release_readiness()
+class BackupAndInstallationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.fixture = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.fixture.cleanup)
+        cls.env = {'RUNNER_TEMP': cls.fixture.name, 'GITHUB_RUN_ID': '10',
+                   'SIGNING_BACKUP_PASSWORD': 'disposable-backup-password-for-tests'}
+        with patch.dict(os.environ, cls.env), patch.object(signing, 'preflight'), patch.object(signing.control, 'api'):
+            signing.generate()  # A disposable test key, deleted with the fixture; never a user identity.
+        cls.fixture_root = Path(cls.fixture.name) / 'nuvix-first-signing'
+        cls.record = signing.verify_backup(cls.fixture_root / 'backup/nuvix-signing-backup.zip', cls.env['SIGNING_BACKUP_PASSWORD'])
 
-    def test_matching_receipt_cannot_bypass_unimplemented_recovery(self):
-        with patch.dict(os.environ, {"EXPECTED_SIGNING_CERT_SHA256": "a" * 64, signing.BACKUP_RECEIPT: "A" * 64}, clear=True), \
-             self.assertRaisesRegex(ValueError, "no reviewed iPad-accessible"):
-            signing.release_readiness()
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'nuvix-first-signing'
+        shutil.copytree(self.fixture_root, self.root)
+        self.env = dict(type(self).env, RUNNER_TEMP=self.temp.name, BACKUP_ARTIFACT_ID='7',
+                        GITHUB_STEP_SUMMARY=str(Path(self.temp.name) / 'summary'))
+        self.artifact = {'name': 'nuvix-first-signing-backup-10', 'workflow_run': {'id': 10},
+                         'expired': False, 'size_in_bytes': 1024}
 
-    def test_error_output_does_not_disclose_api_or_tool_output(self):
-        canary = "DO-NOT-LOG-PRIVATE-MATERIAL"
-        with patch("sys.argv", ["production-signing.py", "preflight"]), \
-             patch.object(signing, "preflight", side_effect=RuntimeError(canary)), \
+    def api(self, path, **kwargs):
+        if path.endswith('/actions/artifacts/7'):
+            return self.artifact
+        if path.endswith('/actions/variables/' + signing.RESERVATION):
+            return {'value': '10'}
+        if path.endswith('/actions/variables'):
+            return {}
+        raise AssertionError('Unexpected API operation')
+
+    def install_patches(self):
+        from contextlib import ExitStack
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(patch.dict(os.environ, self.env))
+        stack.enter_context(patch.object(signing, 'validate_context'))
+        stack.enter_context(patch.object(signing, 'verify_backup', return_value=self.record))
+        stack.enter_context(patch.object(signing, 'check_absent_identity', return_value={signing.RESERVATION}))
+        stack.enter_context(patch.object(signing, 'inventory', return_value=set()))
+        api = stack.enter_context(patch.object(signing.control, 'api', side_effect=self.api))
+        tool = stack.enter_context(patch.object(signing, 'tool'))
+        return api, tool
+
+    def test_encrypted_backup_restores_same_key_and_credentials(self):
+        record = signing.verify_backup(self.root / 'backup/nuvix-signing-backup.zip', self.env['SIGNING_BACKUP_PASSWORD'])
+        self.assertEqual(self.record['fingerprint'], record['fingerprint'])
+        self.assertEqual(signing.SIGNING_NAMES - {'SIGNING_CERT_SHA256'}, set(record['secrets']))
+        with self.assertRaises(Exception):
+            signing.verify_backup(self.root / 'backup/nuvix-signing-backup.zip', 'incorrect-password')
+
+    def test_generation_reserves_identity_before_invoking_keytool(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, dict(self.env, RUNNER_TEMP=directory)), \
+             patch.object(signing, 'preflight'), patch.object(signing.control, 'api') as api:
+            def fail(args, **kwargs):
+                self.assertEqual('POST', api.call_args.kwargs['method'])
+                self.assertEqual(signing.RESERVATION, api.call_args.kwargs['data']['name'])
+                raise ValueError('keytool unavailable')
+            with patch.object(signing, 'tool', side_effect=fail), self.assertRaises(ValueError):
+                signing.generate()
+
+    def test_install_requires_successful_artifact_and_uses_stdin_for_all_secrets(self):
+        api, tool = self.install_patches()
+        signing.install()
+        calls = tool.call_args_list
+        self.assertEqual(4, len(calls))
+        for call in calls:
+            args = call.args[0]
+            self.assertEqual(['gh', 'secret', 'set'], args[:3])
+            self.assertIn(args[3], self.record['secrets'])
+            self.assertIsInstance(call.kwargs['data'], bytes)
+            self.assertNotIn(call.kwargs['data'].decode(), args)
+        self.assertEqual('SIGNING_CERT_SHA256', api.call_args.kwargs['data']['name'])
+        summary = Path(self.env['GITHUB_STEP_SUMMARY']).read_text()
+        self.assertIn(self.record['fingerprint'], summary)
+        for name in ('KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_PASSWORD'):
+            self.assertNotIn(self.record['secrets'][name], summary)
+
+    def test_missing_wrong_expired_or_other_run_artifact_prevents_secret_writes(self):
+        _, tool = self.install_patches()
+        for change in ({'name': 'other'}, {'workflow_run': {'id': 11}}, {'expired': True}, {'size_in_bytes': 0}):
+            original = self.artifact
+            self.artifact = dict(original, **change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                signing.install()
+            tool.assert_not_called()
+            self.artifact = original
+        with patch.dict(os.environ, {'BACKUP_ARTIFACT_ID': ''}), self.assertRaises(ValueError):
+            signing.install()
+        tool.assert_not_called()
+
+    def test_changed_backup_or_existing_secret_prevents_replacement(self):
+        _, tool = self.install_patches()
+        (self.root / 'backup.sha256').write_text('0' * 64)
+        with self.assertRaisesRegex(ValueError, 'missing or changed'):
+            signing.install()
+        tool.assert_not_called()
+        shutil.copyfile(self.fixture_root / 'backup.sha256', self.root / 'backup.sha256')
+        with patch.object(signing, 'inventory', return_value={'KEYSTORE_BASE64'}), self.assertRaisesRegex(ValueError, 'refusing replacement'):
+            signing.install()
+        tool.assert_not_called()
+
+    def test_unexpected_errors_with_private_material_are_not_printed(self):
+        with patch('sys.argv', ['production-signing.py', 'generate']), \
+             patch.object(signing, 'generate', side_effect=RuntimeError('PRIVATE-CANARY')), \
              self.assertRaises(SystemExit) as error:
             signing.main()
-        self.assertNotIn(canary, str(error.exception))
-
-    def test_readiness_cli_fails_closed_without_any_outputs_or_private_keys(self):
-        result = subprocess.run(["python3", str(ROOT / "scripts/production-signing.py"), "release-readiness"],
-                                env=dict(os.environ, EXPECTED_SIGNING_CERT_SHA256="a" * 64,
-                                         SIGNING_KEY_BACKUP_CONFIRMED_SHA256="a" * 64), capture_output=True, text=True)
-        self.assertNotEqual(0, result.returncode)
-        self.assertEqual("", result.stdout)
-        self.assertIn("setup/publication stopped", result.stderr)
+        self.assertNotIn('PRIVATE-CANARY', str(error.exception))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
