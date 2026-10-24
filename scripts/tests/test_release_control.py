@@ -32,18 +32,37 @@ class ReleasePolicyTest(unittest.TestCase):
                        "user": {"login": "approver", "type": "User"}}
 
     def test_channel_version_parsing(self):
-        for version, channel in [("1.0.0", "stable"), ("1.0.0-rc.1", "rc"), ("1.0.0-rc.2", "rc")]:
-            self.assertEqual("v" + version, control.version_tag(version, channel))
+        for version, channel in [("0.0.0", "stable"), ("1.0.0", "stable"), ("10.20.30", "stable"),
+                                 ("0.0.0-rc.1", "rc"), ("1.0.0-rc.1", "rc"), ("10.20.30-rc.12", "rc")]:
+            with self.subTest(version=version, channel=channel):
+                tag = control.version_tag(version, channel)
+                self.assertEqual("v" + version, tag)
+                control.version_key(tag)
 
     def test_unsafe_versions_and_channel_mismatches(self):
-        for version in ["v1.0.0", "1.0", "01.0.0", "1.0.0\n", "1.0.0;id", "$(id)", "../main", "١.0.0", "1.0.0-rc.1"]:
-            with self.subTest(version=version), self.assertRaises(ValueError):
-                control.version_tag(version, "stable")
-        for version in ["1.0.0", "1.0.0-rc.0", "1.0.0-rc.01", "1.0.0-beta.1"]:
+        for version in ["v1.0.0", "1.0", "01.0.0", "1.00.0", "1.0.00", "1.0.0\n", " 1.0.0",
+                        "1.0.0 ", "1.0.0;id", "$(id)", "../main", "١.0.0", "1.0.0+build.1"]:
+            for channel in ("stable", "rc"):
+                candidate = version + "-rc.1" if channel == "rc" else version
+                with self.subTest(version=candidate, channel=channel), self.assertRaises(ValueError):
+                    control.version_tag(candidate, channel)
+        with self.assertRaises(ValueError):
+            control.version_tag("1.0.0-rc.1", "stable")
+        for version in ["v1.0.0", "1.0.0", "1.0.0-rc.0", "1.0.0-rc.01", "1.0.0-beta.1",
+                        "1.0.0-rc.1\n", "1.0.0-rc.١", "1.0.0-rc.1+build.1"]:
             with self.subTest(version=version), self.assertRaises(ValueError):
                 control.version_tag(version, "rc")
         with self.assertRaises(ValueError):
             control.version_tag("1.0.0", "nightly")
+
+    def test_tag_input_for_rc_explains_policy_before_api_access(self):
+        # The failed manual release submitted a tag-like v1.0.0 for channel rc.
+        with patch.object(control, "api") as api:
+            with self.assertRaises(ValueError) as error:
+                control.preflight("v1.0.0", "rc")
+            self.assertIn("X.Y.Z-rc.N", str(error.exception))
+            self.assertIn("without a leading 'v'", str(error.exception))
+            api.assert_not_called()
 
     def test_environment_must_be_explicitly_protected(self):
         control.check_environment(self.environment, self.policies)
@@ -157,12 +176,24 @@ class ReleasePolicyTest(unittest.TestCase):
         from subprocess import CompletedProcess
         for status, expected in [(403, RuntimeError), (500, RuntimeError)]:
             with patch.object(control.subprocess, "run", return_value=CompletedProcess([], 1, b"", f"(HTTP {status})".encode())):
-                with self.assertRaises(expected):
+                with self.assertRaisesRegex(expected, f"HTTP {status}"):
                     control.api(f"{control.BASE}/git/ref/tags/v1.0.0", missing=True)
         with patch.object(control.subprocess, "run", return_value=CompletedProcess([], 1, b"", b"(HTTP 404)")):
             self.assertIsNone(control.api(f"{control.BASE}/git/ref/tags/v1.0.0", missing=True))
         with self.assertRaises(ValueError):
             control.api("https://attacker.example/")
+
+    def test_api_error_reports_status_without_response_or_token(self):
+        from subprocess import CompletedProcess
+        path = f"{control.BASE}/environments/production/deployment-branch-policies"
+        for status in (403, 404, 500):
+            result = CompletedProcess([], 1, b'private response', f'private token (HTTP {status})'.encode())
+            with self.subTest(status=status), patch.object(control.subprocess, "run", return_value=result):
+                with self.assertRaises(RuntimeError) as error:
+                    control.api(path)
+                self.assertIn(f"HTTP {status}", str(error.exception))
+                self.assertIn(path, str(error.exception))
+                self.assertNotIn("private", str(error.exception))
 
     def test_artifact_tampering_rejected_before_signing(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(control, "ROOT", Path(directory)), \
@@ -246,6 +277,7 @@ class PublicationTransactionTest(unittest.TestCase):
             f"{control.digest(p)}  {p.name}\n" for p in sorted(self.dist.iterdir())))
         self.patches = [patch.object(control, "ROOT", self.root),
                         patch.dict(os.environ, {"GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "10",
+                                               "RELEASE_NAME": "",
                                                "GITHUB_STEP_SUMMARY": str(self.root / "summary")}),
                         patch.object(control, "verify_prepared", side_effect=lambda v, c, h: (control.version_tag(v, c), 23)),
                         patch.object(control, "verify_distribution"), patch.object(control, "check_context"),
@@ -283,15 +315,29 @@ class PublicationTransactionTest(unittest.TestCase):
         self.assertEqual(["POST", "POST", "PATCH"], [method for method, _ in writes])
         self.assertEqual({"ref": "refs/tags/v1.0.0", "sha": "a" * 40}, writes[0][1])
         self.assertTrue(writes[1][1]["draft"])
+        self.assertEqual("Nuvix 1.0.0", writes[1][1]["name"])
         self.assertFalse(writes[1][1]["prerelease"])
         self.assertEqual({"draft": False, "make_latest": "true"}, writes[-1][1])
         self.assertNotIn("--clobber", command.call_args.args[0])
+
+    def test_custom_release_title_preserves_text_without_changing_tag_or_command(self):
+        name = 'My "Nuvix" launch 🚀 — $(id); `whoami`'
+        with patch.dict(os.environ, {"RELEASE_NAME": name}), \
+             patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run") as command:
+            control.publish("1.0.0", "stable", "a" * 64)
+        draft = next(data for method, path, data in self.calls
+                     if method == "POST" and path.endswith("/releases"))
+        self.assertEqual(name, draft["name"])
+        self.assertEqual("v1.0.0", draft["tag_name"])
+        self.assertNotIn(name, command.call_args.args[0])
 
     def test_candidate_publication_never_becomes_latest(self):
         self.channel = "rc"
         (self.dist / "nuvix-v1.0.0-source.tar.gz").rename(self.dist / "nuvix-v1.0.0-rc.1-source.tar.gz")
         with patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run"):
             control.publish("1.0.0-rc.1", "rc", "a" * 64)
+        self.assertEqual("Nuvix 1.0.0-rc.1", next(data for method, path, data in self.calls
+                         if method == "POST" and path.endswith("/releases"))["name"])
         self.assertTrue(next(data for method, path, data in self.calls if path.endswith("/releases"))["prerelease"])
         self.assertEqual("false", self.calls[-1][2]["make_latest"])
 
