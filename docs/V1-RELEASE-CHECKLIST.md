@@ -21,7 +21,7 @@ Repeat affected checks after fixes and record explicit acceptance of any remaini
 | Main review protection | October 24, 2026 inspection of [CI ruleset](https://github.com/DisabledAbel/Nuvix/rules/25127172): zero required approvals, no required Code Owner/stale/latest-push approval, admin bypass allowed and only Android CI required. Enforce independent review, no bypass and both existing CI jobs. |
 | Candidate metadata | A separate reviewed version/changelog change is required before any future RC dispatch. Audit public and privately distributed compatible versionCodes; do not assume code 22 is unused. |
 | Real-device/provider acceptance | Stalker, live playback, Multi-View, DVR, Google TV remote, cloud sync and compatible updates remain unverified by this program. Gather sanitized per-candidate reports. |
-| Beta triage labels | Existing labels were inspected; `bug` and `enhancement` exist. The beta/domain labels are missing and label administration is unavailable through this session's tools. Complete [manual label setup](BETA-FEEDBACK.md#labels-and-one-time-github-setup) before recruiting testers. |
+| GitHub form activation and triage ownership | All requested labels now exist, reusing `bug` and `enhancement`. After merge, preview the forms/default labels and assign a triage owner using [GitHub setup](BETA-FEEDBACK.md#labels-and-one-time-github-setup) before recruiting testers. |
 
 No GitHub Releases existed at the October 24, 2026 inspection. This does not prove that no
 compatible APK or signing identity has ever been distributed privately. Historical PR findings
@@ -84,7 +84,7 @@ Record device coverage gaps explicitly; do not fill them with host test results.
 
 - [ ] Issue forms previewed in GitHub; required fields, optional sanitized attachments, Not Tested
       choices, links and default labels verified after merge. Do not submit fake public reports.
-- [ ] Missing labels created/reused, named triage owner assigned, and reproducible reports linked
+- [ ] Configured labels reviewed, named triage owner assigned, and reproducible reports linked
       from candidate session summaries. Track blockers using the documented issue filters.
 - [ ] All Critical bugs resolved and verified on an affected candidate/device; security fixes
       handled privately as appropriate. Failure to reproduce is not resolution.

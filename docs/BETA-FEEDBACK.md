@@ -10,13 +10,16 @@ search for duplicates first. **Feature requests** remain separate and may be def
 October 24, 2026 inspection of the public labels page found `bug`, `enhancement`,
 `documentation`, `duplicate`, `question`, `invalid`, `wontfix`, `help wanted`, `good first issue`,
 `accessibility`, `dependencies`, `github_actions` and `java`. Reuse those names.
-The session's GitHub connector cannot administer repository labels and the CLI label API read
-was denied; no missing labels have been created. This is outstanding manual setup, not a
-completed configuration. Forms can collect reports, but a nonexistent default label will not apply.
+The missing labels below were then created through the connected PR labeling endpoint and
+verified in the public label inventory. Existing labels were reused without duplicates. The
+preparation PR retains only `beta` and `documentation`; creating the other labels does not
+classify this PR as a bug or release blocker. New labels use GitHub's default color and no
+description; the table supplies their intended meanings and optional suggested colors.
 
-Before inviting testers, a maintainer opens [Issues → Labels](https://github.com/DisabledAbel/Nuvix/labels),
-searches each exact name and creates only missing entries using **New label**. Do not rename or
-delete unrelated labels, create case variants, or replace an existing equivalent without review.
+When maintaining labels, open [Issues → Labels](https://github.com/DisabledAbel/Nuvix/labels),
+search each exact name and create only missing entries using **New label**. Optionally add the
+descriptions/colors below. Do not rename or delete unrelated labels, create case variants,
+or replace an existing equivalent without review. A deleted default label will not apply to new reports.
 These are organizational labels, not new workflows or automated release gates.
 
 | Label | Suggested color | Use |

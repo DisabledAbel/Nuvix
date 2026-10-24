@@ -5,7 +5,8 @@
 - Prepare the v1.0 community beta process: tester installation/privacy instructions, authorized
   Stalker, Multi-View, DVR and update checklists, release readiness and feedback triage, and a
   preparation-only Discord announcement. Refresh Nuvix bug/feature forms and add a beta report form.
-  Keep unverified device tests and manual GitHub setup outstanding. No version bump, signing,
+  Configure beta/feature/blocker labels, reusing existing labels. Keep unverified device tests
+  and manual GitHub approval/form setup outstanding. No version bump, signing,
   release publication, application behavior change or nightly publisher is included.
 
 - Add Stalker Advanced Configuration with a confirmed portal MAC editor, independent Automatic/
