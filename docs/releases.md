@@ -4,7 +4,8 @@ The canonical [v1 release readiness tracker](V1-RELEASE-CHECKLIST.md) records bl
 acceptance evidence; this document remains the signing/approval/publication runbook.
 See [beta instructions](BETA-TESTING.md), [feedback triage](BETA-FEEDBACK.md) and the
 [Discord preparation draft](BETA-DISCORD-ANNOUNCEMENT.md). The first planned candidate is
-`v1.0.0-rc.1`, not yet available. This preparation leaves versions and workflows unchanged
+`v1.0.0-rc.1`, not yet available. This preparation sets versionName `1.0.0-rc.1` and
+versionCode `22`, retaining package `com.nuvix.player` and the existing workflows,
 and must not dispatch signing setup or Release. Complete the blockers before any future request.
 
 ## Current status and prerequisites
@@ -137,7 +138,7 @@ If plan/visibility changes make required reviewers unavailable, or approval/API 
 
 ## Prepare and request a candidate or stable release
 
-1. Commit the intended version in `app/build.gradle.kts`, add the matching `CHANGELOG.md` section and pass the PR's CI. The release workflow never overrides Gradle metadata. The implementation deliberately leaves `0.1.0`/21 unchanged; v1.0 preparation needs a separate reviewed version bump.
+1. Commit the intended version in `app/build.gradle.kts`, add the matching `CHANGELOG.md` section and pass the PR's CI. The release workflow never overrides Gradle metadata. This preparation targets `1.0.0-rc.1`/22; review the version plan below before any future dispatch.
 2. RC examples: `versionName = "1.0.0-rc.1"`, then `1.0.0-rc.2`. Stable: `versionName = "1.0.0"`. Choose a new, increasing `versionCode` for **each distributed build**, exceeding all earlier stable and RC codes and any manually distributed compatible APKs. For example, codes 22, 23, 24 may be used only if none have already been distributed. Stable must exceed its candidates. Android's allowed integer range is checked.
 3. Merge the reviewed version commit into `main`. Do **not** precreate its tag: existing tags and releases (including drafts) are rejected.
 4. Open [Actions → Release](https://github.com/DisabledAbel/Nuvix/actions/workflows/release.yml) → **Run workflow**, select `main`, enter the version **without `v`**, and select `rc` or `stable`. Inputs accept only exact ASCII numeric `X.Y.Z` or `X.Y.Z-rc.N`; no leading zeros, suffixes, branch inputs or shell fragments. Release notes come from the committed changelog; there is no arbitrary notes-source input.
@@ -146,6 +147,43 @@ If plan/visibility changes make required reviewers unavailable, or approval/API 
 7. After approval the publishing job verifies the recorded human approval and current reviewer permissions, rechecks production protection, the exact current `main` SHA, requested version, history and artifact hashes. It signs the prepared unsigned release APK with the existing JKS, then checks the actual APK package, version, non-debug status, verified signature and expected certificate using build-tools 36.0.0. The keystore is temporary, private, never uploaded and removed even on failure. Signed APKs are never uploaded as Actions artifacts.
 8. A single global concurrency group serializes RC and stable publication. Immediately before creating anything the workflow rechecks tag/release collisions. It reserves a lightweight `v…` tag at the exact validated commit, creates a draft **after approval**, uploads all assets and verifies GitHub's asset sizes and SHA-256 digests. Only after final cancellation, branch/tag, protection and approval checks does it make the complete draft public. RCs use `prerelease: true`, `make_latest: false`; stable uses `prerelease: false` and becomes latest.
 9. Inspect the workflow summary, published commit/tag, notes, assets and checksums. A failed API request is never interpreted as an absent release unless it is an actual 404.
+
+## v1.0.0-rc.1 version plan
+
+| Build | versionName / eventual tag | versionCode |
+| --- | --- | --- |
+| Previous committed development metadata | `0.1.0` / no published tag | `21` |
+| Prepared RC1 | `1.0.0-rc.1` / `v1.0.0-rc.1` | `22` |
+| Reserved next candidate, if needed | `1.0.0-rc.2` / `v1.0.0-rc.2` | `23`, only if still unused |
+| Eventual stable | `1.0.0` / `v1.0.0` | At least `23` after RC1 alone; at least `24` after RC2 |
+
+The October 24, 2026 audit of latest `main` (`a6c304b`) found committed code 21,
+no Git tags (`git ls-remote --tags origin`) and an empty GitHub Releases API result.
+The owner confirmed in this preparation session that no private `com.nuvix.player`
+APK with a code above 21 has been distributed. Code 22 therefore exceeds the known
+compatible history. Legacy `com.disabledabel.nuvix` codes belong to a separate app.
+
+Reserve a fresh code for every distributed build, including failed/reserved release attempts.
+Without intervening builds, RC N can use `21 + N`; stable uses at least `22 + N`, where N
+is the last distributed candidate. Always re-audit public, draft/reserved and private history
+and choose **one greater than the highest used/reserved code** if it exceeds that plan.
+Never freeze stable at 23/24 if more candidates consume those codes. Use the same
+`com.nuvix.player` package and approved production signing identity throughout.
+The existing strict published-history validator must pass again immediately before publication.
+
+RC1 notes are authored in [CHANGELOG.md](../CHANGELOG.md#100-rc1), the existing workflow's
+only notes source. `create-release.py:release_notes` extracts that exact version section and
+adds installation/GPL/OpenTV notices; `release-control.py` includes it as `release-notes.md`
+and the GitHub release body, bound by checksums. No second editable notes file is required.
+The intended notes title is **Nuvix v1.0.0 Release Candidate 1**; the unchanged workflow's
+release name is `Nuvix 1.0.0-rc.1`. Manual input is `1.0.0-rc.1` with channel `rc`;
+the eventual workflow-created tag is `v1.0.0-rc.1`. Do not create that tag during preparation.
+
+Preparation validates the version parser, notes extraction, package/history, stable-upgrade
+rules, RC prerelease/non-Latest flags and unchanged manual approval/signing protections
+through the existing test suite and identity checker. It never invokes release preflight,
+signing setup, signing or publication against production. Signing recovery and current
+production protection/identity verification remain blockers even after CI passes.
 
 ## Compatibility and verification
 

@@ -2,7 +2,8 @@
 
 ## v1.0 community beta preparation
 
-The first planned candidate is `v1.0.0-rc.1`; no candidate has been published. Follow the
+Metadata and [candidate notes](../CHANGELOG.md#100-rc1) are prepared for `v1.0.0-rc.1`,
+versionCode `22`, package `com.nuvix.player`; no candidate has been published. Follow the
 [beta guide](BETA-TESTING.md), [feedback workflow](BETA-FEEDBACK.md) and canonical
 [release readiness tracker](V1-RELEASE-CHECKLIST.md). Complete feature-freeze review,
 signing backup/recovery, production approval/protection and GitHub form/triage setup before recruitment

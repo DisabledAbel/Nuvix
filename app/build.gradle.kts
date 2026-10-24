@@ -15,8 +15,9 @@ android {
         applicationId = "com.nuvix.player"
         minSdk = 23
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.1.0"
+        // RC and stable share one increasing sequence; see docs/releases.md#v100-rc1-version-plan.
+        versionCode = 22
+        versionName = "1.0.0-rc.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
