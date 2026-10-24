@@ -153,6 +153,14 @@ class ReleasePolicyTest(unittest.TestCase):
         control.check_history("v1.0.0", 23, [({"tag_name": "v1.0.0-rc.1"}, metadata)])
         control.check_history("v1.0.0", 23, [({"tag_name": "nightly-20261015.1.1"}, None)])
 
+    def test_permanent_signing_draft_is_not_treated_as_an_apk_release(self):
+        saved = {"tag_name": "nuvix-signing-key", "draft": True,
+                 "assets": [{"name": "nuvix-signing-backup.zip"}]}
+        with patch.object(control, "pages", return_value=[saved]), patch.object(control, "api") as api:
+            history = control.published_history()
+        api.assert_not_called()
+        control.check_history("v1.0.0-rc.1", 22, history)
+
     def test_committed_metadata_required_and_code_bounded(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -330,6 +338,34 @@ class ReleasePolicyTest(unittest.TestCase):
                 control.sign("1.0.0", "stable", "a" * 64)
             self.assertFalse(key.exists())
 
+    def test_sign_uses_loaded_encrypted_identity_without_legacy_secrets(self):
+        from subprocess import CalledProcessError
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(control, "verify_prepared", return_value=("v1.0.0", 23)), \
+             patch.dict(os.environ, {"RUNNER_TEMP": directory, "ANDROID_HOME": directory,
+                                    "EXPECTED_SIGNING_CERT_SHA256": "a" * 64}, clear=True):
+            private = Path(directory) / "nuvix-release-key"
+            private.mkdir()
+            record = {"repository": control.REPO, "fingerprint": "a" * 64, "secrets": {
+                "KEYSTORE_BASE64": "Zml4dHVyZQ==", "KEYSTORE_PASSWORD": "test-store-password",
+                "KEY_ALIAS": "test-alias", "KEY_PASSWORD": "test-key-password"}}
+            (private / "credentials.json").write_text(json.dumps(record))
+            def fail(*args):
+                self.assertEqual(b"fixture", (Path(directory) / "nuvix-release.jks").read_bytes())
+                self.assertEqual(record["secrets"]["KEYSTORE_PASSWORD"], os.environ["KEYSTORE_PASSWORD"])
+                self.assertNotIn("test-store-password", args)
+                raise CalledProcessError(1, "apksigner")
+            with patch.object(control.release, "run", side_effect=fail), self.assertRaises(CalledProcessError):
+                control.sign("1.0.0", "stable", "a" * 64)
+            self.assertFalse((Path(directory) / "nuvix-release.jks").exists())
+            record["fingerprint"] = "b" * 64
+            (private / "credentials.json").write_text(json.dumps(record))
+            for name in record["secrets"]:
+                os.environ.pop(name, None)
+            with patch.object(control.release, "run") as run, self.assertRaisesRegex(ValueError, "pinned certificate"):
+                control.sign("1.0.0", "stable", "a" * 64)
+            run.assert_not_called()
+
     def test_failed_revalidation_has_no_publication_side_effect(self):
         with patch.object(control, "verify_prepared", side_effect=ValueError("canceled")), \
              patch.object(control, "api") as api:
@@ -470,15 +506,16 @@ class WorkflowSecurityTest(unittest.TestCase):
         self.assertEqual("read", release["permissions"]["contents"])
         publisher = release["jobs"]["publish"]
         self.assertNotIn("environment", publisher)
-        self.assertNotIn("production-signing.py", json.dumps(publisher))
+        self.assertIn("production-signing.py load", json.dumps(publisher))
         self.assertEqual(["validate", "security"], publisher["needs"])
         self.assertEqual("write", publisher["permissions"]["contents"])
         for filename, workflow in workflows.items():
             self.assertNotIn("schedule", workflow["on"])
             self.assertNotIn("nightly", filename)
             if filename != "release.yml":
-                self.assertEqual("read", workflow["permissions"].get("contents"))
-                self.assertNotIn("contents: write", (ROOT / ".github/workflows" / filename).read_text())
+                self.assertEqual("write" if filename == "setup-production-signing.yml" else "read", workflow["permissions"].get("contents"))
+                if filename != "setup-production-signing.yml":
+                    self.assertNotIn("contents: write", (ROOT / ".github/workflows" / filename).read_text())
         validation = json.dumps(release["jobs"]["validate"])
         self.assertNotIn("secrets.", validation)
         self.assertIn("assembleRelease", validation)
@@ -507,6 +544,8 @@ class WorkflowSecurityTest(unittest.TestCase):
                 commands.add(run.split()[2])
                 if run.split()[2] != "request":
                     self.assertEqual("${{ github.token }}", step["env"]["GH_TOKEN"])
+            elif run == "python3 scripts/production-signing.py load":
+                self.assertEqual("${{ github.token }}", step["env"]["GH_TOKEN"])
             else:
                 self.assertNotIn("GH_TOKEN", step.get("env", {}))
             uses = step.get("uses", "")

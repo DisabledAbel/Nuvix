@@ -14,47 +14,34 @@ Changing the workflow does not establish that a signing identity or device-test 
 
 ## Repository signing configuration
 
-Open **Settings → Secrets and variables → Actions** in Nuvix. Configure the existing
-long-lived signing key as **repository secrets**:
+For the first signed release, follow [one-password setup](signing.md#first-release-setup-in-github):
+add only the repository secret `SIGNING_BACKUP_PASSWORD` (a privately saved strong password
+of at least 24 characters), then run **Setup Production Signing** on **main** once.
+The built-in workflow token saves a verified AES-256 encrypted key bundle in the permanent
+`nuvix-signing-key` draft release. Normal releases load that same key automatically.
+No PAT, manual keystore upload, signing alias or fingerprint entry is needed.
+Download an offline encrypted backup and keep the password separately; retain the draft.
 
-| Secret | Value |
-| --- | --- |
-| `KEYSTORE_BASE64` | Base64 bytes of the existing release JKS |
-| `KEYSTORE_PASSWORD` | Existing keystore password |
-| `KEY_ALIAS` | Existing release-key alias |
-| `KEY_PASSWORD` | Existing private-key password |
-
-Set the repository **variable** `SIGNING_CERT_SHA256` to the independently trusted release
-certificate SHA-256: 64 hexadecimal characters without colons. The signer must match this
-fingerprint and every prior compatible release. Never generate a replacement key to make
-an update pass. Preserve a secure backup of the existing key and passwords outside Actions.
-No release or test generates a key or uploads private signing material.
-
-Secrets or variables saved only in the old `production` environment are not available to
-the direct publisher. Re-enter their original values at repository scope; GitHub cannot
-export saved secret values. Do not paste credentials into a workflow input, issue or chat.
+If you already have a complete manual configuration, it remains supported: repository
+secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, plus repository
+variable `SIGNING_CERT_SHA256` containing the independently trusted 64-character certificate
+SHA-256 without colons. Existing or partial signing credentials stop first-key setup.
+Never generate a replacement key to make an update pass. Preserve the existing identity.
 
 The repository **variable** `TRUSTED_RELEASE_ACTORS` optionally lists comma-separated GitHub
 usernames allowed to publish. If unset or empty, the workflow defaults to `DisabledAbel`.
-Both the original actor and triggering actor must be allowed and the triggering actor must
-have current repository write, maintain or admin permission. A workflow rerun is rejected.
-Restrict repository write access and review workflow/script changes; these permissions and
-the signing key now authorize release publication directly.
+Both original and triggering actors must be allowed, and the triggering actor must retain
+write, maintain or admin permission. Setup and releases serialize and reject reruns.
+Restrict write access and review workflow/signing changes: these controls and the signing
+identity authorize publication directly.
 
 ### Safari Settings checklist and independent fingerprint
 
-All configuration is available in Safari under **Settings → Secrets and variables → Actions**.
-Use **Secrets → New repository secret** for each of the four signing values, then
-**Variables → New repository variable** for `SIGNING_CERT_SHA256` and optionally
-`TRUSTED_RELEASE_ACTORS`. Compare the public fingerprint with the existing trusted certificate.
-No environment reviewer, Prevent self-review or administrator-bypass setting is required.
-
-If no key exists and no signed Nuvix build has ever been distributed, follow the browser-only
-[first-release signing setup](signing.md#first-release-setup-in-github). It generates the
-first permanent key, verifies an encrypted recovery backup, saves that backup as an artifact,
-then installs the repository secrets and fingerprint. It requires a short-lived setup PAT
-and a separately saved backup password entered directly in GitHub Settings. Existing or
-partial signing identities stop setup. Release never generates keys or calls setup itself.
+In Safari, open **Settings → Secrets and variables → Actions → New repository secret**,
+name it `SIGNING_BACKUP_PASSWORD`, and enter the strong password you saved privately.
+Then run **Actions → Setup Production Signing** on **main**. The setup summary shows the
+public fingerprint and a backup link. No environment approval or admin PAT is required.
+Existing manual signing configurations use the legacy names above instead.
 
 ## Prepare and request a candidate or stable release
 
@@ -85,8 +72,9 @@ partial signing identities stop setup. Release never generates keys or calls set
 One concurrency group serializes RC and stable releases. Main must still match the exact
 checked-out commit at publication; if main moves, make a fresh release request for current main.
 The workflow uses the built-in token with `contents`/`actions` permissions; no PAT is required.
-Signing secrets are exposed only to the signing step, passwords are passed through environment
-variables rather than command-line values, and the temporary keystore is always removed.
+Only the publisher receives the saved backup password and loads the permanent encrypted key.
+Passwords reach the signing command through environment variables, not command-line values;
+private loaded credentials and the temporary keystore are always removed.
 
 ## CI identity protection
 

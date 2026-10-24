@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time first-release key setup with an encrypted, verified backup before installation."""
+"""Permanent encrypted signing-key storage using one password and the built-in GitHub token."""
 import base64
 import hashlib
 import importlib.util
@@ -23,7 +23,8 @@ def require(condition, message):
     if not condition:
         raise SetupError(message)
 SIGNING_NAMES = {'KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD', 'SIGNING_CERT_SHA256'}
-RESERVATION = 'SIGNING_SETUP_RUN_ID'
+STORE_TAG = 'nuvix-signing-key'
+STORE_ASSET = 'nuvix-signing-backup.zip'
 
 
 def api(path, **kwargs):
@@ -32,7 +33,7 @@ def api(path, **kwargs):
     except RuntimeError as error:
         status = re.search(r'\(HTTP ([0-9]{3})\)', str(error))
         detail = f' (HTTP {status[1]})' if status else ''
-        raise SetupError(f'GitHub signing setup API failed{detail}; check the setup token permissions') from None
+        raise SetupError(f'GitHub signing setup API failed{detail}; check the workflow contents permission') from None
 
 
 def paths():
@@ -46,43 +47,37 @@ def tool(args, *, env=None, data=None):
     return result.stdout
 
 
-def inventory(kind):
-    names = set()
-    for page in range(1, 1001):
-        # Repository variables have a documented maximum page size of 30.
-        result = api(f'{control.BASE}/actions/{kind}?per_page=30&page={page}')
-        items = result.get(kind)
-        require(isinstance(items, list) and all(isinstance(i.get('name'), str) for i in items),
-                'Cannot verify repository signing inventory')
-        names.update(item['name'] for item in items)
-        if len(items) < 30:
-            return names
-    raise ValueError('Signing inventory pagination limit exceeded')
-
-
-def validate_context():
+def validate_context(*, release=False):
     env = os.environ
-    require(env.get('GH_TOKEN'), 'Add the SIGNING_SETUP_TOKEN repository secret in GitHub Settings')
-    require(env.get('GITHUB_REPOSITORY') == control.REPO and env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
-            and env.get('GITHUB_REF') == 'refs/heads/main' and env.get('GITHUB_RUN_ATTEMPT') == '1',
-            'Signing setup requires a fresh manual run on this repository main')
+    require(env.get('GH_TOKEN'), 'GitHub workflow token is unavailable')
+    if not release:
+        require(env.get('GITHUB_REPOSITORY') == control.REPO and env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+                and env.get('GITHUB_REF') == 'refs/heads/main' and env.get('GITHUB_RUN_ATTEMPT') == '1',
+                'Signing setup requires a fresh manual run on this repository main')
     run = api(f"{control.BASE}/actions/runs/{int(env['GITHUB_RUN_ID'])}")
     control.check_context(env, run)
-    require(run.get('path') == '.github/workflows/setup-production-signing.yml', 'Unexpected signing setup workflow')
+    expected = '.github/workflows/release.yml' if release else '.github/workflows/setup-production-signing.yml'
+    require(run.get('path') == expected, 'Unexpected signing workflow')
     control.authorize_publisher(env)
     head = api(f'{control.BASE}/git/ref/heads/main')['object']['sha']
     require(head == env['GITHUB_SHA'] == control.release.run('git', 'rev-parse', 'HEAD').strip(),
-            'main changed; signing setup must use exact current main')
+            'main changed; signing must use exact current main')
 
 
-def check_absent_identity():
-    names = inventory('secrets') | inventory('variables')
-    require(not names.intersection(SIGNING_NAMES),
-            'Signing credentials already exist or are partial; restore the existing key instead of generating another')
-    releases = api(f'{control.BASE}/releases?per_page=1')
-    require(isinstance(releases, list) and not releases,
-            'A release already exists; recover its existing signing identity')
-    return names
+def store_release():
+    matches = [item for item in control.pages(f'{control.BASE}/releases') if item.get('tag_name') == STORE_TAG]
+    require(len(matches) == 1 and matches[0].get('draft') is True,
+            'Permanent signing backup missing or ambiguous; inspect Setup Production Signing')
+    return matches[0]
+
+
+def store_asset(release):
+    assets = release.get('assets', [])
+    require(len(assets) == 1 and assets[0].get('name') == STORE_ASSET and
+            assets[0].get('state') == 'uploaded' and 1 <= assets[0].get('size', 0) <= 1024 * 1024 and
+            re.fullmatch(r'sha256:[a-f0-9]{64}', assets[0].get('digest', '')),
+            'Encrypted signing backup is incomplete; inspect the setup run instead of creating a new key')
+    return assets[0]
 
 
 def preflight():
@@ -90,12 +85,14 @@ def preflight():
     password = os.environ.get('SIGNING_BACKUP_PASSWORD', '')
     require(len(password) >= 24 and not password.isspace(),
             'Add SIGNING_BACKUP_PASSWORD as a repository secret: at least 24 characters, saved privately outside GitHub')
-    names = check_absent_identity()
-    require(RESERVATION not in names,
-            'A signing setup run already reserved this identity; inspect that run and recover its encrypted backup')
+    require(os.environ.get('EXISTING_SIGNING_IDENTITY') == 'false',
+            'Signing credentials already exist or are partial; preserve the existing key')
+    require(not control.pages(f'{control.BASE}/releases'),
+            'A release or signing backup already exists; use the permanent key instead of generating another')
 
 
-def verify_backup(backup, password):
+
+def verify_backup(backup, password, *, exercise=True):
     import pyzipper
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes
@@ -116,6 +113,8 @@ def verify_backup(backup, password):
     require(record['fingerprint'] == fingerprint and
             base64.b64decode(record['secrets']['KEYSTORE_BASE64'], validate=True) == key_bytes,
             'Signing backup identity does not match its credentials')
+    if not exercise:
+        return record
     with tempfile.TemporaryDirectory(dir=backup.parent) as directory:
         restored, p12 = Path(directory) / 'restored.jks', Path(directory) / 'restored.p12'
         restored.write_bytes(key_bytes)
@@ -139,11 +138,17 @@ def generate():
     os.umask(0o077)
     root, backup = paths()
     require(not root.exists(), 'Local signing setup already exists; refusing replacement')
-    # Reserve before generation. Failures never silently produce a second identity.
-    api(f'{control.BASE}/actions/variables', method='POST',
-                data={'name': RESERVATION, 'value': os.environ['GITHUB_RUN_ID']})
+    # Reserve a permanent draft before generation; no secret-management API or PAT is needed.
+    reserved = api(f'{control.BASE}/releases', method='POST', data={
+        'tag_name': STORE_TAG, 'target_commitish': os.environ['GITHUB_SHA'],
+        'name': 'Nuvix encrypted signing backup — keep as draft', 'draft': True,
+        'prerelease': True, 'make_latest': 'false',
+        'body': 'Signing setup is in progress. Keep this backup as a draft; do not publish or delete it.'})
+    require(type(reserved.get('id')) is int and reserved['id'] > 0, 'Cannot reserve the signing identity')
     root.mkdir(mode=0o700)
     backup.parent.mkdir(mode=0o700)
+    (root / 'reservation.json').write_text(json.dumps({'release_id': reserved['id'],
+        'run_id': os.environ['GITHUB_RUN_ID']}))
     store_password, key_password = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     env = dict(os.environ, NUVIX_STORE_PASSWORD=store_password, NUVIX_KEY_PASSWORD=key_password)
     keystore = root / 'nuvix-release.jks'
@@ -168,52 +173,80 @@ def generate():
         archive.writestr('credentials.json', json.dumps(record))
         archive.writestr('certificate.pem', certificate.public_bytes(serialization.Encoding.PEM))
     require(verify_backup(backup, os.environ['SIGNING_BACKUP_PASSWORD']) == record, 'Backup restore failed')
-    # This local receipt binds installation to the file actually uploaded by the next step.
+    # This local receipt binds permanent storage to the encrypted file verified here.
     (root / 'backup.sha256').write_text(hashlib.sha256(backup.read_bytes()).hexdigest())
 
 
-def install():
+def save():
     validate_context()
     root, backup = paths()
     require(backup.is_file() and hashlib.sha256(backup.read_bytes()).hexdigest() == (root / 'backup.sha256').read_text(),
             'Verified encrypted signing backup is missing or changed')
     record = verify_backup(backup, os.environ['SIGNING_BACKUP_PASSWORD'])
-    require(record['repository'] == control.REPO and record['run_id'] == os.environ['GITHUB_RUN_ID'],
+    receipt = json.loads((root / 'reservation.json').read_text())
+    require(record['repository'] == control.REPO and record['run_id'] == receipt['run_id'] == os.environ['GITHUB_RUN_ID'],
             'Signing backup belongs to another repository or run')
-    artifact_id = os.environ.get('BACKUP_ARTIFACT_ID', '')
-    require(re.fullmatch(r'[1-9][0-9]*', artifact_id), 'Encrypted backup must upload successfully before installing secrets')
-    artifact = api(f'{control.BASE}/actions/artifacts/{artifact_id}')
-    require(artifact.get('name') == f"nuvix-first-signing-backup-{record['run_id']}" and
-            artifact.get('workflow_run', {}).get('id') == int(record['run_id']) and
-            artifact.get('expired') is False and artifact.get('size_in_bytes', 0) > 0,
-            'Cannot verify this run uploaded its encrypted signing backup')
-    names = check_absent_identity()
-    require(RESERVATION in names and api(f'{control.BASE}/actions/variables/{RESERVATION}').get('value') == record['run_id'],
-            'Signing identity reservation does not belong to this run')
-    for name, value in record['secrets'].items():
-        require(name not in inventory('secrets'), 'Signing secret appeared during setup; refusing replacement')
-        tool(['gh', 'secret', 'set', name, '--repo', control.REPO], data=value.encode())
-    api(f'{control.BASE}/actions/variables', method='POST',
-                data={'name': 'SIGNING_CERT_SHA256', 'value': record['fingerprint']})
+    reserved = store_release()
+    require(reserved['id'] == receipt['release_id'] and not reserved.get('assets'),
+            'Signing store changed or already has a key; refusing replacement')
+    tool(['gh', 'release', 'upload', STORE_TAG, str(backup), '--repo', control.REPO])
+    uploaded = store_release()
+    asset = store_asset(uploaded)
+    require(uploaded['id'] == receipt['release_id'] and
+            asset['digest'] == 'sha256:' + hashlib.sha256(backup.read_bytes()).hexdigest(),
+            'Uploaded signing backup checksum differs')
+    api(f"{control.BASE}/releases/{reserved['id']}", method='PATCH', data={
+        'body': f"Permanent AES-256 encrypted signing backup. Certificate SHA-256: `{record['fingerprint']}`. "
+                'Keep this draft and the separately saved SIGNING_BACKUP_PASSWORD. Download an offline backup. '
+                'This is key storage, not an APK release; never publish this draft.'})
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-        summary.write(f"Permanent Nuvix signing credentials installed. Certificate SHA-256: `{record['fingerprint']}`.\n\n"
-                      'Download this run\'s encrypted signing-backup artifact within 7 days and keep it with your '
-                      'separately saved backup password. Remove/revoke the setup token after saving the backup. '
-                      'No APK or release was published.\n')
+        summary.write(f"Permanent signing key ready. Certificate SHA-256: `{record['fingerprint']}`.\n\n"
+                      f"[Download an encrypted backup]({uploaded['html_url']}) and save your password separately. "
+                      'The backup stays in the signing draft without Actions artifact expiration. '
+                      'You can now run Release. No APK was published.\n')
+
+
+def load():
+    """Load the authenticated permanent key for one publishing job; never generate a key."""
+    validate_context(release=True)
+    baseline = os.environ.get('EXPECTED_SIGNING_CERT_SHA256', '')
+    if os.environ.get('LEGACY_SIGNING_CONFIGURED') == 'true':
+        require(re.fullmatch(r'[a-fA-F0-9]{64}', baseline), 'Existing signing secrets need SIGNING_CERT_SHA256')
+        return
+    password = os.environ.get('SIGNING_BACKUP_PASSWORD', '')
+    require(password, 'Add the saved SIGNING_BACKUP_PASSWORD repository secret')
+    saved = store_release()
+    asset = store_asset(saved)
+    data = api(f"{control.BASE}/releases/assets/{int(asset['id'])}", binary=True)
+    require(len(data) == asset['size'] and 'sha256:' + hashlib.sha256(data).hexdigest() == asset['digest'],
+            'Downloaded signing backup checksum differs')
+    os.umask(0o077)
+    root = Path(os.environ['RUNNER_TEMP']) / 'nuvix-release-key'
+    require(not root.exists(), 'A signing key is already loaded in this job')
+    root.mkdir(mode=0o700)
+    backup = root / STORE_ASSET
+    backup.write_bytes(data)
+    record = verify_backup(backup, password, exercise=False)
+    require(record.get('repository') == control.REPO and
+            (not baseline or baseline.lower() == record['fingerprint']), 'Signing backup certificate differs from the pinned identity')
+    (root / 'credentials.json').write_text(json.dumps(record))
+    # Only a public fingerprint crosses into subsequent steps; passwords stay in a private file.
+    with open(os.environ['GITHUB_ENV'], 'a') as stream:
+        stream.write(f"EXPECTED_SIGNING_CERT_SHA256={record['fingerprint']}\n")
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('preflight', 'generate', 'install'))
+    parser.add_argument('command', choices=('preflight', 'generate', 'save', 'load'))
     args = parser.parse_args()
     try:
-        {'preflight': preflight, 'generate': generate, 'install': install}[args.command]()
+        {'preflight': preflight, 'generate': generate, 'save': save, 'load': load}[args.command]()
     except SetupError as error:
         raise SystemExit(str(error)) from None
     except Exception:
         raise SystemExit('Signing setup stopped. Check prerequisite secrets, publisher access, existing signing identity '
-                         'and this run\'s backup artifact. Private tool output is withheld. Never clear existing '
+                         'and the permanent signing draft. Private tool output is withheld. Never clear existing '
                          'signing secrets to force regeneration; recover the same key from its encrypted backup.') from None
 
 

@@ -81,12 +81,14 @@ class IdentityContractsTest(unittest.TestCase):
             path.write_text(original)
 
     def test_publisher_checks_and_independent_fingerprint_cannot_be_removed(self):
+        def verify(w):
+            return next(step for step in w['jobs']['publish']['steps'] if step.get('run', '').startswith('python3 scripts/release-control.py verify '))
         for change in [lambda w: w['on'].update(push={}),
                        lambda w: w['jobs']['publish'].update(environment='production'),
                        lambda w: w['jobs']['publish'].update(needs=['validate']),
                        lambda w: w['jobs']['publish']['env'].update(EXPECTED_SIGNING_CERT_SHA256='a' * 64),
-                       lambda w: w['jobs']['publish']['steps'].pop(3),
-                       lambda w: w['jobs']['publish']['steps'][3].update({'if': 'false'}),
+                       lambda w: w['jobs']['publish']['steps'].remove(verify(w)),
+                       lambda w: verify(w).update({'if': 'false'}),
                        lambda w: w['jobs']['publish'].update({'continue-on-error': 'true'}),
                        lambda w: w['jobs']['publish'].update({'if': w['jobs']['publish']['if'] + ' || true'})]:
             self.mutate('release.yml', change)
