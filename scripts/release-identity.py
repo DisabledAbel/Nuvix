@@ -60,7 +60,8 @@ def check_workflows(root=ROOT):
             permissions = job.get("permissions", workflow["permissions"])
             require(permissions.get("contents", "none") == ("write" if publisher else "read"),
                     "Only the trusted publisher may write repository contents")
-            if not publisher:
+            setup = name == "setup-production-signing.yml" and job_id == "setup"
+            if not publisher and not setup:
                 require("secrets." not in json.dumps(job), "Validation/PR jobs must not access secrets")
             for step in job.get("steps", []):
                 command = step.get("run", "")
@@ -126,33 +127,45 @@ def check_signing_setup(workflow):
     require(workflow.get("name") == "Setup Production Signing" and
             workflow.get("on") == {"workflow_dispatch": ""}, "Signing setup must be manual-only with no inputs")
     require(workflow.get("permissions") == {"contents": "read", "actions": "read"},
-            "Signing prerequisite checks require only read permissions")
-    require(workflow.get("concurrency") == {"group": "nuvix-production-signing-setup", "cancel-in-progress": "false"},
-            "Signing setup attempts must serialize without canceling an earlier attempt")
-    require(not workflow.get("env") and set(workflow.get("jobs", {})) == {"prerequisites"},
-            "Setup must remain a secret-free prerequisite check")
-    job = workflow["jobs"]["prerequisites"]
+            "Setup workflow token must remain read-only; installation uses the scoped setup secret")
+    require(workflow.get("concurrency") == {"group": "nuvix-release-publication", "cancel-in-progress": "false"},
+            "First signing setup and releases must serialize")
+    require(workflow.get("env") == {"TRUSTED_RELEASE_ACTORS": "${{ vars.TRUSTED_RELEASE_ACTORS || 'DisabledAbel' }}"}
+            and set(workflow.get("jobs", {})) == {"setup"}, "Keep the explicit setup publisher allowlist")
+    job = workflow["jobs"]["setup"]
     require(job.get("if") == "github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'",
             "Signing setup requires manual dispatch on main")
-    require(job.get("runs-on") == "ubuntu-latest" and job.get("timeout-minutes") == "5" and
+    require(job.get("runs-on") == "ubuntu-latest" and job.get("timeout-minutes") == "15" and
             not any(k in job for k in ("environment", "env", "permissions", "continue-on-error", "outputs", "strategy")),
-            "Prerequisites must not acquire signing credentials or bypass errors")
+            "Signing setup must use a bounded job without environment approvals or global credentials")
     steps = job.get("steps", [])
-    require(len(steps) == 3, "Signing setup must not add generation, secret writes or artifact handling")
-    checkout, preflight, summary = steps
+    require(len(steps) == 8, "Keep all setup verification, encrypted backup and installation steps")
+    checkout, preflight, java, dependencies, generate, backup, install, cleanup = steps
     require(checkout.get("uses") == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" and
-            checkout.get("with") == {"ref": "${{ github.sha }}", "persist-credentials": "false"} and
-            not any(k in checkout for k in ("if", "env", "continue-on-error")),
-            "Setup must check out the exact reviewed commit with pinned checkout and no persisted credentials")
-    require(preflight.get("run") == "python3 scripts/production-signing.py preflight" and
-            preflight.get("env") == {"GH_TOKEN": "${{ github.token }}"} and
-            not any(k in preflight for k in ("if", "continue-on-error", "uses", "with")),
-            "Signing prerequisite checks cannot be skipped or replaced")
-    require(summary.get("if") == "always()" and not summary.get("uses") and not summary.get("env") and
-            summary.get("run", "").startswith('cat >> "$GITHUB_STEP_SUMMARY" <<\'SUMMARY\'\n') and
-            summary["run"].endswith("SUMMARY\n") and "${{" not in summary["run"] and
-            summary["run"].count("SUMMARY\n") == 1 and not summary.get("continue-on-error"),
-            "Setup output must be a static, secret-free recovery-blocker summary")
+            checkout.get("with") == {"ref": "${{ github.sha }}", "persist-credentials": "false"},
+            "Setup must check out the exact reviewed commit with pinned checkout")
+    require(java.get("uses") == "actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad" and
+            java.get("with") == {"distribution": "temurin", "java-version": "17"}, "Keep pinned setup Java")
+    require(dependencies.get("run") == "python3 -m pip install -r scripts/requirements-signing.txt" and
+            not dependencies.get("env"), "Install backup dependencies without exposing setup credentials")
+    for step, command in ((preflight, "preflight"), (generate, "generate"), (install, "install")):
+        expected_env = {"GH_TOKEN": "${{ secrets.SIGNING_SETUP_TOKEN }}",
+                        "SIGNING_BACKUP_PASSWORD": "${{ secrets.SIGNING_BACKUP_PASSWORD }}"}
+        if command == "install":
+            expected_env["BACKUP_ARTIFACT_ID"] = "${{ steps.backup.outputs.artifact-id }}"
+        require(step.get("run") == "python3 scripts/production-signing.py " + command and
+                step.get("env") == expected_env, "Keep setup credentials step-scoped and require the uploaded backup")
+    require(backup.get("id") == "backup" and
+            backup.get("uses") == "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" and
+            backup.get("with") == {"name": "nuvix-first-signing-backup-${{ github.run_id }}",
+                "path": "${{ runner.temp }}/nuvix-first-signing/backup/nuvix-signing-backup.zip",
+                "if-no-files-found": "error", "retention-days": "7"} and not backup.get("env"),
+            "Upload only the encrypted ZIP before installing any signing secrets")
+    require(cleanup.get("if") == "always()" and cleanup.get("run") == 'rm -rf "$RUNNER_TEMP/nuvix-first-signing"' and
+            not cleanup.get("env"), "Always remove private runner signing files")
+    for step in steps:
+        require(not step.get("continue-on-error") and (step is cleanup or not step.get("if")),
+                "Setup verification, backup and installation cannot be skipped")
 
 
 def check_unsigned(metadata_path, tools, root=ROOT):

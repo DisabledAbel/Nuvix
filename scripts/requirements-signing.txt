@@ -1,0 +1,2 @@
+cryptography==50.0.0
+pyzipper==0.4.0
