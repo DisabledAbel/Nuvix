@@ -4,23 +4,10 @@
 Nuvix is a free, open-source IPTV player and optional home launcher for Android TV, Google TV, and compatible Fire TV devices. Bring your own authorized provider—no channels, accounts, playlists, or media are included.
 
 An independent modified version of [OpenTV](https://github.com/opentvproject/opentv),  Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
+APK is available yet**
 
-## v1.0 beta preparation
-
-Community beta testing is being prepared; **no release candidate APK is available yet**.
-Version metadata is prepared for `v1.0.0-rc.1` (code `22`, package `com.nuvix.player`).
-The [candidate notes](CHANGELOG.md#100-rc1) are the release workflow's notes source.
-Signing recovery and production approval
-prerequisites remain blocked, and no release date is guaranteed. Physical-device/provider
-acceptance is still required. See the [beta testing guide](docs/BETA-TESTING.md),
-[feedback and issue workflow](docs/BETA-FEEDBACK.md) and
-[v1 release readiness tracker](docs/V1-RELEASE-CHECKLIST.md). Candidates will use official
-GitHub prereleases and manual installation; the in-app updater continues to discover stable
-releases only. Nightly publishing remains removed.
-
-## Features
-
-- Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
+The [candiction approval
+prerequisites remai- Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
 - Guide filters, channel sorting, hour/day jumps, bounded program search, and program details
   with existing reminders and recording actions. See the [guide instructions](docs/automatic-epg.md#advanced-guide).
 - Sports Hub with EPG-derived game grouping across providers, available-stream choices, local
