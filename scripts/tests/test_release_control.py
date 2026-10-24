@@ -25,11 +25,10 @@ class ReleasePolicyTest(unittest.TestCase):
         self.policies = [{"type": "branch", "name": "main"}]
         self.env = {"GITHUB_REPOSITORY": control.REPO, "GITHUB_EVENT_NAME": "workflow_dispatch",
                     "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "a" * 40,
-                    "GITHUB_RUN_ID": "10", "GITHUB_ACTOR": "initiator", "GITHUB_TRIGGERING_ACTOR": "initiator"}
+                    "TRUSTED_RELEASE_ACTORS": "DisabledAbel",
+                    "GITHUB_RUN_ID": "10", "GITHUB_ACTOR": "DisabledAbel", "GITHUB_TRIGGERING_ACTOR": "DisabledAbel"}
         self.run = {"event": "workflow_dispatch", "head_branch": "main", "head_sha": "a" * 40,
                     "status": "in_progress", "conclusion": None}
-        self.review = {"state": "approved", "environments": [{"id": 1}],
-                       "user": {"login": "approver", "type": "User"}}
 
     def test_channel_version_parsing(self):
         for version, channel in [("0.0.0", "stable"), ("1.0.0", "stable"), ("10.20.30", "stable"),
@@ -90,13 +89,58 @@ class ReleasePolicyTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 control.check_context(self.env, dict(self.run, **change))
 
-    def test_human_approval_must_match_environment_and_differ_from_initiator(self):
-        self.assertEqual(["approver"], control.check_approval([self.review], 1, "initiator"))
-        for reviews in [[], [dict(self.review, state="rejected")], [dict(self.review, environments=[{"id": 2}])],
-                        [dict(self.review, user={"login": "initiator", "type": "User"})],
-                        [dict(self.review, user={"login": "bot", "type": "Bot"})]]:
-            with self.assertRaises(ValueError):
-                control.check_approval(reviews, 1, "initiator")
+    def test_tag_context_requires_an_exact_version_and_matching_run(self):
+        for tag in ("v1.0.0", "v1.0.0-rc.1"):
+            env = dict(self.env, GITHUB_EVENT_NAME="push", GITHUB_REF="refs/tags/" + tag)
+            run = dict(self.run, event="push", head_branch=tag)
+            control.check_context(env, run)
+            for change in ({"head_branch": "main"}, {"head_sha": "b" * 40}, {"status": "completed"}):
+                with self.subTest(tag=tag, change=change), self.assertRaises(ValueError):
+                    control.check_context(env, dict(run, **change))
+        for ref in ("refs/heads/main", "refs/tags/v01.0.0", "refs/tags/v1.0.0-rc.0", "refs/tags/v1.0.0;id"):
+            with self.subTest(ref=ref), self.assertRaises(ValueError):
+                control.check_context(dict(self.env, GITHUB_EVENT_NAME="push", GITHUB_REF=ref), self.run)
+
+    def test_request_resolves_optional_dispatch_prefix_and_tag_channel(self):
+        requests = [
+            ({"GITHUB_EVENT_NAME": "workflow_dispatch", "RELEASE_VERSION": "v1.0.0", "RELEASE_CHANNEL": "stable"}, "1.0.0", "stable"),
+            ({"GITHUB_EVENT_NAME": "workflow_dispatch", "RELEASE_VERSION": "1.0.0-rc.1", "RELEASE_CHANNEL": "rc"}, "1.0.0-rc.1", "rc"),
+            ({"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/tags/v1.0.0"}, "1.0.0", "stable"),
+            ({"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/tags/v1.0.0-rc.2"}, "1.0.0-rc.2", "rc"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "env"
+            for env, version, channel in requests:
+                with self.subTest(env=env), patch.dict(os.environ, dict(env, GITHUB_ENV=str(output)), clear=True):
+                    output.write_text("")
+                    control.configure_request()
+                    self.assertEqual(f"RELEASE_VERSION={version}\nRELEASE_CHANNEL={channel}\n", output.read_text())
+            for env in ({"GITHUB_EVENT_NAME": "pull_request"},
+                        {"GITHUB_EVENT_NAME": "workflow_dispatch", "RELEASE_VERSION": "v1.0.0", "RELEASE_CHANNEL": "rc"},
+                        {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/tags/v1.0.0\nEVIL=value"},
+                        {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main"}):
+                with self.subTest(env=env), patch.dict(os.environ, dict(env, GITHUB_ENV=str(output)), clear=True):
+                    output.write_text("")
+                    with self.assertRaises(ValueError):
+                        control.configure_request()
+                    self.assertEqual("", output.read_text())
+
+    def test_trusted_publisher_defaults_to_owner_and_requires_write_access(self):
+        default_env = dict(self.env)
+        default_env.pop("TRUSTED_RELEASE_ACTORS")
+        with patch.object(control, "api", return_value={"permission": "admin"}) as api:
+            control.authorize_publisher(default_env)
+            for change in ({"GITHUB_ACTOR": "other"}, {"GITHUB_TRIGGERING_ACTOR": "other"},
+                           {"TRUSTED_RELEASE_ACTORS": ""}):
+                with self.subTest(change=change), self.assertRaisesRegex(ValueError, "TRUSTED_RELEASE_ACTORS"):
+                    control.authorize_publisher(dict(self.env, **change))
+            self.assertEqual(1, api.call_count)
+        env = dict(self.env, GITHUB_ACTOR="Maintainer", GITHUB_TRIGGERING_ACTOR="maintainer",
+                   TRUSTED_RELEASE_ACTORS=" DisabledAbel, maintainer ")
+        with patch.object(control, "api", return_value={"permission": "write"}):
+            control.authorize_publisher(env)
+        with patch.object(control, "api", return_value={"permission": "read"}), self.assertRaisesRegex(ValueError, "write access"):
+            control.authorize_publisher(env)
 
     def test_duplicate_draft_and_versioncode_reuse_are_rejected(self):
         metadata = {"applicationId": control.release.APPLICATION_ID, "versionCode": 22, "versionName": "1.0.0-rc.1"}
@@ -149,10 +193,8 @@ class ReleasePolicyTest(unittest.TestCase):
 
     def fake_api(self, path, **kwargs):
         values = {f"{control.BASE}/actions/runs/10": self.run,
-                  f"{control.BASE}/collaborators/initiator/permission": {"permission": "admin"},
+                  f"{control.BASE}/collaborators/DisabledAbel/permission": {"permission": "admin"},
                   f"{control.BASE}/git/ref/heads/main": {"object": {"sha": "a" * 40}},
-                  f"{control.BASE}/environments/production": self.environment,
-                  f"{control.BASE}/environments/production/deployment-branch-policies": {"branch_policies": self.policies},
                   f"{control.BASE}/git/ref/tags/v1.0.0": None,
                   f"{control.BASE}/releases?per_page=100&page=1": []}
         return values[path]
@@ -163,8 +205,10 @@ class ReleasePolicyTest(unittest.TestCase):
                 return {"object": {"sha": "b" * 40}}
             return self.fake_api(path, **kwargs)
         with patch.dict(os.environ, self.env), patch.object(control.release, "run", return_value="a" * 40), \
-             patch.object(control, "source_metadata", return_value=23), patch.object(control, "api", side_effect=self.fake_api):
+             patch.object(control, "source_metadata", return_value=23), patch.object(control, "api", side_effect=self.fake_api) as calls:
             self.assertEqual(("v1.0.0", 23), control.preflight("1.0.0", "stable"))
+            self.assertFalse(any("/environments/" in call.args[0] or "/approvals" in call.args[0]
+                                 for call in calls.call_args_list))
             with patch.object(control, "api", side_effect=api), self.assertRaisesRegex(ValueError, "main changed"):
                 control.preflight("1.0.0", "stable")
             def collision(path, **kwargs):
@@ -183,6 +227,36 @@ class ReleasePolicyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             control.api("https://attacker.example/")
 
+    def test_tag_preflight_checks_existing_tag_without_environment_api(self):
+        env = dict(self.env, GITHUB_EVENT_NAME="push", GITHUB_REF="refs/tags/v1.0.0")
+        run = dict(self.run, event="push", head_branch="v1.0.0")
+        def api(path, **kwargs):
+            if "/actions/runs/" in path:
+                return run
+            if "/git/ref/tags/" in path:
+                return {"object": {"type": "commit", "sha": "a" * 40}}
+            return self.fake_api(path, **kwargs)
+        with patch.dict(os.environ, env, clear=True), patch.object(control, "api", side_effect=api), \
+             patch.object(control.release, "run", return_value="a" * 40), \
+             patch.object(control, "source_metadata", return_value=23):
+            self.assertEqual(("v1.0.0", 23), control.preflight("1.0.0", "stable"))
+            with patch.object(control, "tag_commit", return_value="b" * 40), self.assertRaisesRegex(ValueError, "Pushed release tag"):
+                control.preflight("1.0.0", "stable")
+            with self.assertRaisesRegex(ValueError, "Pushed release tag"):
+                control.preflight("1.0.1", "stable")
+
+    def test_tag_commit_peels_annotations_and_rejects_other_objects(self):
+        annotated = {"object": {"type": "tag", "sha": "b" * 40}}
+        commit = {"object": {"type": "commit", "sha": "a" * 40}}
+        with patch.object(control, "api", side_effect=[annotated, commit]) as api:
+            self.assertEqual("a" * 40, control.tag_commit("v1.0.0"))
+            self.assertEqual(f"{control.BASE}/git/tags/" + "b" * 40, api.call_args.args[0])
+        for obj in ({"type": "tree", "sha": "a" * 40}, {"type": "tag", "sha": "bad"}):
+            with patch.object(control, "api", return_value={"object": obj}), self.assertRaises(ValueError):
+                control.tag_commit("v1.0.0")
+        with patch.object(control, "api", return_value=annotated), self.assertRaisesRegex(ValueError, "nesting limit"):
+            control.tag_commit("v1.0.0")
+
     def test_api_error_reports_status_without_response_or_token(self):
         from subprocess import CompletedProcess
         path = f"{control.BASE}/environments/production/deployment-branch-policies"
@@ -197,7 +271,7 @@ class ReleasePolicyTest(unittest.TestCase):
 
     def test_artifact_tampering_rejected_before_signing(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(control, "ROOT", Path(directory)), \
-             patch.object(control, "preflight", return_value=("v1.0.0", 23)), patch.object(control, "approved_run"):
+             patch.object(control, "preflight", return_value=("v1.0.0", 23)):
             prepared = Path(directory) / "prepared"
             prepared.mkdir()
             (prepared / "unsigned.apk").write_bytes(b"unsigned")
@@ -277,11 +351,12 @@ class PublicationTransactionTest(unittest.TestCase):
             f"{control.digest(p)}  {p.name}\n" for p in sorted(self.dist.iterdir())))
         self.patches = [patch.object(control, "ROOT", self.root),
                         patch.dict(os.environ, {"GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "10",
+                                               "GITHUB_EVENT_NAME": "workflow_dispatch",
                                                "RELEASE_NAME": "",
                                                "GITHUB_STEP_SUMMARY": str(self.root / "summary")}),
                         patch.object(control, "verify_prepared", side_effect=lambda v, c, h: (control.version_tag(v, c), 23)),
                         patch.object(control, "verify_distribution"), patch.object(control, "check_context"),
-                        patch.object(control, "check_environment"), patch.object(control, "approved_run")]
+                        patch.object(control, "authorize_publisher")]
         for item in self.patches:
             item.start()
             self.addCleanup(item.stop)
@@ -303,9 +378,7 @@ class PublicationTransactionTest(unittest.TestCase):
                  "digest": "sha256:" + ("0" * 64 if self.fail_digest else control.digest(p))}
                 for p in self.dist.iterdir()]}
         if "/git/ref/" in path:
-            return {"object": {"sha": "a" * 40}}
-        if path.endswith("/deployment-branch-policies"):
-            return {"branch_policies": []}
+            return {"object": {"sha": "a" * 40, "type": "commit"}}
         return {}
 
     def test_complete_stable_assets_before_single_publication_call(self):
@@ -341,6 +414,26 @@ class PublicationTransactionTest(unittest.TestCase):
         self.assertTrue(next(data for method, path, data in self.calls if path.endswith("/releases"))["prerelease"])
         self.assertEqual("false", self.calls[-1][2]["make_latest"])
 
+    def test_tag_push_publication_keeps_the_existing_tag(self):
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}), \
+             patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run"):
+            control.publish("1.0.0", "stable", "a" * 64)
+        self.assertFalse(any(path.endswith("/git/refs") for _, path, _ in self.calls))
+        self.assertEqual(["POST", "PATCH"], [method for method, _, _ in self.calls if method != "GET"])
+
+    def test_moved_tag_or_revoked_publisher_keeps_draft_private(self):
+        with patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run"), \
+             patch.object(control, "tag_commit", return_value="b" * 40), \
+             self.assertRaisesRegex(ValueError, "tag moved"):
+            control.publish("1.0.0", "stable", "a" * 64)
+        self.assertFalse(any(method == "PATCH" for method, _, _ in self.calls))
+        self.calls.clear()
+        with patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run"), \
+             patch.object(control, "authorize_publisher", side_effect=ValueError("publisher revoked")), \
+             self.assertRaisesRegex(ValueError, "publisher revoked"):
+            control.publish("1.0.0", "stable", "a" * 64)
+        self.assertFalse(any(method == "PATCH" for method, _, _ in self.calls))
+
     def test_bad_uploaded_checksum_leaves_draft_private(self):
         self.fail_digest = True
         with patch.object(control, "api", side_effect=self.api), patch.object(control.subprocess, "run"):
@@ -368,14 +461,16 @@ class WorkflowSecurityTest(unittest.TestCase):
     def workflows(self):
         return {p.name: yaml.load(p.read_text(), Loader=yaml.BaseLoader) for p in (ROOT / ".github/workflows").glob("*.yml")}
 
-    def test_manual_trigger_and_single_gated_publisher(self):
+    def test_manual_and_tag_triggers_and_single_direct_publisher(self):
         workflows = self.workflows()
         release = workflows["release.yml"]
-        self.assertEqual({"workflow_dispatch"}, set(release["on"]))
+        self.assertEqual({"workflow_dispatch", "push"}, set(release["on"]))
+        self.assertEqual({"tags": ["v*.*.*"]}, release["on"]["push"])
         self.assertEqual("false", release["concurrency"]["cancel-in-progress"])
         self.assertEqual("read", release["permissions"]["contents"])
         publisher = release["jobs"]["publish"]
-        self.assertEqual({"name": "production"}, publisher["environment"])
+        self.assertNotIn("environment", publisher)
+        self.assertNotIn("production-signing.py", json.dumps(publisher))
         self.assertEqual(["validate", "security"], publisher["needs"])
         self.assertEqual("write", publisher["permissions"]["contents"])
         for filename, workflow in workflows.items():
@@ -410,7 +505,8 @@ class WorkflowSecurityTest(unittest.TestCase):
             run = step.get("run", "")
             if run.startswith("python3 scripts/release-control.py "):
                 commands.add(run.split()[2])
-                self.assertEqual("${{ github.token }}", step["env"]["GH_TOKEN"])
+                if run.split()[2] != "request":
+                    self.assertEqual("${{ github.token }}", step["env"]["GH_TOKEN"])
             else:
                 self.assertNotIn("GH_TOKEN", step.get("env", {}))
             uses = step.get("uses", "")
@@ -418,7 +514,7 @@ class WorkflowSecurityTest(unittest.TestCase):
             if name in ("actions/setup-java", "android-actions/setup-android"):
                 self.assertRegex(uses, r"^[^@]+@[a-f0-9]{40}$")
                 pinned_actions.add(name)
-        self.assertEqual({"verify", "sign", "publish"}, commands)
+        self.assertEqual({"request", "verify", "sign", "publish"}, commands)
         self.assertEqual({"actions/setup-java", "android-actions/setup-android"}, pinned_actions)
 
 

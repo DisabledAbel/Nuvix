@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Committed versionName: rc = X.Y.Z-rc.N (e.g. 1.0.0-rc.1); stable = X.Y.Z (e.g. 1.0.0). No v prefix or leading zeros; N >= 1.'
+        description: 'Committed versionName: 1.0.0-rc.1 for rc or 1.0.0 for stable (optional v prefix).'
         required: true
         type: string
       release_name:
@@ -17,6 +17,9 @@ on:
         type: choice
         options: [rc, stable]
         default: rc
+  push:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -31,11 +34,12 @@ env:
   RELEASE_VERSION: ${{ inputs.version }}
   RELEASE_CHANNEL: ${{ inputs.channel }}
   RELEASE_NAME: ${{ inputs.release_name }}
+  TRUSTED_RELEASE_ACTORS: ${{ vars.TRUSTED_RELEASE_ACTORS || 'DisabledAbel' }}
 
 jobs:
   validate:
     name: Test and prepare unsigned release
-    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'DisabledAbel/Nuvix' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !github.event.deleted))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     outputs:
@@ -46,7 +50,9 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate manual request, production protection, commit and version history
+      - name: Resolve release version and channel
+        run: python3 scripts/release-control.py request
+      - name: Validate publisher, commit and version history
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/release-control.py preflight --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL"
@@ -54,7 +60,7 @@ jobs:
         run: python3 -m pip install -r scripts/requirements-branding.txt
       - name: Python release policy and branding tests
         run: python3 -m unittest discover -s scripts/tests -v
-      - name: Verify permanent production identity and release gate
+      - name: Verify permanent production identity and release policy
         run: python3 scripts/release-identity.py
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -99,7 +105,7 @@ jobs:
 
   security:
     name: Supabase migrations and security
-    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'DisabledAbel/Nuvix' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !github.event.deleted))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -110,13 +116,11 @@ jobs:
       - run: bash scripts/test-supabase.sh
 
   publish:
-    name: Approve, sign and publish
+    name: Sign and publish
     needs: [validate, security]
-    if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'DisabledAbel/Nuvix' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !github.event.deleted))
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment:
-      name: production
     permissions:
       contents: write
       actions: read
@@ -133,11 +137,9 @@ jobs:
         with:
           name: nuvix-release-prepared
           path: prepared
-      - name: Require independently recoverable signing backup
-        env:
-          SIGNING_KEY_BACKUP_CONFIRMED_SHA256: ${{ vars.SIGNING_KEY_BACKUP_CONFIRMED_SHA256 }}
-        run: python3 scripts/production-signing.py release-readiness
-      - name: Revalidate approval protection, commit, history and artifact checksums
+      - name: Resolve release version and channel
+        run: python3 scripts/release-control.py request
+      - name: Revalidate publisher, commit, history and artifact checksums
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/release-control.py verify --version "$RELEASE_VERSION" --channel "$RELEASE_CHANNEL" --expected-plan-sha256 "$EXPECTED_PLAN_SHA256"
@@ -150,7 +152,7 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           packages: 'build-tools;36.0.0'
-      - name: Sign approved APK and verify package, version and certificate
+      - name: Sign APK and verify package, version and certificate
         env:
           GH_TOKEN: ${{ github.token }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}

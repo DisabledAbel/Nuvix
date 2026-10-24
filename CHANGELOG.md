@@ -63,8 +63,8 @@ Verified implementation limits:
 - Supabase sync does not restore provider credentials, local recording files, device permissions
   or playback tuning. There is no general private database/settings export or guaranteed downgrade.
 - The stable updater excludes prereleases, drafts and nonstable tags. Nightly publishing is removed.
-- Publication remains blocked by the deliberately unimplemented signing-key backup/recovery gate,
-  unverified production credentials/certificate/approval settings and required main review protection.
+- Publication requires existing repository signing credentials and a trusted certificate fingerprint.
+  Trusted publishers release after validation; the legacy signing-setup recovery gate is not used.
 
 Untested acceptance: physical Android TV/Google TV/Fire TV remotes, authorized live providers,
 codecs/decoder counts, Multi-View, OEM background execution, USB/NAS capture, cloud sync and
