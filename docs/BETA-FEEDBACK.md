@@ -57,7 +57,8 @@ severity is separate from a feature label and does not require another set of la
 1. Check reports for sensitive data; do not quote leaked values. Ask for redacted evidence only.
 2. Record candidate/build, device/OS, provider type, frequency, expected/actual behavior and
    reproducible steps. Request missing information and add `needs-reproduction` when needed.
-3. Add `beta`, relevant feature/device labels and the severity comment. Link duplicates to the
+3. Add relevant feature/device labels and the severity comment. Add `beta` only for issues
+   concerning a beta candidate or session, or for confirmed beta bugs. Link duplicates to the
    canonical report without losing device evidence. Assign an owner to every release blocker.
 4. Reproduce using synthetic fixtures first; use only authorized provider identities for device
    tests. Never ask for a real MAC, credentials, private portal URL or configuration export.

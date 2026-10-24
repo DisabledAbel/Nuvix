@@ -21,7 +21,7 @@ body:
   id: candidate
   attributes:
     label: Tested release candidate and build number
-    description: Use the installed version/build from Settings → About; do not guess.
+    description: Use Settings → About when installed, or verified release/download details when available. If installation failed and the build is unknown, enter “not installed”; do not guess.
     placeholder: Exact RC tag and build number
   validations:
     required: true
