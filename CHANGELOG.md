@@ -8,6 +8,7 @@
   active consumers. Add Room 16→17, atomic revision-checked saves and stale-session protection.
 - Encode opaque overrides in portal requests, redact provider object diagnostics and keep identities
   outside cloud sync. Add synthetic portal, migration, persistence and TV remote tests and beta guidance.
+- Keep Sports/EPG benchmark fixtures compatible with omitted empty Room index metadata and additive column defaults.
 
 - Establish permanent production application ID `com.nuvix.player`, preserving the existing
   namespace/source packages and production signing key. Old-package testers install separately;

@@ -25,13 +25,15 @@ def fixture(channels=2000):
     entities = {e["tableName"]: e for e in schema["entities"]}
     for name, entity in entities.items():
         db.execute(entity["createSql"].replace("${TABLE_NAME}", name))
-        for index in entity["indices"]:
+        for index in entity.get("indices", []):
             db.execute(index["createSql"].replace("${TABLE_NAME}", name))
 
     def insert(table, **values):
-        fields = [f["columnName"] for f in entities[table]["fields"]]
+        # Omit unspecified columns so SQLite applies the exported Room defaults, including
+        # new non-null settings added by additive migrations.
+        fields = list(values)
         statement = f"INSERT INTO {table} (" + ",".join(f'`{f}`' for f in fields) + ") VALUES (" + ",".join("?" for _ in fields) + ")"
-        db.execute(statement, [values.get(f) for f in fields])
+        db.execute(statement, [values[f] for f in fields])
 
     now = 1_900_000_000_000
     for source in range(1, 5):
