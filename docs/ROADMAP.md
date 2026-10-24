@@ -5,7 +5,7 @@
 The first planned candidate is `v1.0.0-rc.1`; no candidate has been published. Follow the
 [beta guide](BETA-TESTING.md), [feedback workflow](BETA-FEEDBACK.md) and canonical
 [release readiness tracker](V1-RELEASE-CHECKLIST.md). Complete feature-freeze review,
-signing backup/recovery, production approval/protection and label setup before recruitment
+signing backup/recovery, production approval/protection and GitHub form/triage setup before recruitment
 or a future manual release request. New features may be deferred until after v1.0.
 Stalker, playback/EPG, Multi-View, background DVR, Google TV remote, cloud sync and install/update
 acceptance remain physical-device milestones. No hardware pass or release date is claimed.
