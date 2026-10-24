@@ -36,7 +36,7 @@ class StalkerApiTest {
     @After fun stop() = server.shutdown()
     private fun next() = server.takeRequest(5, TimeUnit.SECONDS)!!
 
-    @Test fun savedOverridesReachProfileMetricsAndEncodedCookie() = runBlocking {
+    @Test fun savedOverridesReachProfileMetricsAndEncodedCookie() = runBlocking<Unit> {
         val saved = source().copy(stalkerSerialNumber = "Serial/+=\"Mixed", stalkerDeviceId1 = "ID1 &=Mixed",
             stalkerDeviceId2 = "ID2; injected=Mixed", stalkerSignature = "Sign/+=Mixed")
         api.configurationSaved(saved)
@@ -62,7 +62,7 @@ class StalkerApiTest {
         assertEquals(4, server.requestCount)
     }
 
-    @Test fun saveInvalidatesSessionWithoutOpeningConnectionsAndStaleSnapshotCannotReconnect() = runBlocking {
+    @Test fun saveInvalidatesSessionWithoutOpeningConnectionsAndStaleSnapshotCannotReconnect() = runBlocking<Unit> {
         val old = source()
         api.liveCategories(old)
         repeat(3) { next() }
@@ -79,7 +79,7 @@ class StalkerApiTest {
         assertEquals(6, server.requestCount)
     }
 
-    @Test fun profileRejectionStopsWithoutTryingOtherEndpointsOrIdentities() = runBlocking {
+    @Test fun profileRejectionStopsWithoutTryingOtherEndpointsOrIdentities() = runBlocking<Unit> {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest) = if (request.requestUrl!!.queryParameter("action") == "get_profile")
                 MockResponse().setResponseCode(403) else response(request)
@@ -90,7 +90,7 @@ class StalkerApiTest {
         next()
     }
 
-    @Test fun inFlightOldAuthenticationCannotPublishOrRetryAfterSave() = runBlocking {
+    @Test fun inFlightOldAuthenticationCannotPublishOrRetryAfterSave() = runBlocking<Unit> {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         server.dispatcher = object : Dispatcher() {
@@ -112,7 +112,7 @@ class StalkerApiTest {
         assertEquals(2, server.requestCount)
     }
 
-    @Test fun testingUnsavedDraftDoesNotReplaceSavedCachedSession() = runBlocking {
+    @Test fun testingUnsavedDraftDoesNotReplaceSavedCachedSession() = runBlocking<Unit> {
         val saved = source()
         api.liveCategories(saved)
         repeat(3) { next() }
