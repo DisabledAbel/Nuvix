@@ -67,7 +67,7 @@ class CandidatePreparationTest(unittest.TestCase):
                       "Known Limitations", "Installation", "Reporting Bugs", "Licensing"):
             self.assertIn("### " + title, notes)
         for text in ("com.nuvix.player", "com.disabledabel.nuvix", "GPL-3.0-or-later", "OpenTV",
-                     "https://github.com/DisabledAbel/Nuvix/issues", "no candidate APK is available yet",
+                     "https://github.com/DisabledAbel/Nuvix/issues", "Prerelease for public beta testing",
                      "portal URLs", "MAC addresses", "tokens", "device identifiers"):
             self.assertIn(text, notes)
         self.assertNotIn("No changes queued", notes)
