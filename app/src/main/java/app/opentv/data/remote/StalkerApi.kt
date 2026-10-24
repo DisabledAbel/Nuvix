@@ -9,6 +9,7 @@ package app.opentv.data.remote
 import android.util.Log
 import app.opentv.data.model.Category
 import app.opentv.data.model.Channel
+import app.opentv.data.model.StalkerIdentity
 import app.opentv.data.model.Source
 import app.opentv.data.model.StreamKind
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -52,14 +55,39 @@ class StalkerApi(
     class StalkerException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     /** Authorized portal token and device identity used by subsequent Stalker requests. */
-    private data class Session(val token: String, val endpoint: HttpUrl, val expiresAt: Long)
+    private class Session(val token: String, val endpoint: HttpUrl, val expiresAt: Long, val revision: Long)
+
+    private val authenticationLocks = ConcurrentHashMap<Long, Any>()
+    private val configurations = ConcurrentHashMap<Long, Source>()
+    private val configurationLock = Any()
+
+    /** Never opens a connection or restarts consumers. In-flight old handshakes cannot publish. */
+    fun configurationSaved(source: Source) = synchronized(configurationLock) {
+        val current = configurations[source.id]
+        if (current == null || source.stalkerRevision >= current.stalkerRevision) {
+            configurations[source.id] = source
+            sessions.remove(source.id)
+        }
+        Unit
+    }
+
+    private fun requireCurrent(source: Source) = synchronized(configurationLock) {
+        val current = configurations[source.id]
+        if (current != null && source.stalkerRevision < current.stalkerRevision) {
+            throw StalkerException("Provider configuration changed. Reconnect using saved settings.")
+        }
+    }
 
     /** One live token per source, so zapping doesn't re-handshake on every channel. */
     private val sessions = ConcurrentHashMap<Long, Session>()
 
     /** Add-source test: proves the portal + MAC produce a token. Throws [StalkerException] if not. */
     suspend fun handshakeTest(source: Source) = withContext(Dispatchers.IO) {
-        session(source, force = true)
+        // A test of an unsaved draft must never replace a saved provider's cached session.
+        StalkerIdentity.validate(source)
+        requireCurrent(source)
+        authenticate(source)
+        requireCurrent(source)
         Unit
     }
 
@@ -125,28 +153,36 @@ class StalkerApi(
     // ---- Session / handshake -----------------------------------------------------------------
 
     /** Returns a cached authenticated portal session or performs a fresh handshake. */
-    private fun session(source: Source, force: Boolean = false): Session {
-        val now = System.currentTimeMillis()
-        if (!force) sessions[source.id]?.let { if (it.expiresAt > now) return it }
-        val mac = source.macAddress?.trim().orEmpty()
-        if (mac.isEmpty()) throw StalkerException("This portal needs a MAC address (e.g. 00:1A:79:xx:xx:xx).")
-        var lastError: Throwable? = null
-        for (endpoint in endpoints(source)) {
-            val hs = runCatching { handshake(source, endpoint) }
-                .onFailure { lastError = it }
-                .getOrNull()
-            if (hs != null) {
-                // Many portals won't serve itv data until get_profile is called with a full MAG
-                // identity (device_id/signature) — that's what unlocks the ones that authenticate the
-                // box rather than just accepting any MAC.
-                runCatching { getProfile(source, endpoint, hs.token, hs.random) }
-                return Session(hs.token, endpoint, now + TOKEN_TTL_MILLIS).also { sessions[source.id] = it }
+    private fun session(source: Source, force: Boolean = false): Session =
+        synchronized(authenticationLocks.getOrPut(source.id) { Any() }) {
+            requireCurrent(source)
+            StalkerIdentity.validate(source)
+            synchronized(configurationLock) {
+                val old = configurations[source.id]
+                if (old == null || old.stalkerRevision < source.stalkerRevision) configurationSaved(source)
             }
+            val now = System.currentTimeMillis()
+            if (!force) sessions[source.id]?.let {
+                if (it.expiresAt > now && it.revision == source.stalkerRevision) return@synchronized it
+            }
+            val authenticated = authenticate(source)
+            synchronized(configurationLock) {
+                requireCurrent(source)
+                sessions[source.id] = authenticated
+            }
+            authenticated
         }
-        throw StalkerException(
-            "The portal didn't accept this MAC address, or the URL is wrong.",
-            lastError,
-        )
+
+    private fun authenticate(source: Source): Session {
+        for (endpoint in endpoints(source)) {
+            requireCurrent(source)
+            val hs = handshake(source, endpoint) ?: continue
+            // Once the portal issues a token, identity rejection is a normal authentication
+            // failure. Do not try alternate identities or repeatedly retry a rejected profile.
+            getProfile(source, endpoint, hs.token, hs.random)
+            return Session(hs.token, endpoint, System.currentTimeMillis() + TOKEN_TTL_MILLIS, source.stalkerRevision)
+        }
+        throw StalkerException("The portal rejected the configuration. Verify your settings with your provider.")
     }
 
     /** Portal authentication result used to construct a session. */
@@ -170,16 +206,20 @@ class StalkerApi(
     /**
      * MAG-box emulation. A lot of real Stalker/Ministra portals won't hand over channels to a client
      * that just presents a MAC — they expect the box's full identity: a serial, a `device_id` and a
-     * `signature`, all derived from the MAC, plus a `metrics` blob. The apps that "just work" against
-     * those portals send exactly this; sending only the MAC is the usual reason a portal that plays
-     * elsewhere returns nothing here. Everything is derived deterministically from the MAC so it's
-     * stable across sessions, and portals that don't check any of it simply ignore it.
+     * `signature`, plus a `metrics` blob. Automatic uses the original MAC-derived defaults;
+     * provider-supplied overrides are resolved independently and encoded as opaque strings.
      */
     private fun getProfile(source: Source, endpoint: HttpUrl, token: String, random: String) {
         val mac = source.macAddress?.trim().orEmpty()
-        val id = stbIdentity(mac)
-        val metrics = "{\"mac\":\"$mac\",\"sn\":\"${id.sn}\",\"model\":\"MAG250\",\"type\":\"STB\"," +
-            "\"uid\":\"${id.deviceId}\",\"random\":\"$random\"}"
+        val id = StalkerIdentity.resolve(source, random)
+        val metrics = buildJsonObject {
+            put("mac", mac)
+            put("sn", id.sn)
+            put("model", "MAG250")
+            put("type", "STB")
+            put("uid", id.deviceId)
+            put("random", random)
+        }.toString()
         val url = endpoint.newBuilder()
             .addQueryParameter("type", "stb")
             .addQueryParameter("action", "get_profile")
@@ -193,10 +233,10 @@ class StalkerApi(
             .addQueryParameter("video_out", "hdmi")
             .addQueryParameter("device_id", id.deviceId)
             .addQueryParameter("device_id2", id.deviceId2)
-            .addQueryParameter("signature", sha256Upper(id.sn + mac + random))
+            .addQueryParameter("signature", id.signature)
             .addQueryParameter("auth_second_step", "0")
             .addQueryParameter("hw_version", "1.7-BD-00")
-            .addQueryParameter("hw_version_2", sha1Upper(mac))
+            .addQueryParameter("hw_version_2", StalkerIdentity.hashUpper("SHA-1", mac))
             .addQueryParameter("not_valid_token", "0")
             .addQueryParameter("api_signature", "262")
             .addQueryParameter("metrics", metrics)
@@ -204,28 +244,13 @@ class StalkerApi(
             .addQueryParameter("prehash", "")
             .addQueryParameter("JsHttpRequest", "1-xml")
             .build()
-        execute(source, url, token)
+        val profile = (execute(source, url, token) as? JsonObject)?.get("js") as? JsonObject
+            ?: throw StalkerException("The portal rejected the device identity. Verify your settings with your provider.")
+        if (profile.str("blocked") in setOf("1", "true") ||
+            profile.str("error")?.let { it !in setOf("0", "false") } == true) {
+            throw StalkerException("The portal rejected the device identity. Verify your settings with your provider.")
+        }
     }
-
-    /** Device identifiers sent by the authorized Stalker client during portal negotiation. */
-    private data class StbIdentity(val sn: String, val deviceId: String, val deviceId2: String)
-
-    /** The MAG identity a portal expects, derived deterministically from the MAC. */
-    private fun stbIdentity(mac: String): StbIdentity {
-        val deviceId = sha256Upper(mac.uppercase())
-        return StbIdentity(sn = md5Upper(mac).take(13), deviceId = deviceId, deviceId2 = deviceId)
-    }
-
-    /** Returns the uppercase SHA-256 digest used in portal device identity fields. */
-    private fun sha256Upper(s: String): String = hashUpper("SHA-256", s)
-    /** Returns the uppercase SHA-1 digest used in portal device identity fields. */
-    private fun sha1Upper(s: String): String = hashUpper("SHA-1", s)
-    /** Returns the uppercase MD5 digest used in portal device identity fields. */
-    private fun md5Upper(s: String): String = hashUpper("MD5", s)
-    /** Hashes portal identity text and encodes its digest as uppercase hexadecimal. */
-    private fun hashUpper(algo: String, s: String): String =
-        java.security.MessageDigest.getInstance(algo).digest(s.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }.uppercase()
 
     // ---- HTTP --------------------------------------------------------------------------------
 
@@ -237,12 +262,14 @@ class StalkerApi(
         action: String,
         extra: (HttpUrl.Builder) -> Unit = {},
     ): JsonElement? {
+        requireCurrent(source)
         val builder = session.endpoint.newBuilder()
             .addQueryParameter("type", type)
             .addQueryParameter("action", action)
             .addQueryParameter("JsHttpRequest", "1-xml")
         extra(builder)
         val body = execute(source, builder.build(), session.token) ?: return null
+        requireCurrent(source)
         return (body as? JsonObject)?.get("js")
     }
 
@@ -265,13 +292,15 @@ class StalkerApi(
 
     /** Executes a portal request and decodes its JSON response or raises a provider error. */
     private fun execute(source: Source, url: HttpUrl, token: String?): JsonElement? {
+        requireCurrent(source)
         val mac = source.macAddress?.trim().orEmpty()
         // adid (the lower-case device id) rides in the cookie the way a real box sends it; some
         // portals key off it alongside the MAC.
         val cookie = buildString {
             append("mac=").append(URLEncoder.encode(mac, "UTF-8"))
             append("; stb_lang=en; timezone=Europe/London")
-            append("; adid=").append(stbIdentity(mac).deviceId2.lowercase())
+            append("; adid=").append(URLEncoder.encode(
+                source.stalkerDeviceId2 ?: StalkerIdentity.resolve(source).deviceId2.lowercase(java.util.Locale.ROOT), "UTF-8"))
             // Some Ministra backends read the token from the cookie, not the Authorization header —
             // send it in both so those portals recognise the session and return the channel list.
             if (token != null) append("; token=").append(token)

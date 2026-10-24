@@ -247,6 +247,9 @@ class AccountConnectionManager private constructor(context: Context) {
 
         /** Digest avoids persisting credential-bearing endpoint/username/MAC/playlist strings. */
         internal fun accountIdentity(source: Source): String {
+            if (source.kind == SourceKind.STALKER) {
+                source.stalkerAccountKey?.takeIf(::isAccountKey)?.let { return it }
+            }
             val parsed = source.url.toHttpUrlOrNull()
             val endpoint = parsed?.newBuilder()?.query(null)?.fragment(null)?.build()?.toString()?.trimEnd('/') ?: source.url.trimEnd('/')
             val identity = when (source.kind) {

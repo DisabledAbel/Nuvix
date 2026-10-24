@@ -78,7 +78,17 @@ data class Source(
     val liveFormat: LiveStreamFormat = LiveStreamFormat.HLS,
     val enabled: Boolean = true,
     val lastCatalogSyncMillis: Long = 0,
+    /** Null means Automatic; overrides stay inside the encrypted provider database. */
+    val stalkerSerialNumber: String? = null,
+    val stalkerDeviceId1: String? = null,
+    val stalkerDeviceId2: String? = null,
+    val stalkerSignature: String? = null,
+    /** Retains the original account's connection policy when the authorized identity changes. */
+    val stalkerAccountKey: String? = null,
+    @ColumnInfo(defaultValue = "0") val stalkerRevision: Long = 0,
 ) {
+    override fun toString(): String = "Source(id=$id, kind=$kind, credentials=redacted)"
+
     companion object {
         const val DEFAULT_USER_AGENT: String = "Nuvix/0.1 (Android)"
     }

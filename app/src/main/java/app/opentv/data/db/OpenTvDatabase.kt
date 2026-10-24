@@ -90,7 +90,7 @@ class Converters {
         SportsEvent::class, SportsProgramme::class, SportsDecision::class, SportsFavorite::class,
         SportsPreferred::class, SportsFeedState::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
@@ -401,6 +401,16 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Identity overrides are nullable so every existing provider retains Automatic defaults. */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("stalkerSerialNumber", "stalkerDeviceId1", "stalkerDeviceId2", "stalkerSignature", "stalkerAccountKey").forEach {
+                    db.execSQL("ALTER TABLE sources ADD COLUMN $it TEXT")
+                }
+                db.execSQL("ALTER TABLE sources ADD COLUMN stalkerRevision INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /** Builds the encrypted database with all supported schema migrations registered. */
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
@@ -413,7 +423,7 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                 )
                 .build()
     }

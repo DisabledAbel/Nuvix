@@ -46,6 +46,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.disabledabel.nuvix.R
 import app.opentv.data.model.Source
+import app.opentv.data.model.StalkerIdentity
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import app.opentv.data.model.SourceKind
 import app.opentv.isRunningOnTelevision
 import app.opentv.ui.SourcesViewModel
@@ -122,6 +125,18 @@ fun AddSourceScreen(
         macAddress = mac.takeIf { it.isNotBlank() },
         epgUrl = epgUrl.takeIf { it.isNotBlank() },
         userAgent = userAgent.ifBlank { Source.DEFAULT_USER_AGENT },
+    )
+
+    var confirmMacChange by remember { mutableStateOf(false) }
+    if (confirmMacChange) AlertDialog(
+        onDismissRequest = { confirmMacChange = false },
+        title = { Text("Confirm portal MAC change") },
+        text = { Text(StalkerIdentity.MAC_WARNING) },
+        confirmButton = { TextButton(onClick = {
+            confirmMacChange = false
+            viewModel.saveAndSync(draft()) { ok -> if (ok) onFinished() }
+        }) { Text("Confirm and Save") } },
+        dismissButton = { TextButton(onClick = { confirmMacChange = false }) { Text("Cancel") } },
     )
 
     val canSubmit = url.isNotBlank() && when (kind) {
@@ -312,7 +327,11 @@ fun AddSourceScreen(
                     }
                 }
                 Button(
-                    onClick = { viewModel.saveAndSync(draft()) { ok -> if (ok) onFinished() } },
+                    onClick = {
+                        if (existing?.kind == SourceKind.STALKER && kind == SourceKind.STALKER &&
+                            !mac.equals(existing.macAddress, ignoreCase = true)) confirmMacChange = true
+                        else viewModel.saveAndSync(draft()) { ok -> if (ok) onFinished() }
+                    },
                     enabled = canSubmit && !ui.testing && !ui.syncing,
                 ) {
                     Text(if (ui.syncing) stringResource(R.string.onboarding_working) else stringResource(R.string.onboarding_save_load))

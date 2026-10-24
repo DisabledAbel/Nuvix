@@ -1,5 +1,11 @@
 # Nuvix development roadmap
 
+Stalker portal identity configuration now supports confirmed authorized MAC edits and independent
+Automatic/provider-supplied identity fields. The encrypted additive migration and original account
+limits are retained. Physical Android TV/Google TV/Fire TV acceptance, native SQLCipher persistence,
+provider reauthorization and concurrent DVR/Multi-View checks remain required before v1.0 acceptance;
+see the [configuration and beta checklist](stalker-configuration.md).
+
 Smart Multi-View now extends the merged account-aware connection and background DVR
 foundation with two-, three- and four-channel playback, balanced/focused layouts, remote
 editing, 150 ms focus-follow or OK-only audio, compact Guide browsing, Sports Hub actions,

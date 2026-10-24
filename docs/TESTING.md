@@ -2,6 +2,24 @@
 
 # Testing Nuvix
 
+## Stalker advanced configuration
+
+`StalkerIdentityTest` checks canonical MAC validation, legacy derivation, independent overrides,
+MAC changes, resets, bounds and diagnostic redaction. `StalkerApiTest` uses a synthetic portal for
+profile/query/cookie/metrics values, rejection without identity retries, cache invalidation,
+in-flight stale authentication and unsaved test isolation. `StalkerPersistenceTest` checks atomic
+saves, stale edits, retained settings/account limits/active reservation owners and cloud isolation.
+`StalkerMigrationTest` upgrades the exported v16 schema to Automatic defaults; existing full-chain
+migration tests also run through v17. `StalkerConfigurationScreenTest` covers D-pad/OK selection,
+confirmation/cancel, per-field restore, validation and Back.
+
+Run `./gradlew :app:testDebugUnitTest`, `./gradlew :app:lintDebug`,
+`./gradlew :app:assembleDebug`, `python3 -m unittest discover -s scripts/tests -v` and
+`bash scripts/test-supabase.sh`. Keep the existing Build workflow and production release checks.
+Use the [hardware checklist](stalker-configuration.md#beta-and-hardware-acceptance) for TV IME,
+native encrypted storage and actual concurrent playback/recording. Tests use synthetic identities;
+no live subscriber credentials or third-party identities are needed.
+
 ## Pre-recording conflict review
 
 `MultiViewRecordingConflictTest` covers exact/shared/independent pools, confirmed spare and
