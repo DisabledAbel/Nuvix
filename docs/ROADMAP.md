@@ -1,5 +1,18 @@
 # Nuvix development roadmap
 
+## v1.0 community beta preparation
+
+The first planned candidate is `v1.0.0-rc.1`; no candidate has been published. Follow the
+[beta guide](BETA-TESTING.md), [feedback workflow](BETA-FEEDBACK.md) and canonical
+[release readiness tracker](V1-RELEASE-CHECKLIST.md). Complete feature-freeze review,
+signing backup/recovery, production approval/protection and label setup before recruitment
+or a future manual release request. New features may be deferred until after v1.0.
+Stalker, playback/EPG, Multi-View, background DVR, Google TV remote, cloud sync and install/update
+acceptance remain physical-device milestones. No hardware pass or release date is claimed.
+Keep the existing CI and manual release gates; nightly publishing remains removed.
+
+## Existing implementation and remaining acceptance
+
 Stalker portal identity configuration now supports confirmed authorized MAC edits and independent
 Automatic/provider-supplied identity fields. The encrypted additive migration and original account
 limits are retained. Physical Android TV/Google TV/Fire TV acceptance, native SQLCipher persistence,

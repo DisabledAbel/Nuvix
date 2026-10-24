@@ -62,6 +62,11 @@ when reauthorizing a device; Nuvix cannot prevent provider-side interruptions.
 
 ## Beta and hardware acceptance
 
+Use the dedicated [authorized Stalker beta checklist](BETA-TESTING.md#authorized-stalker-portal-checklist)
+and submit a [beta session report](https://github.com/DisabledAbel/Nuvix/issues/new?template=beta_test_report.yml).
+Keep real credentials, portal MACs and device identity fields out of reports. Record Not Tested
+when an authorized custom value or test device is unavailable; no live-provider pass is implied.
+
 Use only synthetic fixtures or your own authorized provider's assigned values. For a local
 mock, follow [tools/README.md](../tools/README.md); it logs requests, so never enter real
 subscriber credentials in it. Automated MockWebServer tests require no live subscriptions.

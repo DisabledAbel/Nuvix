@@ -44,10 +44,10 @@ If your environment requires an HTTP proxy, configure the standard Gradle `syste
 
 ## CI
 
-`.github/workflows/build.yml` validates Gradle configuration, compiles Kotlin, runs Android unit tests and the release-verification Python tests, runs Android lint, assembles a debug APK and uploads reports on pushes, pull requests and manual dispatches. It requires no signing secrets. Release CI verifies a signed APK before publishing it; see [signing.md](signing.md).
+`.github/workflows/build.yml` validates Gradle configuration, compiles Kotlin, runs Android unit tests and the release-verification Python tests, runs debug/release Android lint, assembles debug and unsigned release APKs, and uploads reports on pull requests and manual dispatches. It also checks actual release APK identity/version history and runs isolated Supabase security validation. It requires no signing secrets. Release CI verifies a signed APK before publishing it; see [signing.md](signing.md).
 
 The Android tests use Robolectric; the first run downloads its Android test runtime. All providers and playback sources must be supplied by users with legitimate access. Hardware playback, remote navigation, home selection, picture-in-picture and installation approval require testing on real Android TV, Google TV and Fire TV devices.
 
-Daily signed nightly prereleases run at 21:00 PST and use Gemini to generate their
-descriptions. See [nightly builds](nightly-builds.md) for repository secrets,
-scheduling, installation and manual runs.
+Nightly publishing remains removed. The [beta program](BETA-TESTING.md) prepares manual
+GitHub release candidates through the existing protected Release workflow; signing recovery
+and production approval remain blockers. Do not distribute unsigned CI artifacts as beta APKs.
