@@ -120,5 +120,5 @@ USB/NAS behavior, alarms and process interruption. Automatic sports extensions r
   permissions, encrypted database and optional cloud sync, playback/DVR, stable-to-stable and
   RC-to-stable updates with preserved data. No seamless old-package migration is claimed.
 - Version remains 0.1.0/code 21. Prepare v1 RC/version/changelog separately, then manually request
-  and independently approve a release only after the [v1 checklist](releases.md#v10-readiness-checklist).
+  and independently approve a release only after the [v1 checklist](V1-RELEASE-CHECKLIST.md).
   Nightly publishing remains removed. No release is created by this identity change.
