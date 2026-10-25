@@ -91,6 +91,7 @@ def check_workflows(root=ROOT):
             not key_steps[0].get("if") and not key_steps[0].get("continue-on-error") and
             key_steps[0].get("env") == {"GH_TOKEN": "${{ github.token }}",
                 "SIGNING_BACKUP_PASSWORD": "${{ secrets.SIGNING_BACKUP_PASSWORD }}",
+                "SIGNING_STORE_RELEASE_ID": "${{ vars.SIGNING_STORE_RELEASE_ID }}",
                 "LEGACY_SIGNING_CONFIGURED": "${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' }}"},
             "Publisher may load the permanent key, never generate another identity")
     verification = [s for s in steps if s.get("run", "").startswith("python3 scripts/release-control.py verify ")]
@@ -168,7 +169,7 @@ def check_signing_setup(workflow):
         expected_env = {"GH_TOKEN": "${{ github.token }}",
                         "SIGNING_BACKUP_PASSWORD": "${{ secrets.SIGNING_BACKUP_PASSWORD }}"}
         if command != "save":
-            expected_env["EXISTING_SIGNING_IDENTITY"] = "${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' }}"
+            expected_env["EXISTING_SIGNING_IDENTITY"] = "${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}"
         require(step.get("run") == "python3 scripts/production-signing.py " + command and
                 step.get("env") == expected_env, "Use only the built-in token, saved password and existing-key presence check")
     require(cleanup.get("if") == "always()" and cleanup.get("run") == 'rm -rf "$RUNNER_TEMP/nuvix-first-signing"' and

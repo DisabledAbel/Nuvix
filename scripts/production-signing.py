@@ -25,6 +25,7 @@ def require(condition, message):
 SIGNING_NAMES = {'KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD', 'SIGNING_CERT_SHA256'}
 STORE_TAG = 'nuvix-signing-key'
 STORE_ASSET = 'nuvix-signing-backup.zip'
+STORE_NAME = 'Nuvix encrypted signing backup — keep as draft'
 
 
 def api(path, **kwargs):
@@ -64,17 +65,40 @@ def validate_context(*, release=False):
             'main changed; signing must use exact current main')
 
 
-def store_release():
-    matches = [item for item in control.pages(f'{control.BASE}/releases') if item.get('tag_name') == STORE_TAG]
-    require(len(matches) == 1 and matches[0].get('draft') is True,
-            'Permanent signing backup missing or ambiguous; inspect Setup Production Signing')
-    return matches[0]
+def store_release(*, release_id=None):
+    """Only a receipt/configured numeric ID or the expected tag can identify a store.
+
+    Titles and filenames are hints for diagnostics/conflict detection, never authority
+    to recover a differently tagged draft. The encrypted identity is checked by load().
+    """
+    selected = str(release_id) if release_id is not None else os.environ.get('SIGNING_STORE_RELEASE_ID', '')
+    require(not selected or re.fullmatch(r'[1-9][0-9]*', selected, re.ASCII),
+            'Invalid SIGNING_STORE_RELEASE_ID; use the numeric ID of the existing signing draft')
+    releases = control.pages(f'{control.BASE}/releases')
+    matches = [item for item in releases if
+               (selected and item.get('id') == int(selected)) or item.get('tag_name') == STORE_TAG or
+               item.get('name') == STORE_NAME or
+               any(asset.get('name') == STORE_ASSET for asset in item.get('assets', []))]
+    require(len(matches) <= 1,
+            'Ambiguous permanent signing backup: multiple candidates; inspect the signing drafts without replacing any key')
+    require(matches and (not selected or matches[0].get('id') == int(selected)),
+            'Permanent signing backup missing; inspect Setup Production Signing and SIGNING_STORE_RELEASE_ID; never generate a replacement')
+    saved = matches[0]
+    require(type(saved.get('id')) is int and saved['id'] > 0 and saved.get('draft') is True and
+            saved.get('published_at') is None,
+            'Invalid permanent signing store: it must remain an unpublished draft')
+    require(selected or saved.get('tag_name') == STORE_TAG,
+            'Permanent signing backup has an unexpected tag; verify the existing draft and configure SIGNING_STORE_RELEASE_ID; never generate a replacement')
+    return saved
 
 
 def store_asset(release):
     assets = release.get('assets', [])
-    require(len(assets) == 1 and assets[0].get('name') == STORE_ASSET and
-            assets[0].get('state') == 'uploaded' and 1 <= assets[0].get('size', 0) <= 1024 * 1024 and
+    require(isinstance(assets, list) and len(assets) == 1 and isinstance(assets[0], dict) and
+            type(assets[0].get('id')) is int and assets[0]['id'] > 0 and
+            assets[0].get('name') == STORE_ASSET and
+            assets[0].get('state') == 'uploaded' and type(assets[0].get('size')) is int and
+            1 <= assets[0]['size'] <= 1024 * 1024 and isinstance(assets[0].get('digest'), str) and
             re.fullmatch(r'sha256:[a-f0-9]{64}', assets[0].get('digest', '')),
             'Encrypted signing backup is incomplete; inspect the setup run instead of creating a new key')
     return assets[0]
@@ -141,7 +165,7 @@ def generate():
     # Reserve a permanent draft before generation; no secret-management API or PAT is needed.
     reserved = api(f'{control.BASE}/releases', method='POST', data={
         'tag_name': STORE_TAG, 'target_commitish': os.environ['GITHUB_SHA'],
-        'name': 'Nuvix encrypted signing backup — keep as draft', 'draft': True,
+        'name': STORE_NAME, 'draft': True,
         'prerelease': True, 'make_latest': 'false',
         'body': 'Signing setup is in progress. Keep this backup as a draft; do not publish or delete it.'})
     require(type(reserved.get('id')) is int and reserved['id'] > 0, 'Cannot reserve the signing identity')
@@ -186,22 +210,34 @@ def save():
     receipt = json.loads((root / 'reservation.json').read_text())
     require(record['repository'] == control.REPO and record['run_id'] == receipt['run_id'] == os.environ['GITHUB_RUN_ID'],
             'Signing backup belongs to another repository or run')
-    reserved = store_release()
+    reserved = store_release(release_id=receipt['release_id'])
     require(reserved['id'] == receipt['release_id'] and not reserved.get('assets'),
             'Signing store changed or already has a key; refusing replacement')
-    tool(['gh', 'release', 'upload', STORE_TAG, str(backup), '--repo', control.REPO])
-    uploaded = store_release()
+    # Address the reserved release directly; a draft's tag is mutable. gh uses
+    # GH_ENTERPRISE_TOKEN for hosts other than github.com, including uploads.
+    tool(['gh', 'api', '--hostname', 'uploads.github.com',
+          f"https://uploads.github.com/{control.BASE}/releases/{reserved['id']}/assets?name={STORE_ASSET}",
+          '--method', 'POST', '-H', 'Content-Type: application/zip', '--input', str(backup)],
+         env=dict(os.environ, GH_ENTERPRISE_TOKEN=os.environ['GH_TOKEN']))
+    uploaded = store_release(release_id=receipt['release_id'])
     asset = store_asset(uploaded)
     require(uploaded['id'] == receipt['release_id'] and
             asset['digest'] == 'sha256:' + hashlib.sha256(backup.read_bytes()).hexdigest(),
             'Uploaded signing backup checksum differs')
     api(f"{control.BASE}/releases/{reserved['id']}", method='PATCH', data={
+        'tag_name': reserved['tag_name'], 'draft': True,
         'body': f"Permanent AES-256 encrypted signing backup. Certificate SHA-256: `{record['fingerprint']}`. "
                 'Keep this draft and the separately saved SIGNING_BACKUP_PASSWORD. Download an offline backup. '
                 'This is key storage, not an APK release; never publish this draft.'})
+    completed = store_release(release_id=receipt['release_id'])
+    completed_asset = store_asset(completed)
+    require(all(completed_asset[key] == asset[key] for key in ('id', 'size', 'digest')),
+            'Signing backup changed while completing setup')
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
         summary.write(f"Permanent signing key ready. Certificate SHA-256: `{record['fingerprint']}`.\n\n"
-                      f"[Download an encrypted backup]({uploaded['html_url']}) and save your password separately. "
+                      f"Signing store release ID: `{completed['id']}`. Save this public ID as the repository variable "
+                      '`SIGNING_STORE_RELEASE_ID` for durable lookup even if GitHub changes the draft tag.\n\n'
+                      f"[Download an encrypted backup]({completed['html_url']}) and save your password separately. "
                       'The backup stays in the signing draft without Actions artifact expiration. '
                       'You can now run Release. No APK was published.\n')
 

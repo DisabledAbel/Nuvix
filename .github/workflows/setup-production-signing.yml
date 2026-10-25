@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
-          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' }}
+          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}
         run: python3 scripts/production-signing.py preflight
       - name: Set up JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -43,7 +43,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
-          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' }}
+          EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}
         run: python3 scripts/production-signing.py generate
       - name: Save permanent encrypted key and backup using the workflow token
         env:
