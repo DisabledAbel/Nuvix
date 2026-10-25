@@ -14,7 +14,9 @@ Every stable Nuvix update must retain the release application ID `com.nuvix.play
    encrypts them in an AES-256 ZIP with your saved password, restores the backup and verifies
    the recovered key can sign data. The built-in workflow token saves the encrypted ZIP in
    a permanent **draft** named **Nuvix encrypted signing backup — keep as draft**.
-3. Once setup succeeds, run **Release** normally. Releases load and decrypt the same key
+3. Once setup succeeds, save the public numeric signing-store release ID from its summary
+   as the repository Actions **variable** `SIGNING_STORE_RELEASE_ID`. This keeps lookup stable
+   if GitHub changes the draft's tag. Then run **Release** normally. Releases load and decrypt the same key
    automatically. You do not need `SIGNING_SETUP_TOKEN`, the four manual signing secrets,
    or a `SIGNING_CERT_SHA256` variable for this path.
 
@@ -40,6 +42,37 @@ secrets and a pinned fingerprint continue to work without changing the signing i
 The old `SIGNING_SETUP_TOKEN` is no longer used; revoke and remove it if you added one.
 Setup needs only the built-in token's `contents: write` permission to save the encrypted
 backup. It never calls GitHub's secret/variable-management APIs or commits private files.
+
+## Recovering an unexpected signing-draft tag
+
+The signing draft's numeric release ID is durable; its title, tag and asset filename are
+mutable metadata. Without `SIGNING_STORE_RELEASE_ID`, lookup requires exactly one store
+with tag `nuvix-signing-key`. A matching title or filename only helps diagnose an unexpected
+tag or conflict; neither can authorize recovery. A configured ID never falls back to another
+release. Missing, conflicting, published or incomplete stores stop the job.
+
+For the failed Release run `40142736539`, the existing store is draft release **423036468**,
+currently tagged `untagged-b19841b4df050a93d7de`, containing asset **673553812**. After the
+code fix is on main, the minimal recovery action is **Settings → Secrets and variables →
+Actions → Variables → New repository variable**: set `SIGNING_STORE_RELEASE_ID` to
+`423036468`. Keep the saved `SIGNING_BACKUP_PASSWORD` unchanged. No draft metadata edit,
+backup upload, key generation or setup rerun is needed.
+
+The old setup checked the tag after upload, then made a final body-only PATCH without
+preserving `tag_name` or checking the result. Setup succeeded and the draft's last update
+coincides with that PATCH; its tag subsequently appeared as `untagged-*`. The logs do not
+record the response, so they cannot establish GitHub's internal reason for the rewrite.
+Setup now addresses storage by the reservation's ID, explicitly preserves the tag and draft
+state when updating the body, and checks storage again before reporting success.
+
+Loading still verifies the downloaded size and SHA-256, AES password, repository,
+credential set, certificate fingerprint and keystore bytes, and any configured
+`SIGNING_CERT_SHA256` pin. Actual APK signing must also verify that the key's certificate
+matches that identity. The fingerprint written in a draft body is only an observed value;
+do not use it as independent proof or change an existing pin to pass CI. Verify a new pin
+against the actual recovered certificate and an independently trusted record. Regression
+tests use disposable encrypted fixtures; they do not verify the production certificate or
+end-to-end publication. Inspect existing release versions/tags before any fresh Release run.
 
 ## Signing key
 

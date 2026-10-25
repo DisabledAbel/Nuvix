@@ -139,6 +139,60 @@ class SetupPreflightTest(unittest.TestCase):
                 signing.store_release()
 
 
+class StoreDiscoveryTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = {'id': 7, 'tag_name': signing.STORE_TAG, 'draft': True,
+                      'name': signing.STORE_NAME, 'published_at': None, 'assets': []}
+
+    def discover(self, releases, selected=''):
+        with patch.dict(os.environ, {'SIGNING_STORE_RELEASE_ID': selected}), \
+             patch.object(signing.control, 'pages', return_value=releases):
+            return signing.store_release()
+
+    def test_expected_tag_works_with_or_without_explicit_id(self):
+        for selected in ('', '7'):
+            self.assertEqual(self.saved, self.discover([self.saved], selected))
+
+    def test_exact_unexpected_tag_requires_explicit_id(self):
+        saved = dict(self.saved, tag_name='untagged-b19841b4df050a93d7de')
+        with self.assertRaisesRegex(ValueError, 'unexpected tag'):
+            self.discover([saved])
+        self.assertEqual(saved, self.discover([saved], '7'))
+        # A configured numeric ID is durable even if the title is edited.
+        saved.update(name='renamed', assets=[])
+        self.assertEqual(saved, self.discover([saved], '7'))
+
+    def test_names_or_asset_filenames_never_authorize_selection(self):
+        for hint in ({'name': signing.STORE_NAME}, {'assets': [{'name': signing.STORE_ASSET}]}):
+            saved = dict(id=8, draft=True, tag_name='unrelated', **hint)
+            with self.subTest(hint=hint), self.assertRaisesRegex(ValueError, 'unexpected tag'):
+                self.discover([saved])
+            with self.assertRaisesRegex(ValueError, 'missing'):
+                self.discover([saved], '7')
+
+    def test_missing_and_invalid_id_never_fall_back(self):
+        for releases, selected in (([], ''), ([], '7'), ([self.saved], '8')):
+            with self.subTest(selected=selected), self.assertRaisesRegex(ValueError, 'missing'):
+                self.discover(releases, selected)
+        for selected in ('0', '-7', '07', '7.0', '7\n', '٧', 'other/7'):
+            with self.subTest(selected=selected), self.assertRaisesRegex(ValueError, 'Invalid SIGNING_STORE_RELEASE_ID'):
+                self.discover([self.saved], selected)
+
+    def test_multiple_candidates_are_rejected_even_with_an_explicit_id(self):
+        for other in (dict(self.saved, id=8),
+                      {'id': 8, 'tag_name': 'untagged-other', 'name': signing.STORE_NAME},
+                      {'id': 8, 'assets': [{'name': signing.STORE_ASSET}]}):
+            for selected in ('', '7'):
+                with self.subTest(other=other, selected=selected), self.assertRaisesRegex(ValueError, 'Ambiguous'):
+                    self.discover([self.saved, other], selected)
+
+    def test_published_and_invalid_stores_are_rejected(self):
+        for change in ({'draft': False}, {'draft': 'true'}, {'published_at': '2026-01-01T00:00:00Z'},
+                       {'id': True}, {'id': 0}, {'id': '7'}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'Invalid permanent signing store'):
+                self.discover([dict(self.saved, **change)])
+
+
 class BackupAndStorageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -158,6 +212,7 @@ class BackupAndStorageTest(unittest.TestCase):
         self.root = Path(self.temp.name) / 'nuvix-first-signing'
         shutil.copytree(self.fixture_root, self.root)
         self.env = dict(type(self).env, RUNNER_TEMP=self.temp.name,
+                        GH_TOKEN='disposable-workflow-token', SIGNING_STORE_RELEASE_ID='',
                         GITHUB_STEP_SUMMARY=str(Path(self.temp.name) / 'summary'),
                         GITHUB_ENV=str(Path(self.temp.name) / 'env'), LEGACY_SIGNING_CONFIGURED='false',
                         EXPECTED_SIGNING_CERT_SHA256='')
@@ -187,17 +242,24 @@ class BackupAndStorageTest(unittest.TestCase):
     def test_save_uploads_only_encrypted_zip_without_secret_management(self):
         with patch.dict(os.environ, self.env), patch.object(signing, 'validate_context'), \
              patch.object(signing, 'verify_backup', return_value=self.record), \
-             patch.object(signing, 'store_release', side_effect=[dict(self.saved, assets=[]), self.saved]), \
+             patch.object(signing, 'store_release', side_effect=[dict(self.saved, assets=[]), self.saved, self.saved]) as store, \
              patch.object(signing, 'tool') as tool, patch.object(signing.control, 'api') as api:
             signing.save()
         args = tool.call_args.args[0]
-        self.assertEqual(['gh', 'release', 'upload', signing.STORE_TAG], args[:4])
-        self.assertEqual(str(self.root / 'backup/nuvix-signing-backup.zip'), args[4])
+        self.assertEqual(['gh', 'api', '--hostname', 'uploads.github.com'], args[:4])
+        self.assertEqual(f'https://uploads.github.com/{signing.control.BASE}/releases/7/assets?name={signing.STORE_ASSET}', args[4])
+        self.assertEqual(str(self.root / 'backup/nuvix-signing-backup.zip'), args[-1])
+        self.assertIn('Content-Type: application/zip', args)
+        self.assertEqual(self.env['GH_TOKEN'], tool.call_args.kwargs['env']['GH_ENTERPRISE_TOKEN'])
         self.assertNotIn('--clobber', args)
+        self.assertTrue(all(c.kwargs == {'release_id': 7} for c in store.call_args_list))
         self.assertEqual('PATCH', api.call_args.kwargs['method'])
+        self.assertEqual(signing.STORE_TAG, api.call_args.kwargs['data']['tag_name'])
+        self.assertIs(True, api.call_args.kwargs['data']['draft'])
         self.assertFalse(any('/actions/secrets' in c.args[0] or '/actions/variables' in c.args[0] for c in api.call_args_list))
         summary = Path(self.env['GITHUB_STEP_SUMMARY']).read_text()
         self.assertIn(self.record['fingerprint'], summary)
+        self.assertIn('SIGNING_STORE_RELEASE_ID', summary)
         for name in ('KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_PASSWORD'):
             self.assertNotIn(self.record['secrets'][name], summary)
 
@@ -217,13 +279,85 @@ class BackupAndStorageTest(unittest.TestCase):
             signing.save()
         api.assert_not_called()
 
+    def test_save_uses_receipt_id_even_if_github_changes_the_draft_tag(self):
+        changed = dict(self.saved, tag_name='untagged-b19841b4df050a93d7de')
+        with patch.dict(os.environ, self.env), patch.object(signing, 'validate_context'), \
+             patch.object(signing, 'verify_backup', return_value=self.record), \
+             patch.object(signing.control, 'pages', side_effect=[[dict(changed, assets=[])], [changed], [changed]]), \
+             patch.object(signing, 'tool') as tool, patch.object(signing.control, 'api') as api:
+            signing.save()
+        self.assertIn('/releases/7/assets?', tool.call_args.args[0][4])
+        self.assertEqual(changed['tag_name'], api.call_args.kwargs['data']['tag_name'])
+
+    def test_save_rechecks_store_after_metadata_update(self):
+        for changed in (dict(self.saved, draft=False), dict(self.saved, assets=[])):
+            with self.subTest(changed=changed), patch.dict(os.environ, self.env), \
+                 patch.object(signing, 'validate_context'), patch.object(signing, 'verify_backup', return_value=self.record), \
+                 patch.object(signing.control, 'pages', side_effect=[[dict(self.saved, assets=[])], [self.saved], [changed]]), \
+                 patch.object(signing, 'tool'), patch.object(signing.control, 'api'), self.assertRaises(ValueError):
+                signing.save()
+            self.assertFalse(Path(self.env['GITHUB_STEP_SUMMARY']).exists())
+
     def load(self, *, data=None):
         with patch.dict(os.environ, self.env), patch.object(signing, 'validate_context') as context, \
-             patch.object(signing, 'store_release', return_value=self.saved), \
+             patch.object(signing.control, 'pages', return_value=[self.saved]), \
              patch.object(signing.control, 'api', return_value=self.data if data is None else data), \
              patch.object(signing, 'generate', side_effect=AssertionError('Release must never generate keys')):
             signing.load()
         context.assert_called_once_with(release=True)
+
+    def test_load_recovers_the_unexpected_tag_by_id_without_any_api_writes(self):
+        self.saved['tag_name'] = 'untagged-b19841b4df050a93d7de'
+        self.env.update(SIGNING_STORE_RELEASE_ID='7', EXPECTED_SIGNING_CERT_SHA256=self.record['fingerprint'])
+        with patch.object(signing.control, 'api', return_value=self.data) as api, \
+             patch.dict(os.environ, self.env), patch.object(signing, 'validate_context'), \
+             patch.object(signing.control, 'pages', return_value=[self.saved]):
+            signing.load()
+        api.assert_called_once_with(f'{signing.control.BASE}/releases/assets/9', binary=True)
+        private = Path(self.temp.name) / 'nuvix-release-key/credentials.json'
+        self.assertEqual(self.record, json.loads(private.read_text()))
+
+    def test_missing_or_invalid_assets_stop_before_download_or_export(self):
+        for assets in (None, [], [None], [self.asset, self.asset], [dict(self.asset, name='other.zip')],
+                       [dict(self.asset, state='new')], [dict(self.asset, size=0)],
+                       [dict(self.asset, size=1024 * 1024 + 1)], [dict(self.asset, digest='')],
+                       [dict(self.asset, size='100')], [dict(self.asset, digest=None)],
+                       [dict(self.asset, digest='sha256:invalid')], [dict(self.asset, id=0)],
+                       [dict(self.asset, id=True)]):
+            self.saved['assets'] = assets
+            with self.subTest(assets=assets), patch.dict(os.environ, self.env), \
+                 patch.object(signing, 'validate_context'), \
+                 patch.object(signing.control, 'pages', return_value=[self.saved]), \
+                 patch.object(signing.control, 'api') as api, self.assertRaisesRegex(ValueError, 'incomplete'):
+                signing.load()
+            api.assert_not_called()
+            self.assertFalse(Path(self.env['GITHUB_ENV']).exists())
+
+    def test_encrypted_identity_failures_do_not_export_credentials(self):
+        import pyzipper
+        with pyzipper.AESZipFile(self.root / 'backup/nuvix-signing-backup.zip') as archive:
+            archive.setpassword(self.env['SIGNING_BACKUP_PASSWORD'].encode())
+            contents = {name: archive.read(name) for name in archive.namelist()}
+        cases = [('repository', lambda r: r.update(repository='other/Nuvix')),
+                 ('certificate', lambda r: r.update(fingerprint='0' * 64)),
+                 ('keystore', lambda r: r['secrets'].update(KEYSTORE_BASE64='ZmFrZQ==')),
+                 ('credentials', lambda r: r['secrets'].pop('KEY_PASSWORD'))]
+        for name, mutate in cases:
+            record = copy.deepcopy(self.record)
+            mutate(record)
+            backup = Path(self.temp.name) / f'{name}.zip'
+            with pyzipper.AESZipFile(backup, 'x', encryption=pyzipper.WZ_AES) as archive:
+                archive.setpassword(self.env['SIGNING_BACKUP_PASSWORD'].encode())
+                for member, data in contents.items():
+                    archive.writestr(member, json.dumps(record) if member == 'credentials.json' else data)
+            data = backup.read_bytes()
+            self.saved['assets'] = [dict(self.asset, size=len(data), digest='sha256:' + hashlib.sha256(data).hexdigest())]
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                self.load(data=data)
+            self.assertFalse(Path(self.env['GITHUB_ENV']).exists())
+            private = Path(self.temp.name) / 'nuvix-release-key'
+            self.assertFalse((private / 'credentials.json').exists())
+            shutil.rmtree(private)
 
     def test_load_exports_only_public_fingerprint_and_keeps_credentials_private(self):
         self.load()
@@ -236,6 +370,8 @@ class BackupAndStorageTest(unittest.TestCase):
             self.assertNotIn(value, env_output)
 
     def test_load_rejects_wrong_password_changed_download_and_pinned_certificate(self):
+        self.saved['tag_name'] = 'untagged-b19841b4df050a93d7de'
+        self.env['SIGNING_STORE_RELEASE_ID'] = '7'
         self.env['SIGNING_BACKUP_PASSWORD'] = 'incorrect-password'
         with self.assertRaises(Exception):
             self.load()
