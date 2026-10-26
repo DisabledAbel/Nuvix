@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "stable_public": [
+    {
+      "id": "apple-bipbop",
+      "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
+      "authorization": "Apple publishes this HLS example for streaming development and testing.",
+      "reference": "https://developer.apple.com/streaming/examples/",
+      "recording_allowed": false
+    },
+    {
+      "id": "mux-x36xhzz",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+      "authorization": "Mux publishes this demonstration stream in its HLS test-stream collection.",
+      "reference": "https://github.com/muxinc/stream-tests",
+      "recording_allowed": false
+    }
+  ],
+  "optional_live": [],
+  "local": {
+    "id": "synthetic-av-v1",
+    "authorization": "Generated locally from FFmpeg color and sine filters; no third-party media.",
+    "recording_allowed": true,
+    "formats": ["hls", "mpegts"]
+  }
+}

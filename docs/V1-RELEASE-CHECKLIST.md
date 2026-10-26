@@ -12,6 +12,13 @@ date, evidence link, owner and result before checking it. CI/JVM/emulator result
 physical-TV or live-provider rows. Not Tested/Not Supported results require review, not a pass.
 Repeat affected checks after fixes and record explicit acceptance of any remaining limitations.
 
+The **IPTV Playback Tests** workflow adds PR fixture/emulator regressions and optional
+manual Apple/Mux transport checks. Attach its sanitized JSON/Markdown results to playback
+acceptance evidence; see [automated testing](TESTING.md#automated-iptv-playback-tests).
+Rendered synthetic HLS/TS on an emulator, controlled Multi-View tests and generated-media DVR
+coverage do not close the physical-TV/authorized-provider blocker below. No arbitrary public
+stream may be used for recording tests. Existing signing/release/security gates remain required.
+
 ## Current blockers and evidence
 
 | Blocker | Current evidence / action required |

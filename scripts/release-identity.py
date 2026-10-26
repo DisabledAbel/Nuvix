@@ -46,7 +46,7 @@ def check_source(root=ROOT):
 
 def check_workflows(root=ROOT):
     paths = list((root / ".github/workflows").iterdir())
-    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml", "setup-production-signing.yml"},
+    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml", "setup-production-signing.yml", "iptv-playback.yml"},
             "Workflow inventory changed; review release capability before updating the allowlist")
     workflows = {p.name: yaml.load(p.read_text(), Loader=yaml.BaseLoader) for p in paths}
     for name, workflow in workflows.items():
@@ -68,6 +68,15 @@ def check_workflows(root=ROOT):
                 command = step.get("run", "")
                 require(publisher or not re.search(r'gh\s+release|action-gh-release|release-control\.py\s+(?:sign|publish)',
                                                   command + " " + step.get("uses", "")), "Alternate release publisher detected")
+    iptv = workflows["iptv-playback.yml"]
+    require(set(iptv.get("on", {})) == {"pull_request", "workflow_dispatch"} and
+            iptv.get("permissions") == {"contents": "read"}, "IPTV validation must be read-only PR/manual work")
+    require(set(iptv.get("jobs", {})) == {"fixtures", "media3", "public-smoke"}, "Keep both mandatory IPTV fixture jobs")
+    for job_id in ("fixtures", "media3"):
+        require(not iptv["jobs"][job_id].get("if") and not iptv["jobs"][job_id].get("continue-on-error"),
+                "Local IPTV fixtures and real Media3 regressions must run on PRs and block on failure")
+    require(iptv["jobs"]["public-smoke"].get("if") ==
+            "github.event_name == 'workflow_dispatch' && inputs.public_streams", "Public IPTV probes must remain opt-in")
     release = workflows["release.yml"]
     require(set(release["on"]) == {"workflow_dispatch", "push"} and
             release["on"]["push"] == {"tags": ["v*.*.*"]}, "Release accepts only manual requests or version tags")

@@ -1,5 +1,11 @@
 # Advanced playback diagnostics
 
+The [automated IPTV suite](TESTING.md#automated-iptv-playback-tests) exports the same fixed
+transition phases to sanitized JSON/Markdown in Actions. READY and actual video FIRST_FRAME
+are required separately for synthetic channel-switch tests; HTTP probe results are reported
+as transport availability. Previous successful comparable emulator runs provide observational
+timing deltas. Raw player logs and provider URLs are excluded from these artifacts.
+
 Live channel transitions also expose elapsed milliseconds from selection in the existing Stream
 Information panel: selection, submission, previous stream close start/completion, reservation
 acquisition, media-item assignment, prepare start, READY, first rendered video frame and failure.
