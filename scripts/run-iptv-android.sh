@@ -33,5 +33,6 @@ if adb exec-out run-as com.nuvix.player.debug tar -C files -cf - iptv-reports > 
 fi
 report_status=0
 python3 scripts/test-iptv-playback.py --mode fixture --android-report-dir work/iptv-device/iptv-reports \
+  --android-exit-code "$test_status" \
   --baseline work/iptv-baseline.json --output work/iptv-android.json || report_status=$?
 if [[ "$test_status" != 0 || "$report_status" != 0 ]]; then exit 1; fi

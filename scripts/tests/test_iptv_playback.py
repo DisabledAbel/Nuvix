@@ -166,6 +166,18 @@ class LocalProviderTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
+    def test_instrumentation_command_failure_overrides_successful_measurements(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(runner, "fingerprint", return_value={}), \
+                patch.object(runner, "fixture_checks", return_value=[]), \
+                patch.object(runner, "android_results", return_value=[{"id": "rapid", "status": "passed", "metrics": {}}]), \
+                patch("builtins.print"):
+            output = Path(folder, "report.json")
+            result = runner.main(["--android-report-dir", folder, "--android-exit-code", "1", "--output", str(output)])
+            self.assertEqual(1, result)
+            report = json.loads(output.read_text())
+            self.assertEqual("failed", report["status"])
+            self.assertEqual("instrumentation_command_failed", report["android"][-1]["classification"])
+
     def test_public_failures_are_separate_from_app_regressions(self):
         with patch.object(runner, "probe_hls", side_effect=ProbeFailure("network_unavailable")):
             results = runner.public_checks(1)
