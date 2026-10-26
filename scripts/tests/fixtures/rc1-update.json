@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "versionCode": 22,
+  "versionName": "1.0.0-rc.1",
+  "applicationId": "com.nuvix.player",
+  "apkAsset": "nuvix.apk",
+  "sha256": "befd2516711bbb130c02598a9bb5225f60e88f4671ad055adaf2409424791177",
+  "sizeBytes": 31586556,
+  "signingCertificateSha256": "2a6571bc8e4fa5cf303faf0aa70fd436a8360ba99d4b274edeedabeb0d191928"
+}

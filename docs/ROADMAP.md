@@ -2,15 +2,24 @@
 
 ## v1.0 community beta preparation
 
-Metadata and [candidate notes](../CHANGELOG.md#100-rc1) are prepared for `v1.0.0-rc.1`,
-versionCode `22`, package `com.nuvix.player`; no candidate has been published. Follow the
+[RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1) is published with code `22`.
+Metadata and [candidate notes](../CHANGELOG.md#100-rc2) are prepared for `v1.0.0-rc.2`,
+versionCode `23`, package `com.nuvix.player`; RC2 has not been published. Follow the
 [beta guide](BETA-TESTING.md), [feedback workflow](BETA-FEEDBACK.md) and canonical
 [release readiness tracker](V1-RELEASE-CHECKLIST.md). Complete feature-freeze review,
-signing backup/recovery, production approval/protection and GitHub form/triage setup before recruitment
+signing continuity/backup, trusted-publisher controls and GitHub form/triage setup before RC2 recruitment
 or a future manual release request. New features may be deferred until after v1.0.
 Stalker, playback/EPG, Multi-View, background DVR, Google TV remote, cloud sync and install/update
 acceptance remain physical-device milestones. No hardware pass or release date is claimed.
 Keep the existing CI and manual release gates; nightly publishing remains removed.
+
+## RC2 implementation and remaining acceptance
+
+RC2 includes PR #58's optional Sports auto switchover and playback cushion, PR #59's
+D-pad request/cancellation and player-surface repairs, and PR #60's rendered Media3 HLS/TS,
+synthetic-provider and DVR regression suite. Both Sports options remain off by default.
+The original physical-TV delay and RC1-to-RC2 install/data retention still require representative
+device evidence. Stable uses code `24` or higher after RC2. See [RC2 readiness](V1-RELEASE-CHECKLIST.md#rc2-preparation-evidence).
 
 ## Existing implementation and remaining acceptance
 
@@ -113,13 +122,13 @@ USB/NAS behavior, alarms and process interruption. Automatic sports extensions r
 ## Permanent v1 identity preparation
 
 - Implemented: production `com.nuvix.player` with retained namespace/source structure, secret-free
-  PR release identity/build metadata/history checks, protected-environment certificate continuity,
+  PR release identity/build metadata/history checks, trusted-publisher certificate continuity,
   stable updater signer compatibility and sensitive-file Code Owner requests.
-- Pending administrator verification: independently trusted existing certificate fingerprint,
-  production environment protections/secrets/API visibility and enforceable Code Owner reviews.
+- Pending maintainer verification: independently trusted existing certificate fingerprint,
+  permanent-key recovery, trusted-publisher repository access and enforceable Code Owner reviews.
 - Pending device acceptance: old/new side-by-side setup, application startup, provider/storage
   permissions, encrypted database and optional cloud sync, playback/DVR, stable-to-stable and
   RC-to-stable updates with preserved data. No seamless old-package migration is claimed.
-- Version remains 0.1.0/code 21. Prepare v1 RC/version/changelog separately, then manually request
-  and independently approve a release only after the [v1 checklist](V1-RELEASE-CHECKLIST.md).
-  Nightly publishing remains removed. No release is created by this identity change.
+- RC1/code 22 is published; RC2/code 23 is prepared for review. Request a future release
+  only after the [v1 checklist](V1-RELEASE-CHECKLIST.md). Stable must exceed all candidate codes.
+  Nightly publishing remains removed. This preparation creates no release.

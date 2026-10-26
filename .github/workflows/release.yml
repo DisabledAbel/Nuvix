@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Committed versionName: 1.0.0-rc.1 for rc or 1.0.0 for stable (optional v prefix).'
+        description: 'Committed versionName: 1.0.0-rc.2 for rc or 1.0.0 for stable (optional v prefix).'
         required: true
         type: string
       release_name:

@@ -1,14 +1,112 @@
 # Changelog
 
-## Unreleased
+## [1.0.0-rc.2]
 
-### Fixed
+### Nuvix v1.0.0 Release Candidate 2
 
-- Live channel switching: close constrained same-account viewing before resolving the next
-  provider link; preserve capacity and recording reservations, cancel obsolete portal requests,
-  navigate from the latest requested channel, and reattach retained video views after player
-  replacement. Stream Information includes sanitized elapsed transition timings. Representative
-  TV/provider acceptance remains a v1 release blocker; see `docs/TESTING.md`.
+**Prerelease for public beta testing.** RC2 is prepared, not published. These notes cover
+changes after the actual RC1 release commit `66e7b366b3beef0564d53fe8c52a1353abfc04f8`.
+Use a test device and finish active recordings before updating.
+
+### What's Fixed
+
+- Repaired confirmed defects behind the RC1 D-pad Up/Down report where a new channel label
+  appeared while the previous video remained for about a minute. Corrected player surface
+  binding and replacement player handling reattach the retained video view to the current player;
+  late callbacks and outgoing views cannot take ownership from it.
+- More responsive channel-switch request processing follows the latest requested channel,
+  cancels obsolete navigation requests and Stalker portal calls, and rejects stale callbacks.
+  Provider connection transitions close constrained same-account playback before resolving
+  the next link, while preserving shared-account allowances and protected recording reservations.
+- Safer playback metadata and loading-state behavior distinguish the requested channel from
+  the previous stream while a replacement starts. A failed or canceled tune cannot commit
+  obsolete playback information.
+
+These are verified implementation repairs with automated regressions. The original delay is
+**not yet confirmed resolved on physical TVs**; startup performance varies by hardware,
+network and provider. No universal channel-switch latency is promised.
+
+### What's Improved
+
+- Sports Hub has optional auto switchover to another currently confirmed broadcast of the
+  selected game after failure, end or persistent buffering. It rechecks eligibility and provider
+  capacity, uses one retained player, and stops recovery when the user changes channel or pauses.
+- An independent optional Sports playback delay requests a ten-second startup/rebuffer cushion,
+  subject to stream support and device memory limits. Both Sports settings default to off and
+  are saved locally; recovery is not seamless and this is not a DVR extension feature.
+- Stream Information shows sanitized elapsed channel-transition phases for troubleshooting.
+- Automated IPTV playback coverage now decodes generated HLS and MPEG-TS through Media3 with
+  Xtream-style and synthetic Stalker providers. It checks playback readiness, actual first frames
+  and visible replacement video, rapid channel navigation, connection limits, stream failure and
+  recovery, player cleanup, provider imports and generated-media DVR regressions. HTTP availability
+  alone does not count as application playback. Emulator results do not certify TV/provider behavior.
+
+### Beta Testing Focus
+
+Use the [beta guide](https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-TESTING.md)
+and report Pass/Fail/Partial/Not Tested for:
+
+1. D-pad Up/Down channel switching, including rapid input and actual new-channel video.
+2. Same-provider switching with one, spare and Unknown connection allowances, including shared accounts.
+3. Authorized Stalker playback and cancellation during stream resolution.
+4. Authorized Xtream playback.
+5. HLS and MPEG-TS startup, first frame, failure and recovery.
+6. Multi-View, presets, audio and concurrent provider/decoder limits.
+7. Background DVR, protected recordings, conflict handling and recording history.
+8. Sports Hub with both optional settings off and independently enabled.
+9. Physical remote navigation, focus, Guide/preview/fullscreen and PiP transfers.
+10. Updating from RC1 to RC2 with retained provider settings/credentials, presets, recording
+    schedules/history and cloud synchronization preferences.
+
+### Known Limitations
+
+- Physical Android TV/Google TV/Fire TV channel-switching and RC1-to-RC2 update acceptance
+  remain release blockers. Automated synthetic tests do not resolve those hardware reports.
+- Playback performance varies by hardware, network and provider. Multi-View needs sufficient
+  hardware decoders and authorized provider capacity; four streams are not guaranteed.
+- Background DVR depends on Android/vendor execution policy, permissions, provider and storage.
+  Capture requires direct MPEG-TS; HLS playback does not imply HLS recording support. Automatic
+  sports recording extensions and automatic recording deletion remain absent.
+- Sports matching depends on supplied EPG; suggestions are not verified broadcasts or live scores.
+  Other-device provider usage and future capacity remain unknown.
+- Optional cloud sync does not restore provider credentials, recording files, device permissions
+  or playback tuning. There is no general private database/settings export or guaranteed downgrade.
+
+See the [readiness tracker](https://github.com/DisabledAbel/Nuvix/blob/main/docs/V1-RELEASE-CHECKLIST.md)
+for exact-commit CI, signing evidence and remaining device checks.
+
+### Installation and Updates
+
+Requires Android 6.0/API 23 or newer. RC2 is not available until separately published as the
+exact `v1.0.0-rc.2` GitHub **Pre-release**. After publication, verify all `SHA256SUMS` assets and
+the independently trusted production certificate before installing `nuvix.apk` through Android's
+installation prompt. Debug/unsigned CI APKs are validation artifacts, not beta downloads.
+
+RC2 uses **`com.nuvix.player`**, versionName **`1.0.0-rc.2`**, versionCode **`23`** (RC1: `22`).
+RC1 users should be able to update without uninstalling **provided both APKs have matching
+production signing identities**. Production RC2 signing continuity and on-device data retention
+are not yet verified. Do not uninstall, clear data or force a downgrade after an installation error.
+Stable v1.0.0 must use at least code `24`, or higher if more codes are consumed.
+
+Old **`com.disabledabel.nuvix`** installations are a separate package and cannot update in place;
+private data and alarms do not migrate automatically. Debug and legacy nightly packages are
+also separate. The in-app updater offers stable releases only and will not automatically offer
+RC2. Follow the [installation and migration guide](https://github.com/DisabledAbel/Nuvix/blob/main/docs/BETA-TESTING.md).
+
+### Reporting Bugs
+
+Report reproducible problems at <https://github.com/DisabledAbel/Nuvix/issues>. Include
+candidate/build, device/OS, provider type/format/allowance, steps, actual video behavior and
+sanitized diagnostics. Do not share IPTV credentials, private portal URLs, MAC addresses,
+tokens or device identifiers (including serial numbers, device IDs and signatures).
+Redact screenshots and logs before attaching them.
+
+### Licensing
+
+GPL-3.0-or-later; original OpenTV copyright and attribution are retained. Nuvix is an independent
+modified version of OpenTV, with no official affiliation with OpenTV or DIRECTV. A published
+release must include corresponding source and notices. Nuvix supplies no IPTV channels,
+subscriptions, playlists or media. Use authorized sources and provider-assigned identities.
 
 ## [1.0.0-rc.1]
 

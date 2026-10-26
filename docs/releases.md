@@ -112,18 +112,49 @@ No automatic private-data copying, token/Keystore export or old-app uninstall is
 5. Verify playback, settings, recordings and any shared storage access before deciding whether
    to remove the old app. Uninstalling can delete its private data. No seamless migration is claimed.
 
+## v1.0.0-rc.2 version plan
+
+The October 26, 2026 audit started at latest `main` `d0f40d5` and the actual RC1 tag
+`66e7b366b3beef0564d53fe8c52a1353abfc04f8`. The complete GitHub release inventory
+(including drafts) contains published RC1 and the permanent encrypted signing backup only;
+the backup is not an APK release. The remote tag inventory contains only `v1.0.0-rc.1`.
+RC1's published `update.json` records `com.nuvix.player`, `1.0.0-rc.1`, code `22`.
+Its downloaded metadata matches SHA-256
+`2e799b0ed9eda0e293d30d5015b14830b6f79d117ee49dac76211a61ff7d555e`
+in the release asset digest and `SHA256SUMS`. Its fingerprint is observed metadata,
+not independent proof of a trusted signer. Source history uses production codes 21 → 22;
+legacy `app.opentv`/`com.disabledabel.nuvix` and nightly codes are separate identities.
+The owner confirmed during RC2 preparation that no private/unpublished compatible APK
+has used or reserved code 23 or higher. **Select unused code 23 for RC2; stable must use
+at least 24**, increasing again if another build consumes a code. Recheck before publication.
+
+Only PRs [#58](https://github.com/DisabledAbel/Nuvix/pull/58),
+[#59](https://github.com/DisabledAbel/Nuvix/pull/59) and
+[#60](https://github.com/DisabledAbel/Nuvix/pull/60) were merged after the RC1 release commit:
+optional Sports recovery/cushion, channel-switch repairs and automated IPTV playback coverage.
+The signing-store recovery in #57 is already in RC1 and is not an RC2 change.
+
+RC2 notes live solely in [CHANGELOG.md](../CHANGELOG.md#100-rc2). The existing extractor
+produces `release-notes.md` and the checksummed GitHub body from that exact section.
+For a future separately authorized manual main dispatch, use version `1.0.0-rc.2`, channel
+`rc` and release title **Nuvix v1.0.0 Release Candidate 2**. Do not create the tag in advance.
+Current manual and version-tag triggers, trusted-publisher authorization, permanent-key loading,
+certificate verification, checksums and transactional publication are preserved. RCs remain
+`prerelease: true`, `make_latest: false`; the stable-only updater excludes RC2 even if someone
+incorrectly clears GitHub's prerelease flag. This preparation does not dispatch either path.
+
 ## v1.0.0-rc.1 version plan
 
 | Build | versionName / eventual tag | versionCode |
 | --- | --- | --- |
 | Previous committed development metadata | `0.1.0` / no published tag | `21` |
-| Prepared RC1 | `1.0.0-rc.1` / `v1.0.0-rc.1` | `22` |
-| Reserved next candidate, if needed | `1.0.0-rc.2` / `v1.0.0-rc.2` | `23`, only if still unused |
+| Published RC1 | `1.0.0-rc.1` / `v1.0.0-rc.1` | `22` |
+| Prepared RC2 (not published) | `1.0.0-rc.2` / `v1.0.0-rc.2` | `23`, audited unused |
 | Eventual stable | `1.0.0` / `v1.0.0` | At least `23` after RC1 alone; at least `24` after RC2 |
 
 The October 24, 2026 audit of latest `main` (`a6c304b`) found committed code 21,
 no Git tags (`git ls-remote --tags origin`) and an empty GitHub Releases API result.
-The owner confirmed in this preparation session that no private `com.nuvix.player`
+The owner confirmed in that RC1 preparation session that no private `com.nuvix.player`
 APK with a code above 21 has been distributed. Code 22 therefore exceeds the known
 compatible history. Legacy `com.disabledabel.nuvix` codes belong to a separate app.
 
@@ -141,7 +172,32 @@ adds installation/GPL/OpenTV notices; `release-control.py` includes it as `relea
 and the GitHub release body, bound by checksums. No second editable notes file is required.
 The intended notes title is **Nuvix v1.0.0 Release Candidate 1**; the default release title
 is `Nuvix 1.0.0-rc.1`. Manual input is `1.0.0-rc.1` (or `v1.0.0-rc.1`) with channel `rc`.
-A manual run creates `v1.0.0-rc.1`; a tag-push run uses that existing tag.
+RC1 was subsequently published on October 25, 2026; do not redispatch or reuse its tag/code.
+
+## RC1 to RC2 compatibility evidence
+
+Production application ID `com.nuvix.player`, namespace `com.disabledabel.nuvix`, minimum
+API 23, universal APK configuration and signing logic are retained. Code 23 exceeds RC1's 22.
+Compared with the RC1 tag, Room schema 17, all exported schemas and migration registration,
+encrypted database/credential storage, core settings, Multi-View preset storage, recording
+schedules/history, cloud preferences and updater/installer code are unchanged. No new
+migration, reset, uninstall or downgrade path is introduced. PR #58 adds two independent
+Sports booleans defaulting off; it does not reset existing preferences.
+
+Automated evidence reuses `RoomMigrationPreservationTest`, recording migration/persistence
+suites, `MultiViewPresetStoreTest`, `CloudSettingsIsolationTest`, Sports preference tests,
+`UpdateCheckerTest` and `UpdateSecurityTest`. `scripts/tests/test_rc_preparation.py` checks
+RC2 against frozen published RC1 metadata and rejects reused codes or changed certificates.
+Its signature-tool fixtures are synthetic; they do not certify production signing.
+
+The published RC1 metadata reports fingerprint
+`2a6571bc8e4fa5cf303faf0aa70fd436a8360ba99d4b274edeedabeb0d191928`.
+No production RC2 credentials or signed APK are available in ordinary PR CI. Therefore
+**actual production RC1-to-RC2 signing continuity is unverified**. Do not regenerate a key,
+change `SIGNING_CERT_SHA256`, weaken verification, or run first-key setup for this update.
+The future publisher must verify the actual signed APK against the existing independently
+trusted identity and published history. A physical-TV in-place update and data-retention
+report remains required; source/JVM/emulator checks alone cannot certify it.
 
 ## Compatibility and verification
 
