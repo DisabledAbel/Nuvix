@@ -2,6 +2,23 @@
 
 # Testing Nuvix
 
+## RC2 validation and update acceptance
+
+RC2 is prepared as `1.0.0-rc.2`/23 over published RC1 `1.0.0-rc.1`/22. Run the complete
+existing Build and IPTV Playback Tests workflows on the final PR commit, including PR #59's
+surface/remote/cancellation/admission regressions and PR #60's actual rendered Media3 tests.
+Do not substitute HTTP transport success for READY, first-frame and visible-output evidence.
+See the [compatibility audit](releases.md#rc1-to-rc2-compatibility-evidence) and
+[RC1→RC2 device procedure](BETA-TESTING.md#rc1-to-rc2-update-acceptance).
+
+For storage/update regression evidence, retain Room migrations, recording persistence/history,
+Multi-View preset persistence, cloud category isolation and Sports preferences tests. RC2's
+release-policy tests use published RC1 metadata; signature-command fixtures remain synthetic.
+Ordinary PR CI has no production signing secrets. The playback emulator uses debug fixtures
+and in-memory storage, so it cannot certify production signing or an RC1→RC2 APK update.
+Record any separate synthetic-key installation experiment explicitly as synthetic. Actual signed
+installation, data retention and the original physical-TV delay remain acceptance blockers.
+
 ## Automated IPTV playback tests
 
 Open **Actions → IPTV Playback Tests → Run workflow** and select the branch. Leave

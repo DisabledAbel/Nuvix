@@ -1,5 +1,11 @@
 # Advanced playback diagnostics
 
+RC2 (`1.0.0-rc.2`/23) is prepared, not published. For the reported RC1 D-pad delay,
+record actual new-channel video and sanitized selection→close→reservation→prepare→READY→first-frame
+phases on a physical TV. The automated repairs and emulator reports do not establish that
+this delay is resolved on real TVs. See [RC2 validation](TESTING.md#rc2-validation-and-update-acceptance)
+and [release blockers](V1-RELEASE-CHECKLIST.md#rc2-preparation-evidence).
+
 The [automated IPTV suite](TESTING.md#automated-iptv-playback-tests) exports the same fixed
 transition phases to sanitized JSON/Markdown in Actions. READY and actual video FIRST_FRAME
 are required separately for synthetic channel-switch tests; HTTP probe results are reported

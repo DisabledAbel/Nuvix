@@ -1,9 +1,10 @@
 # Nuvix v1.0 release readiness
 
 **Decision: blocked. No beta or stable release is authorized by this checklist.**
-Prepared first candidate: `v1.0.0-rc.1`, versionName `1.0.0-rc.1` / versionCode `22`,
-production package `com.nuvix.player`, minimum API 23. This preparation updates metadata
-and notes; it does not create tags, sign APKs, dispatch production workflows or publish.
+Prepared second candidate: `v1.0.0-rc.2`, versionName `1.0.0-rc.2` / versionCode `23`,
+production package `com.nuvix.player`, minimum API 23. RC1/code 22 is already published.
+RC2 is not published; this preparation creates no release tag, signs no production APK,
+dispatches no production workflow and does not merge the preparation PR.
 
 This is the canonical v1 tracker. Use [tester instructions](BETA-TESTING.md),
 [feedback triage](BETA-FEEDBACK.md) and the existing [release runbook](releases.md).
@@ -24,19 +25,50 @@ stream may be used for recording tests. Existing signing/release/security gates 
 | Blocker | Current evidence / action required |
 | --- | --- |
 | D-pad live channel switching (v1 blocker) | RC1 report: new channel label with previous video for about a minute, including same-provider channels. Close-before-resolution, cancellable portal tuning, latest-selection navigation and surface rebinding have automated regression coverage. **Keep blocked until a representative Android/Google TV and authorized constrained provider pass** the [channel-switch acceptance procedure](TESTING.md#live-channel-switching-v1-blocker). Record first-frame timings and provider format/capacity; virtual-time results do not certify hardware. |
-| Production signing recovery | Preserve and verify a secure backup of the long-lived key and passwords. For the confirmed first signed release only, [one-time setup](signing.md#first-release-setup-in-github) uses one saved password and the built-in token to create, verify and store the encrypted key in a permanent draft backup. Download an offline copy; no PAT or manual signing values are needed. Release never regenerates keys. |
+| Production signing continuity | RC1 is published and the permanent encrypted backup draft exists. Retain the existing key/password and backup; do not rerun first-key setup. RC2 has no production-signed APK in this preparation, so actual RC1-to-RC2 certificate continuity remains unverified. See [compatibility evidence](releases.md#rc1-to-rc2-compatibility-evidence). |
 | Production identity and publisher | Repository signing secrets, independently trusted certificate fingerprint and trusted-actor configuration must be verified using [Safari setup](releases.md#safari-settings-checklist-and-independent-fingerprint). No production environment or second reviewer is required. |
 | Repository access protection | Review workflow/signing changes and restrict write access: trusted actors now publish directly after both validation jobs pass. Existing branch settings are not changed by the workflow. |
-| Candidate review | RC1 metadata/code 22, changelog and generated notes are prepared here. Review this PR and its exact-commit CI before any future dispatch; repeat history checks immediately before publication. See the [version audit](releases.md#v100-rc1-version-plan). |
+| Candidate review | RC2 metadata/code 23, changelog and generated notes are prepared. Review the preparation PR and exact-commit CI before any future dispatch; repeat history checks immediately before publication. See the [RC2 audit](releases.md#v100-rc2-version-plan). |
 | Real-device/provider acceptance | Stalker, live playback, Multi-View, DVR, Google TV remote, cloud sync and compatible updates remain unverified by this program. Gather sanitized per-candidate reports. |
 | GitHub form activation and triage ownership | All requested labels now exist, reusing `bug` and `enhancement`. After merge, preview the forms/default labels and assign a triage owner using [GitHub setup](BETA-FEEDBACK.md#labels-and-one-time-github-setup) before recruiting testers. |
 
-No GitHub Releases or remote tags existed at the October 24, 2026 preparation audit.
-The owner confirmed no private `com.nuvix.player` APK above code 21 was distributed.
-This does not establish the signing identity or replace a fresh pre-publication audit. Historical PR findings
-are evidence of implementation, not certification of current production settings.
+The October 26, 2026 RC2 audit found published RC1 at `66e7b36` (code 22), its matching
+tag and a separate permanent signing-backup draft; no RC2 tag or APK release exists.
+The owner confirmed code 23 is unused by private/unpublished compatible builds.
+See the [full version audit](releases.md#v100-rc2-version-plan). Historical PR findings and
+metadata fingerprints do not certify the current production signing identity.
 
-## RC1 preparation evidence
+## RC2 preparation evidence
+
+- [x] Metadata prepared: `1.0.0-rc.2` / `23`; `com.nuvix.player` and namespace unchanged.
+- [x] [Changelog and canonical release notes](../CHANGELOG.md#100-rc2) prepared from PRs #58–#60
+      after the actual RC1 release commit; no duplicate editable release-notes source.
+- [x] Version progression audited: published RC1 code 22 → unused RC2 code 23;
+      owner confirmed private history. Stable reserved at 24 or higher.
+- [x] Source package/packaging and storage continuity inspected against the RC1 tag;
+      schema 17, migrations, encrypted providers, presets, DVR and cloud preferences unchanged.
+- [ ] Final PR commit CI: Build (unit tests, both lint variants, debug/unsigned release assembly,
+      APK identity/history, Sports benchmark and Supabase security) and IPTV Playback Tests
+      (offline fixtures and actual Media3 emulator readiness/first-frame/visible-output checks).
+      Record final run links and outcomes in the preparation PR; pending is not a pass.
+- [ ] Actual production signing continuity: no production RC2 signed APK or credentials available
+      to this preparation. Synthetic verifier tests do not establish a production certificate pass.
+- [ ] Emulator RC1→RC2 installation/data-retention test: not executed; this workspace has no
+      Android SDK/adb/emulator or production-signed RC2. Media3 fixture tests do not test updates.
+- [ ] Physical-TV RC1→RC2 in-place update with retained credentials/settings, Multi-View presets,
+      recording schedules/history/storage access and cloud opt-ins.
+- [ ] Physical-TV channel-switch acceptance and authorized-provider HLS/TS, Stalker/Xtream,
+      same/shared/one/Unknown-account, rapid-navigation, Multi-View and protected-DVR checks.
+
+Local October 26, 2026: all 160 Python tests, offline IPTV transport fixtures, release
+identity/workflow security contracts, Sports/EPG benchmarks, documentation links and isolated
+Supabase migrations/RLS/typed validation/concurrent merges passed. Synthetic signing-command
+fixtures passed; no production certificate verification is claimed. Local Android validation could not start: wrapper download failed with
+`UnknownHostException: services.gradle.org`; only JDK 21 and no Android SDK/emulator are
+installed. Use the final PR commit's Actions results for Android/emulator/APK evidence.
+This is a draft preparation while signing and hardware acceptance blockers remain open.
+
+## RC1 preparation evidence (historical)
 
 - [x] Version metadata prepared: `1.0.0-rc.1` / `22`, replacing `0.1.0` / `21`.
 - [x] Source application ID validated as `com.nuvix.player`; namespace remains unchanged.
@@ -144,7 +176,7 @@ Record device coverage gaps explicitly; do not fill them with host test results.
 ## Future publication and follow-up — separate authorized work
 
 Only after prerequisites above are satisfied may maintainers consider a separately authorized
-manual `Release` dispatch on `main`, version `1.0.0-rc.1` (optional `v`), channel `rc`, by a
+manual `Release` dispatch on `main`, version `1.0.0-rc.2` (optional `v`), channel `rc`, by a
 trusted publisher, or push its matching version tag at current main. This workflow change does
 not dispatch it. A manual run creates the tag; a tag-push run verifies and retains that tag.
 Follow [failure recovery](releases.md#failure-rejection-and-recovery) if anything fails;

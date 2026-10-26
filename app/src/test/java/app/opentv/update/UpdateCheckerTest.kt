@@ -43,6 +43,9 @@ class UpdateCheckerTest {
 
     @Test fun `RC tags are excluded even when marked stable by mistake`() = runTest {
         assertNull(checker(release.copy(tagName = "v1.0.0-rc.1", assets = emptyList()), metadata).check())
+        for (installed in listOf(21, 22, 23)) {
+            assertNull(checker(release.copy(tagName = "v1.0.0-rc.2", assets = emptyList()), metadata, installed).check())
+        }
         assertNull(checker(release.copy(tagName = "nightly-20261015.1.1", assets = emptyList()), metadata).check())
     }
 
@@ -85,6 +88,18 @@ class UpdateCheckerTest {
     @Test fun `RC installation can discover a higher code stable release`() = runTest {
         // Version name is deliberately not used for installed-version comparison.
         assertEquals(23L, checker(release, metadata.copy(versionCode = 23), 22).check()?.versionCode)
+    }
+
+    @Test fun `RC2 can advance to stable code 24 but equal codes downgrades and changed signers are ignored`() = runTest {
+        val stable = release.copy(tagName = "v1.0.0", assets = release.assets.map {
+            it.copy(browserDownloadUrl = it.browserDownloadUrl.replace("v0.1.0", "v1.0.0"))
+        })
+        val stableMetadata = metadata.copy(versionName = "1.0.0", versionCode = 24)
+        assertEquals(24L, checker(stable, stableMetadata, 23).check()?.versionCode)
+        for (code in listOf(22L, 23L)) {
+            assertNull(checker(stable, stableMetadata.copy(versionCode = code), 23).check())
+        }
+        assertNull(checker(stable, stableMetadata.copy(signingCertificateSha256 = "c".repeat(64)), 23).check())
     }
 
     @Test fun `discovery selects highest compatible code across stable releases`() = runTest {
@@ -141,7 +156,7 @@ class UpdateCheckerTest {
                 assertEquals("https://api.github.com/repos/DisabledAbel/Nuvix/releases?per_page=30&page=1", url)
                 UpdateChecker.json.encodeToString(listOf(release))
             } else {
-                assertEquals("https://github.com/DisabledAbel/Nuvix/releases/download/v0.1.0/update.json", url)
+                assertEquals(release.assets.single { it.name == "update.json" }.browserDownloadUrl, url)
                 UpdateChecker.json.encodeToString(metadata)
             }
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)

@@ -1,11 +1,12 @@
 # Nuvix v1.0 community beta
 
-**Status: preparation only. No release candidate APK is available.** The first planned
-candidate is `v1.0.0-rc.1` (versionCode `22`, package `com.nuvix.player`); its metadata and
-[release notes](../CHANGELOG.md#100-rc1) are prepared, but it has not been published.
-Production signing recovery and
-GitHub approval prerequisites remain blocked; see the [release readiness tracker](V1-RELEASE-CHECKLIST.md).
-There is no guaranteed release date. Do not run a signing or release workflow to test this guide.
+**RC2 status: prepared for review, not published or downloadable.** Target `v1.0.0-rc.2`
+uses versionCode `23` and package `com.nuvix.player`; [prepared release notes](../CHANGELOG.md#100-rc2)
+cover the channel-switch repairs, optional Sports settings and automated playback regressions.
+[RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1), code `22`, was published
+on October 25, 2026. Production RC2 signing continuity, physical-TV switching and update/data
+retention acceptance remain unverified; see the [readiness tracker](V1-RELEASE-CHECKLIST.md).
+There is no RC2 publication date. Do not run a signing or release workflow to test this guide.
 
 Nuvix is a GPL-3.0-or-later IPTV player. It supplies no channels, subscriptions, accounts,
 playlists or media. Use only accounts, content and device identities authorized by your provider.
@@ -31,7 +32,7 @@ and limits; Nuvix cannot supply access or bypass them. See [live playback](live-
 
 1. Open the official [GitHub Releases page](https://github.com/DisabledAbel/Nuvix/releases).
    Only proceed when a maintainer has published the exact candidate, for example
-   **v1.0.0-rc.1**, with the **Pre-release** designation. An empty page means wait.
+   **v1.0.0-rc.2**, with the **Pre-release** designation. If RC2 is absent, wait for publication.
    Do not use the stable `/releases/latest` link to find a candidate.
 2. Read its notes and known issues. Download `nuvix.apk` and `SHA256SUMS` from that release's
    Assets. `update.json`, `release-notes.md` and the matching GPL source archive must also
@@ -71,6 +72,20 @@ and limits; Nuvix cannot supply access or bypass them. See [live playback](live-
 4. Add only your authorized provider. Keep credentials and identities on your device, and
    check permissions and storage before testing DVR. Confirm that Android cancellation or
    denied installation approval leaves the existing app usable.
+
+### RC1 to RC2 update acceptance
+
+After RC2 publication, independently compare both production APKs: `com.nuvix.player`,
+RC1 code `22` → RC2 code `23`, and the same trusted signing certificate. Finish active
+recordings; install RC2 over RC1 using the installer or `adb install -r`, never uninstall,
+clear data or use downgrade flags. Record installation approval/cancellation and verify
+providers/credentials, Multi-View presets, scheduled recordings/history/storage grants and
+cloud opt-ins before and after restarting. Private values stay on the device.
+
+Repeat D-pad Up/Down with same-provider HLS/TS, one/spare/Unknown/shared allowances, Stalker,
+Xtream, rapid input and concurrent protected DVR. Check actual video and sanitized first-frame
+phases, then Multi-View, Sports Hub (both optional settings off/on) and remote focus.
+Emulator/JVM results do not complete physical-TV acceptance.
 
 ### Older packages and later candidates
 

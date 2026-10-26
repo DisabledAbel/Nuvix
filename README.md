@@ -78,7 +78,14 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 
 ## Project status
 
-Nuvix is in development. Real-device testing is still needed for launcher selection, remote navigation, playback, database migration, cloud sync, and APK updates.
+RC2 (`1.0.0-rc.2`, code `23`) is prepared for review and **has not been published**.
+[RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1) is the existing prerelease.
+See [RC2 changes and prepared release notes](CHANGELOG.md#100-rc2) for the channel-switch repairs,
+optional Sports recovery/delay and automated Media3 playback coverage. Stable users are not
+automatically offered candidates; obtain RC2 only after its separate publication.
+Physical-TV channel switching, production RC2 signing continuity and RC1-to-RC2 installation/data
+retention remain unverified. Follow the [beta guide](docs/BETA-TESTING.md) and
+[readiness tracker](docs/V1-RELEASE-CHECKLIST.md) before testing.
 
 Smart Multi-View extends the merged account-management and background DVR foundation.
 Additional streams depend on configured provider allowances, recording reservations and
