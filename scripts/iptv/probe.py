@@ -166,18 +166,22 @@ def probe_hls(url, client):
         body, final = client.get(url)
         try:
             lines, references = hls_references(body.decode("utf-8-sig"), final)
-        except UnicodeError:
+        except (UnicodeError, ValueError):
             raise ProbeFailure("invalid_manifest") from None
         for reference in references:
             validate_url(reference, client.local_origin)
         if any(line.startswith("#EXT-X-KEY:") and "METHOD=NONE" not in line for line in lines):
             raise ProbeFailure("encrypted_fixture_unsupported")
         if any(line.startswith("#EXT-X-STREAM-INF:") for line in lines):
-            url = next(urljoin(final, line) for line in lines if not line.startswith("#"))
+            url = next((urljoin(final, line) for line in lines if not line.startswith("#")), None)
+            if url is None:
+                raise ProbeFailure("invalid_manifest")
             continue
         if not any(line.startswith("#EXTINF:") for line in lines):
             raise ProbeFailure("invalid_manifest")
         segments = [urljoin(final, line) for line in lines if not line.startswith("#")][:2]
+        if not segments:
+            raise ProbeFailure("invalid_manifest")
         for segment in segments:
             data, _ = client.get(segment, limit=256 * 1024, segment=True)
             # A bounded media prefix is evidence of transport availability, not a playback event.

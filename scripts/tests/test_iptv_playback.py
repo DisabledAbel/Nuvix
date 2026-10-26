@@ -99,6 +99,31 @@ class PolicyTest(unittest.TestCase):
                 playlist(text)
 
 
+class ManifestTest(unittest.TestCase):
+    def assert_invalid_manifest(self, body):
+        url = "http://127.0.0.1:1/master.m3u8"
+        client = Client(local_origin="http://127.0.0.1:1")
+        with patch.object(client, "get", return_value=(body, url)) as request:
+            with self.assertRaisesRegex(ProbeFailure, "^invalid_manifest$"):
+                probe_hls(url, client)
+            request.assert_called_once_with(url)
+
+    def test_malformed_reference_and_encoding_are_invalid_manifests(self):
+        for body in (b"#EXTM3U\n#EXTINF:1,\nhttp://[\n",
+                     b'#EXTM3U\n#EXT-X-MAP:URI="http://["\n#EXTINF:1,\na.ts\n',
+                     b"\xff"):
+            with self.subTest(body=body):
+                self.assert_invalid_manifest(body)
+
+    def test_master_with_uri_attribute_but_no_variant_is_invalid(self):
+        self.assert_invalid_manifest(b'#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\n'
+                                     b'#EXT-X-MEDIA:TYPE=AUDIO,URI="audio.m3u8"\n')
+
+    def test_media_with_uri_attribute_but_no_segment_is_invalid(self):
+        self.assert_invalid_manifest(b'#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n'
+                                     b'#EXTINF:1,\n#EXT-X-ENDLIST\n')
+
+
 class LocalProviderTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -154,6 +179,21 @@ class LocalProviderTest(unittest.TestCase):
             self.client.get(self.server.base + "/large.m3u8", limit=100)
         data, _ = self.client.get(self.server.base + "/a.ts", limit=188, segment=True)
         self.assertEqual(188, len(data))
+
+    def test_valid_master_and_media_keep_first_variant_and_two_segment_limit(self):
+        root = Path(self.directory.name)
+        master = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nmedia.m3u8\n"
+                  "#EXT-X-STREAM-INF:BANDWIDTH=2000\nunused.m3u8\n")
+        media = "#EXTM3U\n" + "#EXTINF:1,\na.ts\n" * 3 + "#EXT-X-ENDLIST\n"
+        (root / "master.m3u8").write_text(master)
+        (root / "media.m3u8").write_text(media)
+        segment_bytes = (root / "a.ts").stat().st_size
+        for path, manifests, requests, manifest_bytes in (("master.m3u8", 2, 4, len(master) + len(media)),
+                                                         ("media.m3u8", 1, 3, len(media))):
+            with self.subTest(path=path):
+                result = probe_hls(self.server.base + "/" + path, Client(2, self.server.base))
+                self.assertEqual({"manifests": manifests, "segments": 2, "requests": requests,
+                                  "bytes_checked": manifest_bytes + 2 * segment_bytes}, result)
 
     def test_slow_auth_and_interrupted_connections_are_classified(self):
         with self.assertRaisesRegex(ProbeFailure, "network_unavailable"):
