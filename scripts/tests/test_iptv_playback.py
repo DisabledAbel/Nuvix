@@ -166,6 +166,17 @@ class LocalProviderTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
+    def test_junit_failure_details_never_expose_urls_tokens_or_raw_messages(self):
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "TEST-fixture.xml").write_text('''<testsuite><testcase
+              classname="app.opentv.iptv.IptvPlaybackTest" name="hlsOneConnectionSwitch">
+              <failure message="Media3 must release the previous player">https://private.invalid/?token=secret</failure>
+              </testcase><testcase classname="other.private.Class" name="private-name"><failure>secret</failure>
+              </testcase></testsuite>''')
+            result = runner.junit_failures(folder)
+            self.assertEqual([{"id": "hls-one", "classification": "previous_media3_not_released"}], result)
+            self.assertNotIn("secret", json.dumps(result))
+
     def test_instrumentation_command_failure_overrides_successful_measurements(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(runner, "fingerprint", return_value={}), \
                 patch.object(runner, "fixture_checks", return_value=[]), \

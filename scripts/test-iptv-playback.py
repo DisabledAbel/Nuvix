@@ -19,6 +19,40 @@ PHASES = {"SELECTED", "SUBMITTED", "CLOSE_STARTED", "CLOSE_COMPLETED", "RESERVAT
           "MEDIA_SET", "PREPARE_STARTED", "FIRST_FRAME", "READY", "FAILED"}
 
 
+def junit_failures(directory):
+    """Extract fixed diagnostic codes from our test class; never print raw JUnit/logcat text."""
+    methods = {"hlsOneConnectionSwitch": "hls-one", "hlsSpareConnectionSwitch": "hls-spare",
+               "transportStreamUnknownAllowanceSwitch": "ts-unknown", "stalkerOneConnectionSwitch": "stalker-one",
+               "rapidUpDownLatestRequestRenders": "rapid", "failedMediaThenExplicitRecoveryRendersNewChannel": "recovery",
+               "syntheticProvidersPassProductionImportersAndAuthentication": "providers",
+               "dvrCapturesSyntheticTransportAndStopsAtDeadline": "dvr"}
+    codes = {"Media3 must release the previous player": "previous_media3_not_released",
+             "Stopping must release the replacement Media3 player": "stopped_media3_not_released",
+             "Replacement must render synthetic blue video": "replacement_pixels_mismatch",
+             "Initial channel must render synthetic red video": "initial_pixels_mismatch",
+             "Local Media3 milestone timed out": "media3_milestone_timeout"}
+    results = []
+    for file in Path(directory).rglob("TEST-*.xml"):
+        try:
+            if file.stat().st_size > 10 * 1024 * 1024:
+                continue
+            root = ET.parse(file).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for case in root.iter("testcase"):
+            if case.get("classname") != "app.opentv.iptv.IptvPlaybackTest" or case.get("name") not in methods:
+                continue
+            failure = case.find("failure")
+            if failure is None:
+                failure = case.find("error")
+            if failure is None:
+                continue
+            private_text = failure.get("message", "") + (failure.text or "")
+            code = next((value for pattern, value in codes.items() if pattern in private_text), "test_assertion_or_error")
+            results.append({"id": methods[case.get("name")], "classification": code})
+    return results
+
+
 def fixture_checks(timeout):
     results = []
     with tempfile.TemporaryDirectory(prefix="nuvix-iptv-") as directory:
@@ -154,6 +188,8 @@ def markdown(report):
               "", f"Baseline comparison: {report['comparison']['status']}."]
     for row in report["comparison"].get("changes", []):
         lines.append(f"- {row['id']} {row['metric']}: {row['previous']} → {row['current']} ({row['delta']:+}).")
+    for row in report.get("test_failures", []):
+        lines.append(f"- Failed device case: {row['id']} ({row['classification']}).")
     return "\n".join(lines) + "\n"
 
 
@@ -163,6 +199,7 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, default=Path("work/iptv-report.json"))
     parser.add_argument("--timeout", type=float, default=10, help="HTTP timeout in seconds (0 < value <= 30)")
     parser.add_argument("--android-report-dir", type=Path)
+    parser.add_argument("--android-junit-dir", type=Path, help="Extract only fixed failure codes for this suite")
     parser.add_argument("--android-exit-code", type=int, default=0, help="Propagate the instrumentation command result into JSON")
     parser.add_argument("--run-android", action="store_true", help="Run connectedDebugAndroidTest against an already started emulator")
     parser.add_argument("--baseline", type=Path)
@@ -203,6 +240,8 @@ def main(argv=None):
         report["android"].append({"id": "instrumentation", "status": "application_regression",
                                   "classification": "instrumentation_command_failed"})
         report["status"] = "failed"
+    if args.android_junit_dir:
+        report["test_failures"] = junit_failures(args.android_junit_dir)
     if args.baseline and args.baseline.is_file():
         try:
             report["comparison"] = comparison(report, json.loads(args.baseline.read_text()))
@@ -212,6 +251,8 @@ def main(argv=None):
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     args.output.with_suffix(".md").write_text(markdown(report))
     print(f"IPTV checks: {report['status']}; sanitized JSON and Markdown reports written.")
+    for row in report.get("test_failures", []):
+        print(f"Device case failed: {row['id']} ({row['classification']})")
     return 0 if report["status"] == "passed" else 1
 
 

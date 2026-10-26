@@ -20,6 +20,8 @@ a synthetic one-connection Stalker create_link→TS switch are covered, alongsid
 selections, terminal HTTP failure and recovery. Each local milestone
 must complete within 15 seconds, catching a minute-long stall on a healthy fixture. This is a
 CI bound for synthetic low-resolution media, not a real-provider timing promise.
+Visible-color checks additionally poll compositor output for up to two seconds after the
+decoder milestone, avoiding a single stale screenshot during an emulator surface-buffer swap.
 
 The test runner uses a plain test Application and an in-memory database, with a debug-only
 surface Activity. Background sync, hosted accounts and production storage are excluded.
@@ -92,6 +94,9 @@ and decline encrypted media. Each source permits at most 12 requests, 4 manifest
 wall-clock/read deadline. No keys are fetched or decrypted. Reports retain only fixed fixture
 IDs, classifications and numeric metrics, without URLs, bodies, raw exception text, MACs or
 tokens. CI artifacts deliberately exclude raw logcat and provider request logs.
+Failed device assertions also produce fixed diagnostic codes (for example,
+`previous_media3_not_released` or `replacement_pixels_mismatch`) in reports and job logs;
+raw JUnit failure messages and captured device output are never copied into those diagnostics.
 
 ## Live channel switching (v1 blocker)
 

@@ -177,13 +177,21 @@ class IptvPlaybackTest {
                 controller.player.playbackState == Player.STATE_READY && activity.video.player === controller.player &&
                 controller.diagnostics.snapshot.value.transition.any { it.phase == ChannelTransitionPhase.FIRST_FRAME }
         }
-        // Let SurfaceFlinger present the decoder output before checking actual channel color.
-        SystemClock.sleep(150)
-        val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
-        val pixel = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
-        bitmap.recycle()
-        if (blue) assertTrue("Replacement must render synthetic blue video", Color.blue(pixel) > Color.red(pixel) + 80)
-        else assertTrue("Initial channel must render synthetic red video", Color.red(pixel) > Color.blue(pixel) + 80)
+        // A decoder callback precedes compositor presentation. Poll actual pixels with a bound;
+        // one screenshot during an emulator buffer swap can still contain the previous surface.
+        val deadline = SystemClock.elapsedRealtime() + 2_000
+        do {
+            val bitmap = instrumentation.uiAutomation.takeScreenshot()
+            if (bitmap != null) {
+                val pixel = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
+                bitmap.recycle()
+                val matched = if (blue) Color.blue(pixel) > Color.red(pixel) + 80
+                              else Color.red(pixel) > Color.blue(pixel) + 80
+                if (matched) return
+            }
+            SystemClock.sleep(50)
+        } while (SystemClock.elapsedRealtime() < deadline)
+        fail(if (blue) "Replacement must render synthetic blue video" else "Initial channel must render synthetic red video")
     }
 
     private fun switch(maximum: Int?, extension: String, scenario: String, kind: SourceKind = SourceKind.XTREAM) {
