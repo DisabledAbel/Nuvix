@@ -47,10 +47,16 @@ metadata fingerprints do not certify the current production signing identity.
       owner confirmed private history. Stable reserved at 24 or higher.
 - [x] Source package/packaging and storage continuity inspected against the RC1 tag;
       schema 17, migrations, encrypted providers, presets, DVR and cloud preferences unchanged.
-- [ ] Final PR commit CI: Build (unit tests, both lint variants, debug/unsigned release assembly,
-      APK identity/history, Sports benchmark and Supabase security) and IPTV Playback Tests
-      (offline fixtures and actual Media3 emulator readiness/first-frame/visible-output checks).
-      Record final run links and outcomes in the preparation PR; pending is not a pass.
+- [x] [Build #205](https://github.com/DisabledAbel/Nuvix/actions/runs/40419407553) passed on
+      implementation commit `61695faffc93fc6724f593618417e9291e9e49b9`: all Android unit tests,
+      debug/release lint, debug/unsigned-release APK builds, actual APK identity/published-history
+      inspection, 160 Python tests, release/workflow contracts, Sports benchmark and Supabase security.
+- [x] [IPTV Playback Tests #8](https://github.com/DisabledAbel/Nuvix/actions/runs/40419407533)
+      passed on the same commit: offline fixtures and all eight Media3 emulator scenarios
+      (HLS one/spare slots, TS Unknown, synthetic Stalker, rapid navigation, failure/recovery,
+      provider imports and generated-media DVR). Actual READY, first-frame, visible replacement
+      video and old/stopped-player cleanup assertions passed; public transport probes stayed off.
+      [Sanitized playback reports](https://github.com/DisabledAbel/Nuvix/actions/runs/40419407533/artifacts/12696217751).
 - [ ] Actual production signing continuity: no production RC2 signed APK or credentials available
       to this preparation. Synthetic verifier tests do not establish a production certificate pass.
 - [ ] Emulator RC1→RC2 installation/data-retention test: not executed; this workspace has no
@@ -67,6 +73,11 @@ fixtures passed; no production certificate verification is claimed. Local Androi
 `UnknownHostException: services.gradle.org`; only JDK 21 and no Android SDK/emulator are
 installed. Use the final PR commit's Actions results for Android/emulator/APK evidence.
 This is a draft preparation while signing and hardware acceptance blockers remain open.
+
+The linked runs verify the named implementation commit. After this evidence-only documentation
+update, revalidate the final head as well; [preparation PR #62](https://github.com/DisabledAbel/Nuvix/pull/62)
+records its exact SHA, final run links and outcomes. A future pending/failed run is not a pass,
+and neither successful CI nor this checklist authorizes signing, tagging, merging or publishing.
 
 ## RC1 preparation evidence (historical)
 
