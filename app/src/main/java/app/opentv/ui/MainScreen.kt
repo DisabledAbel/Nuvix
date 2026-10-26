@@ -272,7 +272,11 @@ fun MainScreen(
                 when (tab) {
                     Tab.HOME -> TelevisionHomeScreen(hasSources, onPlayChannel, onOpenMovie, onOpenSeries, onResume, onAddSource, { tab = Tab.GUIDE }, { tab = Tab.APPS })
                     Tab.SPORTS -> SportsScreen(onPlayChannel, onAddToMultiView = addToMultiView,
-                        onReplaceMultiViewPanel = replaceMultiViewPanel)
+                        onReplaceMultiViewPanel = replaceMultiViewPanel,
+                        onPlaySportsChannel = { eventId, channel ->
+                            if (!multiViewActive) liveSession.openSportsChannel(eventId, channel.id)
+                            onPlayChannel(channel)
+                        })
                     Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
                     Tab.LIVE, Tab.GUIDE -> HomeScreen(
                         isTelevision = isTelevision,

@@ -128,6 +128,8 @@ class PlayerController(
     private var consecutiveFailures = 0
     private var suspended = false
     private var released = false
+    private var sportsAutoSwitchover = false
+    private var sportsPlaybackDelay = false
     internal val isReleased: Boolean get() = released
     private var explicitTextSelection = false
     private var generation = 0L
@@ -208,12 +210,13 @@ class PlayerController(
         if (preview) return BufferPolicy.PREVIEW
         val selected = configuration.resolve(lowMemory)
         // Growing recordings need an eight-second cushion; DVR retains its existing forward span.
-        return selected.copy(
+        val policy = selected.copy(
             minimumMs = if (liveRecording) maxOf(selected.minimumMs, 8_000) else selected.minimumMs,
             maximumMs = if (dvr) DVR_MAX_BUFFER_MILLIS else maxOf(selected.maximumMs, if (liveRecording) 8_000 else 0),
             playbackMs = if (liveRecording) 8_000 else selected.playbackMs,
             rebufferMs = if (liveRecording) 8_000 else selected.rebufferMs,
         )
+        return if (sportsPlaybackDelay) policy.withSportsCushion() else policy
     }
 
     private val loadControl = ConfigurableLoadControl(
@@ -221,6 +224,9 @@ class PlayerController(
         budgetBytes = if (preview) 8 * 1024 * 1024 else if (lowMemory) 16 * 1024 * 1024 else 32 * 1024 * 1024,
         backBufferMs = if (dvr) DVR_BACK_BUFFER_MILLIS else 0,
     )
+
+    /** Recovery timeouts must allow the configured startup/rebuffer reservoir to fill first. */
+    internal val bufferPolicy: BufferPolicy get() = effectiveBuffer(bufferSettings.configuration.value)
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setSeekBackIncrementMs(SEEK_INCREMENT_MILLIS)
@@ -274,7 +280,7 @@ class PlayerController(
                     )
                     // One silent restart covers the common case of a provider dropping the
                     // connection when another device on the account starts streaming.
-                    if (consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
+                    if (!sportsAutoSwitchover && consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
                         val token = generation
                         retryJob = scope.launch {
                             delay(AUTO_RESTART_DELAY_MILLIS)
@@ -290,7 +296,18 @@ class PlayerController(
     val diagnostics = PlaybackDiagnostics(player)
 
     private val bufferJob = scope.launch {
-        bufferSettings.configuration.collectLatest { loadControl.update(effectiveBuffer(it)) }
+        bufferSettings.configuration.collectLatest {
+            loadControl.update(effectiveBuffer(it), useLiveTarget = !sportsPlaybackDelay)
+        }
+    }
+
+    /** Sports recovery owns retries; the cushion changes loading without replacing the player. */
+    fun setSportsPlaybackOptions(autoSwitchover: Boolean, playbackDelay: Boolean) {
+        if (released) return
+        sportsAutoSwitchover = autoSwitchover
+        sportsPlaybackDelay = playbackDelay
+        if (autoSwitchover) retryJob?.cancel()
+        loadControl.update(effectiveBuffer(bufferSettings.configuration.value), useLiveTarget = !playbackDelay)
     }
 
     /**
@@ -333,6 +350,10 @@ class PlayerController(
                         setLiveConfiguration(
                             MediaItem.LiveConfiguration.Builder()
                                 .setTargetOffsetMs(LIVE_TARGET_OFFSET_MILLIS)
+                                .apply {
+                                    // Do not accelerate through the optional safety cushion.
+                                    if (sportsPlaybackDelay) setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f)
+                                }
                                 .build(),
                         )
                     }

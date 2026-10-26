@@ -65,6 +65,36 @@ class LivePlaybackCoordinatorTest {
         val engine get() = engines.single()
     }
 
+    @Test fun `canceling a pending replacement preserves the existing channel and ignores a late resolution`() = runTest {
+        val lookup = CompletableDeferred<Unit>()
+        val f = Fixture(this) { selected ->
+            if (selected.id == 2L) withContext(NonCancellable) { lookup.await() }
+            resolved(selected)
+        }
+        f.session.openChannel(1); runCurrent()
+        f.session.openChannel(2); runCurrent()
+        f.session.setPaused(true)
+        f.session.cancelPendingTune()
+        lookup.complete(Unit); runCurrent()
+        assertThat(f.session.currentChannel.value?.id).isEqualTo(1)
+        assertThat(f.session.paused.value).isTrue()
+        assertThat(f.engine.requests).hasSize(1)
+    }
+
+    @Test fun `automatic recovery follows foreground and pip suspension policy`() = runTest {
+        val f = Fixture(this)
+        assertThat(f.session.playbackAllowed.value).isTrue()
+        f.session.setForeground(false)
+        assertThat(f.session.playbackAllowed.value).isFalse()
+        f.session.setInPip(true)
+        assertThat(f.session.playbackAllowed.value).isTrue()
+        f.session.setInPip(false)
+        assertThat(f.session.playbackAllowed.value).isFalse()
+        f.session.setForeground(true)
+        f.session.setPresentation(LivePresentation.HIDDEN)
+        assertThat(f.session.playbackAllowed.value).isFalse()
+    }
+
     /** Checks: live player is lazy and is created once across Home Guide Sports and fullscreen. */
     @Test fun `live player is lazy and is created once across Home Guide Sports and fullscreen`() = runTest {
         val f = Fixture(this)

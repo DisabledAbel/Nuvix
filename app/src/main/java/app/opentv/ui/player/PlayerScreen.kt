@@ -144,6 +144,7 @@ fun PlayerScreen(
     // tuning, recovery and release, including while this composable is absent.
     val controller = liveSession.controller
     val state by liveSession.state.collectAsState()
+    val sportsNotice by liveSession.sportsNotice.collectAsState()
     val tracks by controller.tracks.collectAsState()
     val variants by liveSession.variants.collectAsState()
     val currentChannel by liveSession.currentChannel.collectAsState()
@@ -438,6 +439,19 @@ fun PlayerScreen(
             }
 
             else -> Unit
+        }
+
+        if (sportsNotice != null && !inPip) {
+            Column(
+                Modifier.align(Alignment.TopCenter).padding(24.dp).widthIn(max = 700.dp)
+                    .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(12.dp)).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(sportsNotice!!, color = Color.White, textAlign = TextAlign.Center)
+                if (state !is PlayerController.State.Error) {
+                    Button(onClick = liveSession::retry) { Text(stringResource(R.string.common_try_again)) }
+                }
+            }
         }
 
         val channelTitle = when (val s = state) {

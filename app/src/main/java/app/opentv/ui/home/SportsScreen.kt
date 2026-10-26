@@ -46,7 +46,8 @@ import java.time.format.DateTimeFormatter
 /** The existing Sports destination owns both hub and details; fullscreen playback returns here. */
 @Composable
 fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = viewModel(key = "sports_hub"),
-    onAddToMultiView: ((Channel) -> Unit)? = null, onReplaceMultiViewPanel: ((Channel) -> Unit)? = null) {
+    onAddToMultiView: ((Channel) -> Unit)? = null, onReplaceMultiViewPanel: ((Channel) -> Unit)? = null,
+    onPlaySportsChannel: ((String, Channel) -> Unit)? = null) {
     val state by model.state.collectAsState()
     val query by model.query.collectAsState()
     val selectedId by model.selectedId.collectAsState()
@@ -93,7 +94,9 @@ fun SportsScreen(onPlayChannel: (Channel) -> Unit, model: SportsViewModel = view
                     SportsAction("Back to Sports") { model.select(null) }
                     Text("Game unavailable or no longer visible. Return to Sports or refresh the guide.")
                 } else SportsDetails(state, event, sportsReminderForEvent(reminders, event.id, state.streams)?.fired == false,
-                    onBack = { model.select(null) }, onPlay = { stream -> model.play(stream, onPlayChannel) }, onRemind = { remind(event.id) },
+                    onBack = { model.select(null) }, onPlay = { stream -> model.play(stream) { channel ->
+                        onPlaySportsChannel?.invoke(event.id, channel) ?: onPlayChannel(channel)
+                    } }, onRemind = { remind(event.id) },
                     onCancelReminder = { model.cancelReminder(event.id) }, onFavorite = model::favorite,
                     onFavoriteChannel = model::favoriteChannel, onDecide = model::decide, onUndo = model::undo,
                     onPrefer = model::prefer, onOpenEvent = model::select, onStreamPage = model::streamsPage,
@@ -437,6 +440,10 @@ private fun SportsSettings(state: SportsHubState, onBack: () -> Unit, onChange: 
         item { SportsAction("Show possible matches: ${p.showPossible}") { onChange(p.copy(showPossible = !p.showPossible)) } }
         item { SportsAction("Show scores when supplied: ${p.showScores}") { onChange(p.copy(showScores = !p.showScores)) } }
         item { SportsAction("Offer game reminders: ${p.reminders}") { onChange(p.copy(reminders = !p.reminders)) } }
+        item { SportsAction("Auto switchover: ${if (p.autoSwitchover) "On" else "Off"}") { onChange(p.copy(autoSwitchover = !p.autoSwitchover)) } }
+        item { Text("If a fullscreen game's stream fails or keeps buffering, try another confirmed broadcast of the same game. Provider connection limits still apply.") }
+        item { SportsAction("10-second playback delay: ${if (p.playbackDelay) "On" else "Off"}") { onChange(p.copy(playbackDelay = !p.playbackDelay)) } }
+        item { Text("Builds a playback cushion for games opened from Sports. Adds startup time and can reduce buffering; stream support and device memory vary. Switching may still interrupt playback. Applies to single-stream playback, including PiP.") }
         item { SportsAction("Clear derived sports cache (keep favorites and corrections)", onClick = onClear) }
         item { Text("Favorite sports, teams and leagues are local to this installation. Reorder or remove them here or from the hub. External schedule and score APIs are not configured.") }
         items(state.favorites, key = { "${it.kind}:${it.id}" }) { f ->

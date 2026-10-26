@@ -27,15 +27,16 @@ class ConfigurableLoadControl(
     initial.minimumMs, initial.maximumMs, initial.playbackMs, initial.rebufferMs,
     budgetBytes, false, backBufferMs, backBufferMs > 0,
 ) {
-    @Volatile private var policy: BufferPolicy = initial
+    private data class Configuration(val policy: BufferPolicy, val useLiveTarget: Boolean)
+    @Volatile private var configuration = Configuration(initial, true)
     private var wasLoading = false
 
     /** Replaces the buffering policy used for subsequent loading and startup decisions. */
-    fun update(policy: BufferPolicy) { this.policy = policy }
+    fun update(policy: BufferPolicy, useLiveTarget: Boolean = true) { configuration = Configuration(policy, useLiveTarget) }
 
     /** Combines configured time thresholds with allocator byte limits and loading hysteresis. */
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
-        wasLoading = policy.shouldContinueLoading(
+        wasLoading = configuration.policy.shouldContinueLoading(
             parameters.bufferedDurationUs, parameters.playbackSpeed,
             allocator.totalBytesAllocated, budgetBytes, wasLoading,
         )
@@ -43,10 +44,12 @@ class ConfigurableLoadControl(
     }
 
     /** Evaluates playback startup using the current buffer policy and live target. */
-    override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean =
-        policy.shouldStartPlayback(
+    override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
+        val selected = configuration
+        return selected.policy.shouldStartPlayback(
             parameters.bufferedDurationUs, parameters.playbackSpeed, parameters.rebuffering,
-            parameters.targetLiveOffsetUs.takeUnless { it == C.TIME_UNSET },
+            parameters.targetLiveOffsetUs.takeUnless { it == C.TIME_UNSET || !selected.useLiveTarget },
             allocator.totalBytesAllocated >= budgetBytes,
         )
+    }
 }
