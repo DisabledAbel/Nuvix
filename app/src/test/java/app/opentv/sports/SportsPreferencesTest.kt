@@ -23,12 +23,15 @@ class SportsPreferencesTest {
         val store = SportsPreferencesStore(context)
         assertEquals(SportsPreferences(), store.preferences.value)
         assertTrue(store.preferences.value.showPossible)
+        assertFalse(store.preferences.value.autoSwitchover)
+        assertFalse(store.preferences.value.playbackDelay)
         store.close()
     }
     /** Checks: typed Settings Persist And Independent Observers Receive Edits. */
     @Test fun typedSettingsPersistAndIndependentObserversReceiveEdits() {
         val first = SportsPreferencesStore(context); val second = SportsPreferencesStore(context)
-        val custom = SportsPreferences(SportsFilter.FAVORITE_TEAMS, SportsStreamSort.FAVORITES, false, false, false)
+        val custom = SportsPreferences(SportsFilter.FAVORITE_TEAMS, SportsStreamSort.FAVORITES, false, false, false,
+            autoSwitchover = true, playbackDelay = true)
         first.set(custom)
         assertEquals(custom, second.preferences.value)
         assertEquals(custom, SportsPreferencesStore(context).also { it.close() }.preferences.value)
@@ -37,11 +40,14 @@ class SportsPreferencesTest {
     /** Checks: corrupt Local Values Recover Independently. */
     @Test fun corruptLocalValuesRecoverIndependently() {
         context.getSharedPreferences("nuvix_sports", Context.MODE_PRIVATE).edit().putString("default_view", "INVALID")
-            .putInt("show_scores", 42).putString("stream_sort", "PROVIDER").commit()
+            .putInt("show_scores", 42).putString("stream_sort", "PROVIDER")
+            .putString("auto_switchover", "true").putInt("playback_delay", 10).commit()
         val store = SportsPreferencesStore(context)
         assertEquals(SportsFilter.ALL, store.preferences.value.defaultView)
         assertTrue(store.preferences.value.showScores)
         assertEquals(SportsStreamSort.PROVIDER, store.preferences.value.streamSort)
+        assertFalse(store.preferences.value.autoSwitchover)
+        assertFalse(store.preferences.value.playbackDelay)
         store.close()
     }
 }

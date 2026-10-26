@@ -22,6 +22,20 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class RuntimeBufferTest {
+    @Test fun `sports cushion waits ten seconds even when live offset would shorten it`() {
+        val control = ConfigurableLoadControl(BufferPolicy.SMALL, 32 * 1024 * 1024)
+        control.update(BufferPolicy.SMALL.withSportsCushion(), useLiveTarget = false)
+        fun parameters(bufferUs: Long, rebuffering: Boolean) = LoadControl.Parameters(
+            PlayerId.UNSET, Timeline.EMPTY, MediaPeriodId("sports"), 0L,
+            bufferUs, 1f, true, rebuffering, 10_000_000L,
+        )
+        assertThat(control.shouldStartPlayback(parameters(5_000_000, false))).isFalse()
+        assertThat(control.shouldStartPlayback(parameters(9_999_999, true))).isFalse()
+        assertThat(control.shouldStartPlayback(parameters(10_000_000, false))).isTrue()
+        assertThat(control.shouldStartPlayback(parameters(10_000_000, true))).isTrue()
+        control.update(BufferPolicy.SMALL)
+        assertThat(control.shouldStartPlayback(parameters(1_000_000, false))).isTrue()
+    }
     /** Checks: changing load control policy keeps allocator and applies without reconstruction. */
     @Test fun `changing load control policy keeps allocator and applies without reconstruction`() {
         val control = ConfigurableLoadControl(BufferPolicy.LARGE, 32 * 1024 * 1024)

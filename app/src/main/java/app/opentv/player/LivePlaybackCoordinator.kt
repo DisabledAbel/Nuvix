@@ -78,6 +78,8 @@ internal class LivePlaybackCoordinator(
     private var policyPreviewSuppressed = false
     private var optionalPreviewSuppressed = false
     val guidePreviewSuppressed = _guidePreviewSuppressed.asStateFlow()
+    private val _playbackAllowed = MutableStateFlow(true)
+    val playbackAllowed = _playbackAllowed.asStateFlow()
     private var resolving = false
     private var resolutionFailed = false
     private var engine: LivePlaybackEngine? = null
@@ -120,6 +122,18 @@ internal class LivePlaybackCoordinator(
         request(channel.id, rememberPrevious = false) { channel }
     }
 
+    /** User pause or disabled automatic recovery must also cancel a replacement still resolving. */
+    fun cancelPendingTune() {
+        if (requestedId == null) return
+        generation++
+        requestJob?.cancel()
+        requestJob = null
+        requestedId = null
+        resolving = false
+        resolutionFailed = false
+        _state.value = engine?.state?.value ?: PlayerController.State.Idle
+    }
+
     /** Starts a resolved request only if it still belongs to the current tune generation. */
     private fun request(id: Long, rememberPrevious: Boolean, channel: suspend () -> Channel?) {
         if (destroyed || requestedId == id) return
@@ -138,6 +152,7 @@ internal class LivePlaybackCoordinator(
         requestedId = id
         resolving = true
         resolutionFailed = false
+        _state.value = PlayerController.State.Buffering("")
         _active.value = true
         val token = ++generation
         requestJob?.cancel()
@@ -155,10 +170,10 @@ internal class LivePlaybackCoordinator(
                 if (_currentChannel.value == null && token == generation) {
                     _currentChannel.value = selected
                     _variants.value = listOf(selected)
-                    _state.value = PlayerController.State.Buffering(selected.shownName)
                 }
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
+                _state.value = PlayerController.State.Buffering(selected.shownName)
                 val resolved = resolve(selected)
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
@@ -176,7 +191,9 @@ internal class LivePlaybackCoordinator(
                 resolving = false
                 playback.play(resolved.request)
                 playback.setPaused(false)
-                _state.value = playback.state.value
+                _state.value = playback.state.value.let {
+                    if (it == PlayerController.State.Idle) PlayerController.State.Buffering(resolved.channel.shownName) else it
+                }
                 _active.value = true
                 applyPolicy()
                 onTune(resolved.channel)
@@ -239,6 +256,7 @@ internal class LivePlaybackCoordinator(
     /** Reconciles engine suspension and browsing audio with the current presentation and settings. */
     private fun applyPolicy() {
         val pip = inPip || presentation == LivePresentation.PIP
+        _playbackAllowed.value = (foreground && presentation != LivePresentation.HIDDEN) || pip
         engine?.setBrowsingMuted(!continueAudio && presentation == LivePresentation.BROWSING && !pip)
         engine?.setSuspended((!foreground || presentation == LivePresentation.HIDDEN) && !pip)
     }

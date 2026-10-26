@@ -46,6 +46,12 @@ data class BufferPolicy(
         return bufferedUs / speed.coerceAtLeast(0.01f) >= effectiveThreshold || budgetReached
     }
 
+    /** A best-effort ten-second forward cushion, still bounded by the device's byte budget. */
+    fun withSportsCushion(): BufferPolicy = copy(
+        minimumMs = maxOf(minimumMs, 10_000), maximumMs = maxOf(maximumMs, 10_000),
+        playbackMs = 10_000, rebufferMs = 10_000,
+    )
+
     companion object {
         val SMALL = BufferPolicy(5_000, 15_000, 1_000, 2_000)
         val MEDIUM = BufferPolicy(15_000, 60_000, 2_500, 5_000)

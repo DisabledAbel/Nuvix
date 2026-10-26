@@ -50,6 +50,40 @@ class SportsRepositoryTest {
     /** Returns eligible provider stream choices for the synthetic sports event. */
     private suspend fun streams(id: String) = repo.streams(id).first()
 
+    @Test fun automaticRecoveryUsesOnlyCurrentConfirmedVisibleChoices() = runBlocking {
+        seed(10 * 60_000)
+        val event = game()
+        val at = event.startUtcMillis + 15 * 60_000
+        suspend fun next(attempted: Set<Long>, visible: (Channel) -> Boolean = { true }) =
+            repo.nextPlaybackChannel(event.id, attempted, SportsStreamSort.CONFIDENCE, at, visible)
+        // Provider 2 is only likely, so it cannot replace either confirmed broadcast.
+        assertEquals(3L, next(setOf(1))?.id)
+        assertNull(next(setOf(1, 3)))
+        assertNull(next(setOf(1)) { it.id != 3L })
+        val suggestion = streams(event.id).first { it.channel.id == 2L }
+        repo.decide(event.id, suggestion.programme.key, suggestion.channel.id, true)
+        assertEquals(2L, next(setOf(1, 3))?.id)
+        db.sources().update(db.sources().byId(2)!!.copy(enabled = false))
+        assertNull(next(setOf(1, 3)))
+        assertNull(repo.nextPlaybackChannel(event.id, emptySet(), SportsStreamSort.CONFIDENCE,
+            event.endUtcMillis) { true })
+        assertNull(repo.nextPlaybackChannel(event.id, emptySet(), SportsStreamSort.CONFIDENCE,
+            event.startUtcMillis - 1) { true })
+    }
+
+    @Test fun automaticRecoveryHonorsPreferredBroadcastAndRechecksRejections() = runBlocking {
+        seed()
+        val event = game()
+        val preferred = streams(event.id).first { it.channel.id == 3L }
+        repo.prefer(event.id, preferred)
+        val at = event.startUtcMillis + 60_000
+        assertEquals(3L, repo.nextPlaybackChannel(event.id, setOf(1), SportsStreamSort.CONFIDENCE, at) { true }?.id)
+        repo.decide(event.id, preferred.programme.key, preferred.channel.id, false)
+        assertEquals(2L, repo.nextPlaybackChannel(event.id, setOf(1), SportsStreamSort.CONFIDENCE, at) { true }?.id)
+        db.sports().upsertEvents(listOf(event.copy(status = "FINAL")))
+        assertNull(repo.nextPlaybackChannel(event.id, emptySet(), SportsStreamSort.CONFIDENCE, at) { true })
+    }
+
     /** Checks: one Game Retains All Provider Choices Without Group Key Deduplication. */
     @Test fun oneGameRetainsAllProviderChoicesWithoutGroupKeyDeduplication() = runBlocking {
         seed()
@@ -361,6 +395,9 @@ class SportsRepositoryTest {
         val second = repo.streams(e.id, offset = 200).first()
         assertEquals(200, first.size); assertEquals(4, second.size)
         assertEquals(204, (first + second).map { it.channel.id }.distinct().size)
+        val onlyVisible = second.last().channel.id
+        assertEquals(onlyVisible, repo.nextPlaybackChannel(e.id, emptySet(), SportsStreamSort.CONFIDENCE,
+            e.startUtcMillis + 60_000) { it.id == onlyVisible }?.id)
     }
     /** Checks: rescheduling Drops Old Broadcast Evidence And Rejects Stale Playback Choices. */
     @Test fun reschedulingDropsOldBroadcastEvidenceAndRejectsStalePlaybackChoices() = runBlocking {

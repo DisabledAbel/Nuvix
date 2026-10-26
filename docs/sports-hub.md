@@ -36,7 +36,34 @@ opening its details, refreshing metadata or ordering broadcasts never opens a st
 The retained `LivePlaybackSession` owns connection replacement, recording conflicts,
 errors/retry, audio focus and PiP. Back from fullscreen returns to the selected event.
 A failed stream can be retried through existing controls or another choice can be
-selected explicitly. The hub never probes streams or starts parallel players.
+selected explicitly. Optional **Auto switchover** also tries another confirmed broadcast
+of the selected game after a playback error, an ended stream, sustained buffering or a
+startup timeout. Buffering gets at least eight seconds (or the configured rebuffer threshold
+plus five seconds); startup gets at least 20 seconds (or its buffer threshold plus ten seconds).
+This gives the optional ten-second cushion time to refill. Each failed choice is tried once
+per selection (up to 200 attempts, searching at most 2,000 catalog choices). Sorting and
+preferred broadcasts guide replacement order within each catalog page. Suggestions are
+never tuned automatically. Each replacement rechecks current event/program windows,
+enabled providers/feeds, matching decisions and parental visibility. Finished, canceled,
+postponed or out-of-window games cannot trigger another tune.
+
+Recovery belongs to the retained single-stream session, including browsing and PiP.
+Pausing, background suspension, disabling the setting or selecting a different channel
+cancels pending recovery. VOD, recordings, Multi-View and stopping live playback clear
+the game context. Explicit retry starts a fresh recovery round. Replacement uses existing
+account admission and releases the old player before freeing its reserved connection;
+automatic recovery skips additional unknown-allowance connections requiring confirmation.
+No streams are probed and no parallel players are started. Exhaustion leaves manual
+retry and broadcast selection available.
+
+The independent **10-second playback delay** option requests a ten-second forward
+buffer at startup and after rebuffering for games opened from Sports. Supported live
+streams also retain the player's ten-second target live offset. The cushion keeps the
+existing memory budget, so high bitrates or short live windows can provide less protection.
+It adds startup latency and can absorb short interruptions, but cannot guarantee invisible
+buffering or gapless changes: the replacement must connect and fill its own buffer,
+and different providers may have different broadcast timing. Changes to the delay setting
+affect future loading decisions without retuning the active stream.
 
 ## Matching and manual corrections
 
@@ -98,9 +125,11 @@ be reviewed instead of silently moving a reminder.
 ## Settings and privacy
 
 **Sports → Sports settings** controls the default view, stream sorting, possible
-matches, optional scores, reminder actions, favorite ordering/removal and clearing
+matches, optional scores, reminder actions, auto switchover, the ten-second playback
+delay, favorite ordering/removal and clearing
 the derived cache. Clearing the cache retains favorites, decisions, preferred
 broadcasts, existing EPG and reminders, then rebuilds from local EPG.
+Auto switchover and playback delay are both off by default and saved locally.
 
 Room schema 13 adds local sports cache/intent tables, indexed guide joins and a
 nullable unique game key on existing reminders. The forward migration preserves

@@ -133,6 +133,26 @@ class SportsRepository(private val db: OpenTvDatabase) {
         channel
     }
 
+    /** Fresh, bounded same-game recovery choices; this reads metadata and never probes playback. */
+    suspend fun nextPlaybackChannel(eventId: String, attempted: Set<Long>, sort: SportsStreamSort, now: Long,
+        visible: (app.opentv.data.model.Channel) -> Boolean): app.opentv.data.model.Channel? {
+        val event = dao.event(eventId) ?: return null
+        if (now !in event.startUtcMillis until event.endUtcMillis || event.status in setOf("CANCELED", "POSTPONED", "FINAL")) return null
+        val preferred = dao.observePreferred(eventId).first()
+        // Match the hub's bounded result scale without limiting recovery to its visible page.
+        for (page in 0 until 10) {
+            val rows = streams(eventId, offset = page * 200).first()
+            for (stream in orderSportsStreams(rows, preferred, sort)) {
+                if (!stream.available || stream.channel.id in attempted ||
+                    now !in stream.programme.startUtcMillis until stream.programme.endUtcMillis) continue
+                val channel = playable(eventId, stream) ?: continue
+                if (visible(channel)) return channel
+            }
+            if (rows.size < 200) break
+        }
+        return null
+    }
+
     /** Adds or removes a league or team from saved sports favorites. */
     suspend fun toggleFavorite(kind: String, id: String, leagueId: String, name: String) = withContext(Dispatchers.IO) {
         require(kind in setOf("team", "league", "sport"))

@@ -470,6 +470,11 @@ The host SQLite diagnostic uses the exported Room schema and actual DAO SQL with
 96,000 programs, four synthetic providers and 100 events; it asserts bounded results and catalog index
 use. Host times do not establish device frame rates.
 
+`SportsAutoSwitchoverTest`, `SportsRepositoryTest`, `SportsPreferencesTest` and
+`RuntimeBufferTest` also cover recovery timeouts/cancellation/exhaustion, same-game
+eligibility and preferences, and a ten-second startup/rebuffer cushion without the
+normal live-offset shortcut. The tests use synthetic sources and no real streams.
+
 Manual verification remains required; record device/OS, provider connection limit and observations:
 
 - [ ] Android TV, Google TV and Fire TV: enter the existing Sports tab; reach My Sports, Live Games,
@@ -486,6 +491,13 @@ Manual verification remains required; record device/OS, provider connection limi
   duplicates, manual EPG-ID overrides and large stream lists requiring multiple pages.
 - [ ] With authorized streams, test failures/retry, single-connection limits, concurrent recording guards,
   PiP, browsing audio, audio focus, subtitle/track choices and existing guide/fullscreen surface transfers.
+- [ ] Enable Auto switchover, open a game with multiple confirmed broadcasts, then interrupt its source,
+  end it, or sustain buffering. Verify one replacement at a time, no repeated failed choices, and useful
+  exhaustion/retry behavior. Disable the option, pause, background, stop or manually change channel
+  during recovery; verify no late replacement. Check single-connection accounts and unknown allowances.
+- [ ] Enable the independent 10-second playback delay; compare startup, rebuffering, short dropouts,
+  high-bitrate streams and low-memory devices. Verify delay preferences survive restart and apply only
+  to single-stream Sports games. Record actual delays and switching gaps; seamless switching is not guaranteed.
 - [ ] Set the same game reminder via Sports and several Guide channels: one alarm/notification only.
   Test cancellation, denied notification/exact-alarm permissions and reboot rearming; no automatic tune.
 - [ ] Go offline and refresh a failing provider: other schedules remain, cached timestamps remain original,

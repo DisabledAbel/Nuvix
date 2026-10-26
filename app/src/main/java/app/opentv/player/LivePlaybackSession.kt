@@ -21,6 +21,10 @@ import app.opentv.connections.UnknownConnectionApproval
 import app.opentv.data.model.Channel
 import app.opentv.data.model.Programme
 import app.opentv.data.model.shownName
+import app.opentv.data.model.StreamKind
+import app.opentv.data.repo.LocalCustomGroups
+import app.opentv.sports.SportsAutoSwitchover
+import app.opentv.sports.SportsPreferencesStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -52,6 +57,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     private val connectionSessionId = "live:${UUID.randomUUID()}"
     private var connectionGeneration = 0L
     private var connectionToken: ReservationToken? = null
+    private var automaticSportsTune = false
     private val _connectionPrompt = MutableStateFlow<LiveConnectionPrompt?>(null)
     val connectionPrompt = _connectionPrompt.asStateFlow()
     private var approvalResponse: CompletableDeferred<UnknownConnectionApproval?>? = null
@@ -81,6 +87,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             ControllerEngine(application).also { implementation = it; _controllerOrNull.value = it.controller }
         },
         onTune = { channel ->
+            automaticSportsTune = false
             graph.settings.lastChannelId = channel.id
             RecentChannels.get(application).record(channel.id)
         },
@@ -104,10 +111,20 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     val paused = coordinator.paused
     val state = coordinator.state
 
+    private val sportsStore = SportsPreferencesStore(application)
+    private val _sportsNotice = MutableStateFlow<String?>(null)
+    val sportsNotice = _sportsNotice.asStateFlow()
+    private val sportsSwitch = SportsAutoSwitchover(
+        viewModelScope, ::nextSportsChannel,
+        { id -> automaticSportsTune = true; coordinator.openChannel(id) },
+        { _sportsNotice.value = it },
+    )
+
     /** The retained owner enforces mutual exclusion with single-channel/VOD playback. */
     val multiView = app.opentv.multiview.MultiViewSessionManager.create(application, viewModelScope) {
         releaseGuidePreview()
         releaseNonLivePlayback()
+        sportsSwitch.clear()
         coordinator.stopForOtherPlayback()
     }
     val recordingConflicts = app.opentv.recording.RecordingConflictCoordinator.create(application, viewModelScope, multiView)
@@ -126,6 +143,25 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             combine(graph.settings.persistentLivePlayback, graph.settings.continueAudioWhileBrowsing) { persistent, audio -> persistent to audio }
                 .collect { (persistent, audio) -> coordinator.updatePreferences(persistent, audio) }
+        }
+        viewModelScope.launch {
+            combine(state, active, paused, coordinator.playbackAllowed, sportsStore.preferences) { state, active, paused, allowed, preferences ->
+                Triple(state, active && !paused && allowed, preferences)
+            }.combine(connectionPrompt) { playback, prompt ->
+                Triple(playback.first, playback.second && prompt == null, playback.third)
+            }.combine(sportsSwitch.selection) { playback, _ -> playback }
+                .collect { (state, allowed, preferences) ->
+                    val sports = sportsSwitch.selection.value != null
+                    if (!sports || state is PlayerController.State.Playing || !preferences.autoSwitchover) _sportsNotice.value = null
+                    if (automaticSportsTune && (!allowed || !preferences.autoSwitchover)) coordinator.cancelPendingTune()
+                    implementation?.controller?.setSportsPlaybackOptions(
+                        sports && preferences.autoSwitchover, sports && preferences.playbackDelay,
+                    )
+                    val buffer = implementation?.controller?.bufferPolicy
+                    sportsSwitch.observe(state, allowed, preferences.autoSwitchover,
+                        buffer?.playbackMs ?: 0, buffer?.rebufferMs ?: 0)
+                    if (!active.value) sportsSwitch.clear()
+                }
         }
         viewModelScope.launch {
             SleepTimer.deadline.collectLatest { deadline ->
@@ -161,6 +197,10 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         val request = ConnectionRequest(connectionSessionId, ++connectionGeneration, source.id, ConnectionPurpose.LIVE)
         var result = connections.reserve(request)
         if (result is ReservationResult.ApprovalRequired) {
+            if (automaticSportsTune) {
+                connections.discardChallenge(result.challenge)
+                throw LiveConnectionException("Automatic switchover cannot open an additional connection with an unknown allowance. Choose a broadcast in Sports to review it.")
+            }
             val response = CompletableDeferred<UnknownConnectionApproval?>()
             approvalResponse = response
             val prompt = LiveConnectionPrompt(channel.shownName, result.challenge)
@@ -238,6 +278,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     fun registerNonLivePlayback(controller: PlayerController) {
         multiView.stop()
         releaseGuidePreview()
+        sportsSwitch.clear()
         coordinator.stopForOtherPlayback()
         if (nonLivePlayback !== controller) releaseNonLivePlayback()
         nonLivePlayback = controller
@@ -254,18 +295,48 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
 
     /** Launches an explicit channel selection through the shared live coordinator. */
-    fun openChannel(id: Long) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id) }
+    fun openChannel(id: Long) {
+        automaticSportsTune = false
+        if (sportsSwitch.selection.value?.channelId != id) sportsSwitch.clear()
+        multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id)
+    }
+    /** Only an explicit confirmed Sports game selection grants automatic same-game tuning. */
+    fun openSportsChannel(eventId: String, id: Long) {
+        automaticSportsTune = false
+        _sportsNotice.value = null
+        multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback()
+        sportsSwitch.start(eventId, id)
+        coordinator.openChannel(id)
+    }
+
+    /** Rechecks local evidence, current programme windows and parental visibility before each tune. */
+    private suspend fun nextSportsChannel(eventId: String, attempted: Set<Long>): Channel? {
+        val categories = graph.catalogRepository.observeCategories(StreamKind.LIVE).first()
+        return graph.sportsRepository.nextPlaybackChannel(eventId, attempted, sportsStore.preferences.value.streamSort,
+            System.currentTimeMillis()) { channel ->
+            LocalCustomGroups.visible(channel, categories, graph.settings.hiddenCategories.value, graph.settings.hiddenUnlocked.value)
+        }
+    }
     /** Tunes the selected channel using the session's current live playback ownership. */
-    fun tune(channel: Channel) { multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel) }
+    fun tune(channel: Channel) {
+        automaticSportsTune = false
+        sportsSwitch.clear()
+        multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel)
+    }
     /** Clears diagnostics belonging to the current live playback session. */
     fun clearDiagnostics() {
         implementation?.controller?.diagnostics?.clear()
         nonLivePlayback?.diagnostics?.clear()
     }
     /** Retries the explicitly selected live channel. */
-    fun retry() = coordinator.retry()
+    fun retry() {
+        automaticSportsTune = false
+        _sportsNotice.value = null
+        sportsSwitch.selection.value?.let { sportsSwitch.start(it.eventId, it.channelId) }
+        coordinator.retry()
+    }
     /** Stops the shared live playback session. */
-    fun stop() { multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
+    fun stop() { sportsSwitch.clear(); multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
     /** Capture admission closes only viewing sessions whose account capacity is needed. */
     fun recordChannel(channel: Channel, programme: Programme? = null) {
         viewModelScope.launch { graph.recordingEngine.startChannel(channel, programme) }
@@ -303,6 +374,8 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         multiView.release()
         releaseGuidePreview()
         releaseNonLivePlayback()
+        sportsSwitch.clear()
+        sportsStore.close()
         coordinator.destroy()
         super.onCleared()
     }
@@ -339,7 +412,12 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             }
         }
         /** Starts the resolved channel request on the underlying controller. */
-        override fun play(request: PlayerController.Request) = controller.play(request, debounce = false)
+        override fun play(request: PlayerController.Request) {
+            val preferences = sportsStore.preferences.value
+            val sports = sportsSwitch.selection.value != null
+            controller.setSportsPlaybackOptions(sports && preferences.autoSwitchover, sports && preferences.playbackDelay)
+            controller.play(request, debounce = false)
+        }
         /** Applies the explicit pause state to the underlying player. */
         override fun setPaused(paused: Boolean) = controller.setUserPaused(paused)
         /** Applies lifecycle suspension to the underlying player. */
