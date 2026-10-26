@@ -103,9 +103,11 @@ class LiveConnectionAdmissionTest {
         }
 
     /** Provides a synthetic provider configuration for the test's requested source identity. */
-    private suspend fun source(id: Long, maximum: Int?): Source {
-        val source = Source(id = id, name = "Offline account $id", kind = SourceKind.M3U,
-            url = "https://account-$id.example.invalid/fixture.m3u")
+    private suspend fun source(id: Long, maximum: Int?, kind: SourceKind = SourceKind.M3U): Source {
+        val source = Source(id = id, name = "Offline account $id", kind = kind,
+            url = "https://account-$id.example.invalid/fixture.m3u",
+            username = if (kind == SourceKind.XTREAM) "synthetic" else null,
+            password = if (kind == SourceKind.XTREAM) "synthetic" else null)
         database.sources().insert(source)
         connections.registerSource(source)
         connections.setMaximumConnections(id, maximum)
@@ -135,6 +137,52 @@ class LiveConnectionAdmissionTest {
         connections.markActive(token)
         externalReservations += token
         return token
+    }
+
+    @Test fun sameProviderReplacementClosesOldPlayerAndKeepsExactlyOneOwnedReservation() = runTest(dispatcher) {
+        for ((index, maximum) in listOf(1, 3, null).withIndex()) {
+            val sourceId = index.toLong() + 1
+            source(sourceId, maximum, SourceKind.XTREAM)
+            val current = channel(sourceId * 10 + 1, sourceId)
+            val next = channel(sourceId * 10 + 2, sourceId)
+            val live = session()
+            live.openChannel(current.id); scheduler.runCurrent()
+            val oldPlayer = requireNotNull(live.controllerOrNull.value)
+            val oldToken = connections.snapshotForSource(sourceId)!!.reservations.single().token
+            live.openChannel(next.id); scheduler.runCurrent()
+            assertThat(oldPlayer.isReleased).isTrue()
+            assertThat(live.requestedChannelId.value).isEqualTo(next.id)
+            assertThat(live.currentChannel.value?.id).isEqualTo(next.id)
+            assertThat(live.connectionPrompt.value).isNull()
+            val newest = connections.snapshotForSource(sourceId)!!.reservations.single().token
+            assertThat(newest.generation).isGreaterThan(oldToken.generation)
+            assertThat(connections.release(oldToken)).isFalse()
+            assertThat(connections.reservationState(newest)).isEqualTo(ReservationState.PENDING)
+            live.stop()
+            assertThat(connections.snapshotForSource(sourceId)!!.locallyReserved).isEqualTo(0)
+        }
+    }
+
+    @Test fun sameProviderReplacementPreservesDvrReservationAndUnknownApprovalRequirement() = runTest(dispatcher) {
+        source(1, 2)
+        val current = channel(11, 1)
+        val next = channel(12, 1)
+        val capture = recording(1, "protected-capture")
+        val live = session()
+        live.openChannel(current.id); scheduler.runCurrent()
+        live.openChannel(next.id); scheduler.runCurrent()
+        assertThat(connections.reservationState(capture)).isEqualTo(ReservationState.ACTIVE)
+        assertThat(connections.snapshotForSource(1)!!.locallyReserved).isEqualTo(2)
+        connections.setMaximumConnections(1, null)
+        live.openChannel(current.id); scheduler.runCurrent()
+        val prompt = requireNotNull(live.connectionPrompt.value)
+        assertThat(live.controllerOrNull.value).isNull()
+        assertThat(connections.snapshotForSource(1)!!.reservations.single().token).isEqualTo(capture)
+        // A newer selection cancels the obsolete approval; the older challenge cannot admit it.
+        live.openChannel(next.id); scheduler.runCurrent()
+        assertThat(connections.approve(prompt.challenge)).isNull()
+        live.answerConnectionPrompt(false); scheduler.runCurrent()
+        assertThat(connections.reservationState(capture)).isEqualTo(ReservationState.ACTIVE)
     }
 
     /** Checks: repeated Manual Recording Requests Before Service Delivery Reuse One Durable Booking. */

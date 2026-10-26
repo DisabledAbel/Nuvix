@@ -19,6 +19,30 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class PlayerSurfaceOwnerTest {
+    @Test fun `same fullscreen view attaches replacement player after constrained stream release`() {
+        val context = RuntimeEnvironment.getApplication()
+        val first = ExoPlayer.Builder(context).build()
+        val replacement = ExoPlayer.Builder(context).build()
+        var active = first
+        val owner = PlayerSurfaceOwner { active }
+        val view = PlayerView(context)
+        try {
+            assertThat(owner.attach(view)).isTrue()
+            owner.clear()
+            first.release()
+            active = replacement
+            owner.reset()
+            // AndroidView.update must run this for the retained View after engine replacement.
+            assertThat(owner.attach(view)).isTrue()
+            assertThat(view.player).isSameInstanceAs(replacement)
+            assertThat(owner.attach(view)).isTrue()
+            assertThat(replacement.mediaItemCount).isEqualTo(0)
+        } finally {
+            owner.clear()
+            first.release()
+            replacement.release()
+        }
+    }
     /**
      * Checks: fullscreen preview and recreated Activity views transfer one player without changing
      * intent.

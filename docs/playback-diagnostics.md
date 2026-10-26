@@ -1,5 +1,16 @@
 # Advanced playback diagnostics
 
+Live channel transitions also expose elapsed milliseconds from selection in the existing Stream
+Information panel: selection, submission, previous stream close start/completion, reservation
+acquisition, media-item assignment, prepare start, READY, first rendered video frame and failure.
+These use `SystemClock.elapsedRealtime`, retain only the latest generation and at most one value
+per fixed phase (ten entries), and honor the existing diagnostics setting and Clear action. Late
+media/generation callbacks are rejected. No channel names, source/account IDs, URLs, credentials,
+portal MACs or device identity fields are captured or logged. READY and first video frame are
+separate milestones; audio-only streams need not supply a video-frame measurement. Closing a
+player preserves the session's transition milestones for its replacement player. Hardware timings
+measure the actual provider/device path; deterministic fake-player timings measure ordering only.
+
 During live TV, a movie, an episode, or supported recording playback, reveal the playback
 controls and select **Stream Information**. Playback keeps running. D-pad through the
 controls and statistics; **Close** or **Back** dismisses the panel and returns to playback

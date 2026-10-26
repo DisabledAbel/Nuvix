@@ -14,6 +14,14 @@ import app.opentv.data.model.Source
 import app.opentv.data.model.StreamKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.resume
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -44,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap
  * [endpoints] tries the common ones and the first that hands back a token wins, cached per source. The
  * MAC goes in a Cookie, URL-encoded, alongside a MAG-style STB User-Agent — the shape real boxes send.
  *
- * Blocking OkHttp calls wrapped in `withContext(Dispatchers.IO)`, matching [XtreamApi].
+ * Cancellable OkHttp calls close obsolete tuning requests; authenticated sessions are reused.
  */
 class StalkerApi(
     private val http: OkHttpClient,
@@ -57,7 +65,7 @@ class StalkerApi(
     /** Authorized portal token and device identity used by subsequent Stalker requests. */
     private class Session(val token: String, val endpoint: HttpUrl, val expiresAt: Long, val revision: Long)
 
-    private val authenticationLocks = ConcurrentHashMap<Long, Any>()
+    private val authenticationLocks = ConcurrentHashMap<Long, Mutex>()
     private val configurations = ConcurrentHashMap<Long, Source>()
     private val configurationLock = Any()
 
@@ -153,8 +161,8 @@ class StalkerApi(
     // ---- Session / handshake -----------------------------------------------------------------
 
     /** Returns a cached authenticated portal session or performs a fresh handshake. */
-    private fun session(source: Source, force: Boolean = false): Session =
-        synchronized(authenticationLocks.getOrPut(source.id) { Any() }) {
+    private suspend fun session(source: Source, force: Boolean = false): Session =
+        authenticationLocks.getOrPut(source.id) { Mutex() }.withLock {
             requireCurrent(source)
             StalkerIdentity.validate(source)
             synchronized(configurationLock) {
@@ -163,7 +171,7 @@ class StalkerApi(
             }
             val now = System.currentTimeMillis()
             if (!force) sessions[source.id]?.let {
-                if (it.expiresAt > now && it.revision == source.stalkerRevision) return@synchronized it
+                if (it.expiresAt > now && it.revision == source.stalkerRevision) return@withLock it
             }
             val authenticated = authenticate(source)
             synchronized(configurationLock) {
@@ -173,7 +181,7 @@ class StalkerApi(
             authenticated
         }
 
-    private fun authenticate(source: Source): Session {
+    private suspend fun authenticate(source: Source): Session {
         for (endpoint in endpoints(source)) {
             requireCurrent(source)
             val hs = handshake(source, endpoint) ?: continue
@@ -189,7 +197,7 @@ class StalkerApi(
     private data class Handshake(val token: String, val random: String)
 
     /** Obtains the portal authorization token for the configured device identity. */
-    private fun handshake(source: Source, endpoint: HttpUrl): Handshake? {
+    private suspend fun handshake(source: Source, endpoint: HttpUrl): Handshake? {
         val url = endpoint.newBuilder()
             .addQueryParameter("type", "stb")
             .addQueryParameter("action", "handshake")
@@ -209,7 +217,7 @@ class StalkerApi(
      * `signature`, plus a `metrics` blob. Automatic uses the original MAC-derived defaults;
      * provider-supplied overrides are resolved independently and encoded as opaque strings.
      */
-    private fun getProfile(source: Source, endpoint: HttpUrl, token: String, random: String) {
+    private suspend fun getProfile(source: Source, endpoint: HttpUrl, token: String, random: String) {
         val mac = source.macAddress?.trim().orEmpty()
         val id = StalkerIdentity.resolve(source, random)
         val metrics = buildJsonObject {
@@ -254,7 +262,7 @@ class StalkerApi(
     // ---- HTTP --------------------------------------------------------------------------------
 
     /** Calls a portal action using the authenticated session and query parameters. */
-    private fun call(
+    private suspend fun call(
         session: Session,
         source: Source,
         type: String,
@@ -279,7 +287,7 @@ class StalkerApi(
      * "sometimes just rejected" becomes a silent retry instead of an empty channel list or a channel
      * that won't tune.
      */
-    private fun callRetrying(
+    private suspend fun callRetrying(
         source: Source,
         type: String,
         action: String,
@@ -290,7 +298,7 @@ class StalkerApi(
     }
 
     /** Executes a portal request and decodes its JSON response or raises a provider error. */
-    private fun execute(source: Source, url: HttpUrl, token: String?): JsonElement? {
+    private suspend fun execute(source: Source, url: HttpUrl, token: String?): JsonElement? {
         requireCurrent(source)
         val mac = source.macAddress?.trim().orEmpty()
         // adid (the lower-case device id) rides in the cookie the way a real box sends it; some
@@ -312,14 +320,27 @@ class StalkerApi(
             .header("Cookie", cookie)
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .build()
-        return runCatching {
-            http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val text = response.body?.string().orEmpty()
-                if (text.isBlank()) return null
-                json.parseToJsonElement(text)
-            }
-        }.onFailure { Log.w(TAG, "Stalker request failed") }.getOrNull()
+        return suspendCancellableCoroutine { continuation ->
+            val call = http.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) {
+                        Log.w(TAG, "Stalker request failed")
+                        continuation.resume(null)
+                    }
+                }
+                override fun onResponse(call: Call, response: Response) {
+                    val body = runCatching {
+                        response.use {
+                            if (!it.isSuccessful) null
+                            else it.body?.string()?.takeIf(String::isNotBlank)?.let(json::parseToJsonElement)
+                        }
+                    }.getOrNull()
+                    if (continuation.isActive) continuation.resume(body)
+                }
+            })
+        }
     }
 
     /** Candidate API endpoints for a portal URL, most common first. First that handshakes wins. */

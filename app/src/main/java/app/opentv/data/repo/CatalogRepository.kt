@@ -746,7 +746,9 @@ class CatalogRepository(
     suspend fun resolvePlaybackUrl(channel: Channel, source: Source?): String {
         if (source?.kind != SourceKind.STALKER) return channel.streamUrl
         val cmd = channel.cmd?.takeIf { it.isNotBlank() } ?: return channel.streamUrl
-        return runCatching { stalkerApi.createLink(source, cmd) }.getOrNull() ?: channel.streamUrl
+        return try { stalkerApi.createLink(source, cmd) ?: channel.streamUrl }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { channel.streamUrl }
     }
 
     /** Refreshes Xtream movie and series catalogs while retaining local user choices. */

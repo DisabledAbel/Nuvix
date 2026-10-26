@@ -127,6 +127,7 @@ private fun rate(bps: Long?) = bps?.let { String.format(Locale.ROOT, "%.2f Mbps"
 
 /** Builds stream information rows from the current diagnostic snapshot and detail preferences. */
 internal fun diagnosticRows(s: DiagnosticSnapshot, detailed: Boolean, technical: Boolean): List<Pair<String, String>> = buildList {
+    s.transition.forEach { add(it.phase.label to "${it.elapsedMs} ms from selection") }
     add("Playback health" to s.health.label)
     add("Playback status" to s.state)
     if (technical) {

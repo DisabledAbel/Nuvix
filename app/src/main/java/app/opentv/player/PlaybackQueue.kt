@@ -19,4 +19,12 @@ object PlaybackQueue {
 
     @Volatile
     var items: List<Item> = emptyList()
+
+    /** TV Up follows the preceding displayed row; Down follows the next, without wrapping. */
+    fun adjacent(items: List<Item>, selectedId: Long?, delta: Int): Long? {
+        if (items.isEmpty()) return null
+        val current = items.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+        val next = (current + delta).coerceIn(0, items.lastIndex)
+        return items[next].id.takeIf { next != current }
+    }
 }

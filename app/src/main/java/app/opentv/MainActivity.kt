@@ -542,6 +542,7 @@ private fun NuvixNavigation(
     }
 
     val liveActive by liveSession.active.collectAsState()
+    val liveController by liveSession.controllerOrNull.collectAsState()
     val route = currentEntry?.destination?.route
     val liveRoute = route == Routes.PLAYER
     val previewVideo by bootSettings.livePreview.collectAsState()
@@ -558,9 +559,9 @@ private fun NuvixNavigation(
         else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    DisposableEffect(liveSession, liveRoute, liveActive, route, multiViewState) {
+    DisposableEffect(liveSession, liveRoute, liveActive, liveController, route, multiViewState) {
         val selectedPanel = multiViewState.audioPanelId ?: multiViewState.focusedPanelId
-        val player = if (liveRoute && liveActive) liveSession.controller.player
+        val player = if (liveRoute && liveActive) liveController?.player
             else if (route == Routes.MULTIVIEW && selectedPanel != null) multiView.player(selectedPanel) else null
         val listener = object : androidx.media3.common.Player.Listener {
             fun update() {

@@ -90,13 +90,33 @@ Cancellation and generation checks prevent an obsolete lookup from tuning after 
 selection. Existing buffering configuration, audio/subtitle selections, Media3 errors,
 and bounded retry behavior stay with `PlayerController`.
 
-Actual channel changes now use the shared account allocator. A replacement resolves while
-the old stream is still owned, then safe switching closes the old decoder before opening
-the new one. Known unavailable capacity can be rejected before relinquishing playback.
+Actual channel changes use the shared account allocator. Before provider link resolution,
+preflight rejects known unavailable capacity. A same-account replacement with no spare slot
+(or Unknown capacity) closes the old decoder/HTTP owner before freeing its reservation and
+resolving the replacement. This avoids asking a constrained portal for a new link while the
+previous stream still owns its slot. Admission rechecks capacity after resolution and any
+request-specific Unknown approval; recordings retain their reservations. With verified spare
+capacity, link resolution retains the previous stream, followed by the existing safe close/open.
 The single-channel coordinator continues to use break-before-make; Multi-View additionally
 permits a bounded candidate when account and decoder headroom are confirmed. Presentation-only
 surface transfers retain the existing player. See [connection rules](smart-multiview-dvr.md#connection-management-and-dvr-foundation)
 for unknown allowances, manual account associations and local limits.
+
+Fullscreen Up/Down advances the synchronous requested-channel cursor, even while a channel
+lookup is pending. Requested, preparing and playing channels are tracked separately. The loading
+banner identifies the requested target and names the previous playing stream when it is retained
+during resolution. The persistent preview keeps the committed channel metadata and identifies the
+loading target. Engine replacement clears the old playing identity and each retained PlayerView
+reattaches through its exclusive surface owner. Presentation checks prevent an outgoing screen
+from reclaiming the current destination's surface. PiP observers follow the replacement controller;
+UI composition never allocates a player while a tune is pending. Returning to a channel whose player already closed
+starts a fresh tune. Canceled callbacks cannot invoke a later generation's release callback.
+
+Stalker `create_link` reuses the cached authenticated session and endpoint. HTTP cancellation closes
+obsolete calls, including response-body reads; authentication uses a cancellable mutex. Cancellation
+propagates through URL resolution instead of falling back to a stale marker. No playlist refresh,
+global timeout reduction, buffer change, second live decoder or additional audio-focus owner is added.
+See [investigation and regression evidence](TESTING.md#live-channel-switching-v1-blocker).
 
 `PlayerSurfaceOwner` grants one surface attachment at a time. A replacement `PlayerView`
 first detaches its predecessor. An outgoing Compose `AndroidView` can only detach its own

@@ -44,6 +44,29 @@ class LivePlaybackSessionLifecycleTest {
     /** Minimal activity host for retained live-session lifecycle assertions. */
     class PlaybackOwnerActivity : ComponentActivity()
 
+    @Test fun `late outgoing fullscreen and preview updates cannot reclaim the current surface`() {
+        Dispatchers.setMain(StandardTestDispatcher())
+        val activity = Robolectric.buildActivity(PlaybackOwnerActivity::class.java).setup()
+        try {
+            val session = ViewModelProvider(activity.get())[LivePlaybackSession::class.java]
+            val player = session.controller.player
+            val fullscreen = PlayerView(activity.get())
+            val preview = PlayerView(activity.get())
+            session.setPresentation(LivePresentation.BROWSING)
+            assertThat(session.attachVideoSurface(preview, LivePresentation.BROWSING)).isTrue()
+            assertThat(session.attachVideoSurface(fullscreen, LivePresentation.FULLSCREEN)).isFalse()
+            assertThat(preview.player).isSameInstanceAs(player)
+            session.setPresentation(LivePresentation.FULLSCREEN)
+            assertThat(session.attachVideoSurface(fullscreen, LivePresentation.FULLSCREEN)).isTrue()
+            assertThat(session.attachVideoSurface(preview, LivePresentation.BROWSING)).isFalse()
+            assertThat(fullscreen.player).isSameInstanceAs(player)
+            assertThat(preview.player).isNull()
+        } finally {
+            activity.pause().stop().destroy()
+            Dispatchers.resetMain()
+        }
+    }
+
     @Test fun `initial inactivity preserves sports selection but later inactivity clears it`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)

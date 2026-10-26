@@ -102,6 +102,7 @@ import app.opentv.core.ServiceLocator
 import app.opentv.core.findActivity
 import app.opentv.core.requestIgnoreBatteryOptimizations
 import app.opentv.data.model.Channel
+import app.opentv.data.model.shownName
 import app.opentv.player.LivePlaybackSession
 import app.opentv.player.PlaybackQueue
 import app.opentv.player.PlayerController
@@ -142,13 +143,15 @@ fun PlayerScreen(
     if (!active) return
     // Navigation only changes where this Activity-owned player is displayed. The session owns
     // tuning, recovery and release, including while this composable is absent.
-    val controller = liveSession.controller
+    val controller by liveSession.controllerOrNull.collectAsState()
     val state by liveSession.state.collectAsState()
     val sportsNotice by liveSession.sportsNotice.collectAsState()
-    val tracks by controller.tracks.collectAsState()
+    val tracks = controller?.tracks?.collectAsState()?.value ?: Tracks.EMPTY
     val variants by liveSession.variants.collectAsState()
     val currentChannel by liveSession.currentChannel.collectAsState()
     val currentId = currentChannel?.id
+    val requestedChannel by liveSession.requestedChannel.collectAsState()
+    val playingChannel by liveSession.playingChannel.collectAsState()
     val previousId by liveSession.previousChannelId.collectAsState()
     val paused by liveSession.paused.collectAsState()
     // What's recording right now, so the Record button can show as armed for this channel.
@@ -210,10 +213,8 @@ fun PlayerScreen(
     }
 
     fun zapBy(delta: Int) {
-        if (queue.isEmpty()) return
-        val cur = queue.indexOfFirst { it.id == currentId }.let { if (it < 0) 0 else it }
-        val next = (cur + delta).coerceIn(0, queue.size - 1)
-        if (next != cur) playChannelId(queue[next].id)
+        PlaybackQueue.adjacent(queue, liveSession.requestedChannelId.value ?: currentId, delta)
+            ?.let(::playChannelId)
     }
 
     fun toggleRecord() {
@@ -238,7 +239,7 @@ fun PlayerScreen(
         val textChosen = tracks.groups.any { g ->
             g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { g.isTrackSelected(it) }
         }
-        if (subtitlesDefault && hasText && !textChosen) controller.applySubtitleDefault(true)
+        if (subtitlesDefault && hasText && !textChosen) controller?.applySubtitleDefault(true)
     }
 
     // Auto-hide the bar after a few seconds — but never while paused or with a picker open.
@@ -301,7 +302,7 @@ fun PlayerScreen(
     }
 
     if (diagnosticsVisible && diagnosticsEnabled && !inPip) {
-        StreamInformation(controller.diagnostics) { diagnosticsVisible = false; reveal() }
+        controller?.let { StreamInformation(it.diagnostics) { diagnosticsVisible = false; reveal() } }
     }
 
     Box(
@@ -360,17 +361,20 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     videoView[0] = this
-                    surfaceAvailable = liveSession.surfaceOwner.attach(this)
+                    surfaceAvailable = controller != null && liveSession.attachVideoSurface(this, app.opentv.player.LivePresentation.FULLSCREEN)
                 }
             },
-            update = { it.resizeMode = resizeMode },
+            update = {
+                it.resizeMode = resizeMode
+                surfaceAvailable = controller != null && liveSession.attachVideoSurface(it, app.opentv.player.LivePresentation.FULLSCREEN)
+            },
             onRelease = {
                 liveSession.surfaceOwner.detach(it)
                 if (videoView[0] === it) videoView[0] = null
             },
         )
 
-        if (!surfaceAvailable && !inPip && state !is PlayerController.State.Error) {
+        if (!surfaceAvailable && controller != null && !inPip && state !is PlayerController.State.Error) {
             Column(
                 Modifier.align(Alignment.Center).padding(48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -382,7 +386,7 @@ fun PlayerScreen(
                 )
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = {
-                    videoView[0]?.let { surfaceAvailable = liveSession.surfaceOwner.attach(it) }
+                    videoView[0]?.let { surfaceAvailable = liveSession.attachVideoSurface(it, app.opentv.player.LivePresentation.FULLSCREEN) }
                 }) {
                     Text(stringResource(R.string.common_try_again))
                 }
@@ -410,6 +414,9 @@ fun PlayerScreen(
                         CircularProgressIndicator()
                         Spacer(Modifier.height(16.dp))
                         Text(current.title, color = Color.White)
+                        playingChannel?.takeIf { it.id != requestedChannel?.id }?.let {
+                            Text(stringResource(R.string.player_switch_previous, it.shownName), color = Color.White)
+                        }
                     }
                 }
             }
@@ -480,10 +487,10 @@ fun PlayerScreen(
                     .padding(horizontal = 28.dp, vertical = 20.dp),
             ) {
                 // The open picker sits above the transport row.
-                if (panel != Panel.NONE) {
+                if (panel != Panel.NONE && controller != null) {
                     OptionPanel(
                         panel = panel,
-                        controller = controller,
+                        controller = requireNotNull(controller),
                         settings = settings,
                         tracks = tracks,
                         variants = variants,
@@ -513,15 +520,15 @@ fun PlayerScreen(
                         BarChip(Icons.Filled.AspectRatio, "Multi-View", false, onClick = onOpenMultiView)
                         Spacer(Modifier.width(10.dp))
                     }
-                    if (diagnosticsEnabled) {
+                    if (diagnosticsEnabled && controller != null) {
                         BarChip(Icons.Filled.Info, "Stream Information", false) {
                             panel = Panel.NONE; channelListVisible = false; diagnosticsVisible = true; interaction++
                         }
                         Spacer(Modifier.width(10.dp))
                     }
-                    if (controller.isSeekable) {
+                    if (controller?.isSeekable == true) {
                         BarChip(Icons.Filled.FastRewind, stringResource(R.string.player_rewind), false) {
-                            controller.seekBackward(); interaction++
+                            controller?.seekBackward(); interaction++
                         }
                         Spacer(Modifier.width(10.dp))
                     }
@@ -534,10 +541,10 @@ fun PlayerScreen(
                         liveSession.setPaused(!paused)
                         interaction++
                     }
-                    if (controller.isSeekable) {
+                    if (controller?.isSeekable == true) {
                         Spacer(Modifier.width(10.dp))
                         BarChip(Icons.Filled.FastForward, stringResource(R.string.player_forward), false) {
-                            controller.seekForward(); interaction++
+                            controller?.seekForward(); interaction++
                         }
                     }
 

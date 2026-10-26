@@ -32,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,6 +72,9 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     /** Memory-only startup guard: configuration changes must not steal a browsing destination. */
     var startupNavigationHandled: Boolean = false
     val surfaceOwner = PlayerSurfaceOwner { implementation?.controller?.player }
+    private val transitionDiagnostics = ChannelTransitionDiagnostics(
+        enabled = { graph.settings.diagnosticsEnabled.value },
+    )
 
     private val coordinator = LivePlaybackCoordinator(
         scope = viewModelScope,
@@ -97,6 +101,8 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             surfaceOwner.clear(); implementation = null; _controllerOrNull.value = null
         },
         preparePlayback = ::reserveLiveConnection,
+        beforeResolve = ::prepareLiveReplacement,
+        transitionDiagnostics = transitionDiagnostics,
         afterEngineRelease = {
             connectionToken?.let(connections::release)
             connectionToken = null
@@ -104,6 +110,10 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     )
 
     val currentChannel = coordinator.currentChannel
+    val requestedChannelId = coordinator.requestedChannelId
+    val requestedChannel = coordinator.requestedChannel
+    val preparingChannel = coordinator.preparingChannel
+    val playingChannel = coordinator.playingChannel
     val previousChannelId = coordinator.previousChannelId
     val variants = coordinator.variants
     val active = coordinator.active
@@ -111,6 +121,13 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     val guidePreviewSuppressed = coordinator.guidePreviewSuppressed
     val paused = coordinator.paused
     val state = coordinator.state
+
+    /** An outgoing destination's update must not reclaim the current destination's surface. */
+    fun attachVideoSurface(view: androidx.media3.ui.PlayerView, presentation: LivePresentation): Boolean {
+        val current = coordinator.presentationMode
+        if (current != presentation && !(current == LivePresentation.PIP && presentation == LivePresentation.FULLSCREEN)) return false
+        return surfaceOwner.attach(view)
+    }
 
     private val sportsStore = SportsPreferencesStore(application)
     private val _sportsNotice = MutableStateFlow<String?>(null)
@@ -181,6 +198,24 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /** Check capacity before provider link resolution, closing a constrained same-account viewer. */
+    private suspend fun prepareLiveReplacement(channel: Channel, releaseCurrent: () -> Unit) {
+        val source = graph.sourceRepository.byId(channel.sourceId)?.takeIf { it.enabled }
+            ?: throw LiveConnectionException("This provider is no longer available.")
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val accountKey = connections.registerSource(source)
+        val snapshot = connections.snapshotForSource(source.id)
+        val old = connectionToken
+        val maximum = snapshot?.effectiveMaximum
+        val usedWithoutOld = (snapshot?.locallyReserved ?: 0) - if (old?.accountKey == accountKey) 1 else 0
+        if (maximum != null && usedWithoutOld >= maximum) {
+            throw LiveConnectionException("This account's configured connection limit is in use. Recordings keep their reserved connections.")
+        }
+        if (old?.accountKey == accountKey && (maximum == null || (snapshot?.locallyReserved ?: 0) >= maximum)) {
+            releaseCurrent()
+        }
+    }
+
     /** Requests account capacity for a live tune and coordinates any required confirmation. */
     private suspend fun reserveLiveConnection(channel: Channel, releaseCurrent: () -> Unit) {
         val source = graph.sourceRepository.byId(channel.sourceId)?.takeIf { it.enabled }
@@ -193,8 +228,8 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         if (maximum != null && usedWithoutOld >= maximum) {
             throw LiveConnectionException("This account's configured connection limit is in use. Recordings keep their reserved connections.")
         }
-        // This foundation deliberately uses safe switching. Resolve first, then close the real
-        // old player before freeing its slot; a pending reservation never opens a stream.
+        // Recheck after resolution/approval: DVR or another consumer may have claimed capacity.
+        // Close the real old player before freeing its slot; pending tokens never open streams.
         if (old?.accountKey == accountKey && (maximum == null || (snapshot?.locallyReserved ?: 0) >= maximum)) {
             releaseCurrent()
         }
@@ -222,6 +257,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         val token = (result as? ReservationResult.Reserved)?.token ?: throw LiveConnectionException(
             (result as? ReservationResult.Denied)?.reason ?: "Connection settings changed. Please retry.",
         )
+        transitionDiagnostics.record(transitionDiagnostics.generation, ChannelTransitionPhase.RESERVATION_ACQUIRED)
         try {
             releaseCurrent()
             connectionToken = token
@@ -329,6 +365,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
     /** Clears diagnostics belonging to the current live playback session. */
     fun clearDiagnostics() {
+        transitionDiagnostics.clear()
         implementation?.controller?.diagnostics?.clear()
         nonLivePlayback?.diagnostics?.clear()
     }
@@ -391,6 +428,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             application, scope, graph.streamingHttpClient,
             subtitlesEnabled = graph.settings.subtitlesEnabled.value,
             dvr = graph.settings.livePauseEnabled.value,
+            transitionDiagnostics = transitionDiagnostics,
         )
         override val state = controller.state
         override val paused = controller.userPaused
