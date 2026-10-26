@@ -15,8 +15,9 @@ The emulator job uses API 35 x86_64, an actual Media3 decoder, and the productio
 `LivePlaybackSession`, coordinator, controller and retained `PlayerView`. It plays red
 Channel A then blue Channel B, checks visible output pixels as well as READY/first-frame
 callbacks, verifies the old controller is released, rejects stale reservation release and
-checks stop leaves no player or reservation. HLS limits 1/3 and TS Unknown admission are
-covered, alongside rapid selections, terminal HTTP failure and recovery. Each local milestone
+checks stop leaves no player or reservation. Xtream HLS limits 1/3, TS Unknown admission and
+a synthetic one-connection Stalker create_link→TS switch are covered, alongside rapid
+selections, terminal HTTP failure and recovery. Each local milestone
 must complete within 15 seconds, catching a minute-long stall on a healthy fixture. This is a
 CI bound for synthetic low-resolution media, not a real-provider timing promise.
 

@@ -124,16 +124,21 @@ class IptvPlaybackTest {
         }
     }
 
-    private fun seed(maximum: Int?, extension: String) {
-        val source = Source(id = 1, name = "Synthetic Xtream", kind = SourceKind.XTREAM,
-            url = base, username = "fixture", password = "fixture")
+    private fun seed(maximum: Int?, extension: String, kind: SourceKind = SourceKind.XTREAM) {
+        val source = Source(id = 1, name = "Synthetic provider", kind = kind,
+            url = if (kind == SourceKind.STALKER) "$base/c" else base,
+            username = if (kind == SourceKind.XTREAM) "fixture" else null,
+            password = if (kind == SourceKind.XTREAM) "fixture" else null,
+            macAddress = if (kind == SourceKind.STALKER) "02:00:00:00:00:01" else null)
         runBlocking {
             db.sources().insert(source)
             db.channels().upsertAll((1L..2L).map { id ->
                 val path = if (extension == "m3u8") "${if (id == 1L) "a" else "b"}/index.m3u8"
                            else "${if (id == 1L) "a" else "b"}.ts"
                 Channel(id = id, sourceId = 1, streamId = "$id", name = "Synthetic $id",
-                    categoryId = null, logoUrl = null, epgChannelId = null, number = id.toInt(), streamUrl = "$base/$path")
+                    categoryId = null, logoUrl = null, epgChannelId = null, number = id.toInt(),
+                    streamUrl = if (kind == SourceKind.STALKER) "$base/unresolved" else "$base/$path",
+                    cmd = if (kind == SourceKind.STALKER) (if (id == 1L) "a" else "b") else null)
             })
         }
         connections.registerSource(source)
@@ -146,6 +151,15 @@ class IptvPlaybackTest {
             if (main(condition)) return
             SystemClock.sleep(25)
         }
+        main {
+            session.controllerOrNull.value?.let { controller ->
+                controller.diagnostics.sample()
+                metrics.put("media3_state", controller.player.playbackState)
+                metrics.put("rendered_frames", controller.diagnostics.snapshot.value.renderedFrames ?: 0)
+                metrics.put("error_code", controller.player.playerError?.errorCode ?: 0)
+                metrics.put("surface_bound", if (activity.video.player === controller.player) 1 else 0)
+            }
+        }
         fail("Local Media3 milestone timed out: $description") // no provider data in failures
     }
 
@@ -157,6 +171,8 @@ class IptvPlaybackTest {
             } else {
                 session.attachVideoSurface(activity.video, LivePresentation.FULLSCREEN, rebind = true)
             }
+            // The production information panel samples explicitly while visible; no panel runs here.
+            controller.diagnostics.sample()
             session.currentChannel.value?.id == id && session.playingChannel.value?.id == id &&
                 controller.player.playbackState == Player.STATE_READY && activity.video.player === controller.player &&
                 controller.diagnostics.snapshot.value.transition.any { it.phase == ChannelTransitionPhase.FIRST_FRAME }
@@ -170,9 +186,9 @@ class IptvPlaybackTest {
         else assertTrue("Initial channel must render synthetic red video", Color.red(pixel) > Color.blue(pixel) + 80)
     }
 
-    private fun switch(maximum: Int?, extension: String, scenario: String) {
+    private fun switch(maximum: Int?, extension: String, scenario: String, kind: SourceKind = SourceKind.XTREAM) {
         reportId = scenario
-        seed(maximum, extension)
+        seed(maximum, extension, kind)
         main { session.openChannel(1) }
         rendered(1, false)
         val previous = main { requireNotNull(session.controllerOrNull.value) }
@@ -207,6 +223,7 @@ class IptvPlaybackTest {
     @Test fun hlsOneConnectionSwitch() = switch(1, "m3u8", "hls-one")
     @Test fun hlsSpareConnectionSwitch() = switch(3, "m3u8", "hls-spare")
     @Test fun transportStreamUnknownAllowanceSwitch() = switch(null, "ts", "ts-unknown")
+    @Test fun stalkerOneConnectionSwitch() = switch(1, "ts", "stalker-one", SourceKind.STALKER)
 
     @Test fun rapidUpDownLatestRequestRenders() {
         reportId = "rapid"

@@ -72,12 +72,12 @@ def android_results(directory):
             raise ProbeFailure("android_report_invalid")
         for row in data["results"]:
             scenario = row["scenario"]
-            if scenario not in ("hls-one", "hls-spare", "ts-unknown", "rapid", "recovery", "providers", "dvr"):
+            if scenario not in ("hls-one", "hls-spare", "ts-unknown", "stalker-one", "rapid", "recovery", "providers", "dvr"):
                 raise ProbeFailure("android_report_invalid")
             metrics = {}
             for key, value in row.get("metrics", {}).items():
                 if key not in PHASES | {"import_ms", "provider_ms", "release_ms", "prepare_ms", "request_ms",
-                                       "reservations", "failures"}:
+                                       "reservations", "failures", "media3_state", "rendered_frames", "error_code", "surface_bound"}:
                     raise ProbeFailure("android_report_invalid")
                 if type(value) not in (int, float) or not 0 <= value <= 900000:
                     raise ProbeFailure("android_report_invalid")
@@ -86,24 +86,34 @@ def android_results(directory):
                             "metrics": metrics})
     if not results:
         raise ProbeFailure("android_report_missing")
-    required = {"hls-one", "hls-spare", "ts-unknown", "rapid", "recovery", "providers", "dvr"}
+    required = {"hls-one", "hls-spare", "ts-unknown", "stalker-one", "rapid", "recovery", "providers", "dvr"}
     if {row["id"] for row in results} != required or len(results) != len(required):
         raise ProbeFailure("android_report_incomplete")
     for row in results:
-        if row["id"] in {"hls-one", "hls-spare", "ts-unknown"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
+        if row["id"] in {"hls-one", "hls-spare", "ts-unknown", "stalker-one"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
             raise ProbeFailure("android_report_incomplete")
     return results
 
 
 def fingerprint():
     digest = hashlib.sha256()
+    digest.update(Path(__file__).read_bytes())
     for file in sorted((ROOT / "scripts/iptv").glob("*.py")):
         digest.update(file.read_bytes())
     for file in sorted((ROOT / "app/src/androidTest").rglob("*.kt")):
         digest.update(file.read_bytes())
+    try:
+        media_generator = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True,
+                                         check=True, timeout=3).stdout.splitlines()[0]
+    except (OSError, subprocess.SubprocessError, IndexError):
+        media_generator = "unavailable"
+    cpu = platform.processor()
+    if Path("/proc/cpuinfo").is_file():
+        cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+                    if line.startswith("model name")), cpu)
     return {"platform": platform.system(), "machine": platform.machine(), "fixtures": digest.hexdigest(),
-            "android": "api-35-x86_64-default-320x180-v1", "cpu": platform.processor(),
-            "runner_image": os.environ.get("ImageVersion", "local")}
+            "android": "api-35-x86_64-default-320x180-v1",
+            "cpu": cpu, "generator": media_generator, "runner_image": os.environ.get("ImageVersion", "local")}
 
 
 def comparison(report, baseline):
@@ -129,8 +139,13 @@ def markdown(report):
              "| Group | Scenario | Status | Measurements |", "| --- | --- | --- | --- |"]
     for group in ("fixture", "public", "android"):
         for row in report[group]:
-            metrics = row.get("metrics", {})
-            detail = ", ".join(f"{key}={value}" for key, value in metrics.items()) or row.get("classification", "")
+            metrics = dict(row.get("metrics", {}))
+            for key in ("duration_ms", "requests", "bytes_checked", "segments", "manifests", "channels"):
+                if key in row:
+                    metrics[key] = row[key]
+            detail = ", ".join(f"{key}={value}" for key, value in metrics.items())
+            if row.get("classification"):
+                detail = ", ".join(filter(None, (row["classification"], detail)))
             lines.append(f"| {group} | {row['id']} | {row['status']} | {detail} |")
     if not report["android"]:
         lines += ["", "Real Media3 decoding: **not run in this invocation**. The emulator CI job is required on PRs."]
