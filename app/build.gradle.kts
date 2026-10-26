@@ -133,7 +133,7 @@ dependencies {
     implementation(libs.media3.datasource.okhttp)
 
     // SQLCipher 4.19.1 requires compile SDK 36; retain the validated SDK 35 build.
-    implementation("net.zetetic:sqlcipher-android:4.12.0")
+    implementation("net.zetetic:sqlcipher-android:4.19.1")
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
