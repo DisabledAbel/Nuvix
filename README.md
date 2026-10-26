@@ -7,6 +7,10 @@ An independent modified version of [OpenTV](https://github.com/opentvproject/ope
 
 ## Features
 
+Automated playback validation runs in GitHub Actions with generated HLS/TS media and local
+synthetic providers. See [IPTV Playback Tests](docs/TESTING.md#automated-iptv-playback-tests)
+for manual runs, optional Apple/Mux availability checks, sanitized reports and emulator limits.
+
 - Live TV, Standard/Compact/Expanded time-grid guides, movies, TV shows, and remote-friendly navigation.
 - Guide filters, channel sorting, hour/day jumps, bounded program search, and program details
   with existing reminders and recording actions. See the [guide instructions](docs/automatic-epg.md#advanced-guide).

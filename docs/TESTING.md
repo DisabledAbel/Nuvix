@@ -2,6 +2,96 @@
 
 # Testing Nuvix
 
+## Automated IPTV playback tests
+
+Open **Actions → IPTV Playback Tests → Run workflow** and select the branch. Leave
+`public_streams` off for reproducible local media; enable it only for the optional Apple/Mux
+transport probe. Pull requests automatically run the local fixture and emulator jobs.
+The existing **Build** workflow still runs all Android unit tests, debug/release lint,
+debug/unsigned release builds, release identity/history checks and isolated Supabase security
+tests. Neither workflow publishes a release; nightly publishing remains disabled.
+
+The emulator job uses API 35 x86_64, an actual Media3 decoder, and the production
+`LivePlaybackSession`, coordinator, controller and retained `PlayerView`. It plays red
+Channel A then blue Channel B, checks visible output pixels as well as READY/first-frame
+callbacks, verifies the old controller is released, rejects stale reservation release and
+checks stop leaves no player or reservation. HLS limits 1/3 and TS Unknown admission are
+covered, alongside rapid selections, terminal HTTP failure and recovery. Each local milestone
+must complete within 15 seconds, catching a minute-long stall on a healthy fixture. This is a
+CI bound for synthetic low-resolution media, not a real-provider timing promise.
+
+The test runner uses a plain test Application and an in-memory database, with a debug-only
+surface Activity. Background sync, hosted accounts and production storage are excluded.
+`adb reverse` connects emulator loopback to a loopback-only Python server; it does not expose
+a portal publicly. The same server provides M3U, XMLTV, fake Xtream authentication/catalogs,
+fake Stalker handshake/profile/create_link, 401, slow, interrupted and connection-limited
+responses. Android tests run these through the production parsers/provider clients and record
+synthetic MPEG-TS with the production capture loop.
+
+Coverage builds on PR #59 and existing suites:
+
+| Area | Evidence |
+| --- | --- |
+| Historic 60-second slot wait, stale callbacks, release-before-resolution | `ChannelSwitchRegressionTest` virtual-provider regression |
+| Remote Up/Down and actual retained Compose surface ownership | `FullscreenChannelSwitchTest`, `PlayerSurfaceOwnerTest` |
+| Actual decode, visible replacement, first frame, HLS/TS and recovery | `IptvPlaybackTest` on the Actions emulator |
+| Limits 1/3/Unknown, protected DVR, independent accounts and stale tokens | `LiveConnectionAdmissionTest`, `AccountConnectionManagerTest` |
+| Two/three/four sessions, cleanup, focus changes/loss and single audio lease | `MultiViewSessionManagerTest` |
+| Recording start/stop, interrupted/partial files, extensions and late-start/conflicts | `RecordingCaptureTest`, `RecordingDurationEngineTest`, `RecordingLateStartEngineTest`, `DvrConflictPolicyTest`, `MultiViewRecordingConflictTest` |
+| Importers and synthetic protocol auth | `IptvPlaybackTest`, `M3uParserTest`, `XmltvChannelParseTest`, `StalkerApiTest` |
+
+Production Multi-View intentionally requires hardware video decoders. Its 2/3/4 session and
+audio-focus regressions use controlled players in the existing JVM suites; the software
+emulator does **not** certify four simultaneous hardware video decoders. Likewise, synthetic
+Stalker responses do not establish compatibility or permission for a third-party portal.
+Physical-TV/provider acceptance remains a separate release blocker.
+
+Local commands (Python 3.10+, FFmpeg with libx264/AAC; fixture mode needs no Internet):
+
+```sh
+python3 scripts/test-iptv-playback.py --mode fixture --output work/iptv.json --timeout 5
+python3 -m unittest discover -s scripts/tests -p test_iptv_playback.py -v
+# Optional bounded HTTPS transport checks; no public media is persisted or recorded:
+python3 scripts/test-iptv-playback.py --mode public --output work/public.json --timeout 10
+python3 scripts/test-iptv-playback.py --mode all --output work/all.json
+# With Android SDK/JDK, an already running disposable API 35 emulator and adb on PATH:
+bash scripts/run-iptv-android.sh
+# Equivalent orchestration entrypoint, with sanitized report ingestion:
+python3 scripts/test-iptv-playback.py --mode fixture --run-android --output work/playback.json
+```
+
+The generated `*.json` and matching `*.md` reports are uploaded and linked from the Actions
+summary. `fixture_failure` means the local transport fixture failed;
+`application_regression` means the device test or its required measurements failed/missing.
+`external_unavailable` is an optional external network/manifest/format result, not an app
+regression. A Python-only invocation explicitly reports Media3 decoding **not run**. An emulator
+failure still fails the job even if a partial report exists; incomplete scenario sets cannot pass.
+Read Gradle/emulator job failures separately if the test process never produced a report.
+
+Measurements include M3U parse/import time, provider response time, switch submission cost,
+close start/completion, reservation acquisition, media assignment, prepare, READY and first
+frame, failures and reservation counts. Phase values are elapsed milliseconds from selection;
+`release_ms` and `prepare_ms` are differences between their respective phases. The emulator
+job restores a previous successful report when available, compares matching fixture/test
+versions and runner environment only, and reports deltas without cross-machine timing gates.
+A missing or mismatched baseline is explicit. Fresh branches may have no baseline until a
+successful manual run on main or a previous successful run on that PR.
+
+Source policy lives in `scripts/iptv/streams.json`, separately listing stable public examples,
+optional live sources (currently empty), and local fixtures. Only official Apple examples and
+Mux's published HLS test collection are included. Their availability is not guaranteed and
+their presence grants no recording/redistribution rights. Do not infer permission from an IPTV
+directory. No third-party media is committed. Generated red/blue video and sine tones are the
+only DVR media used here.
+
+Public probes have hard-coded HTTPS host/path allowlists independent of the manifest, reject
+credentials/query strings, traversal, private DNS results and off-list redirects/URI attributes,
+and decline encrypted media. Each source permits at most 12 requests, 4 manifest levels,
+3 redirects per request, two bounded segment prefixes, a 4 MiB aggregate budget and a bounded
+wall-clock/read deadline. No keys are fetched or decrypted. Reports retain only fixed fixture
+IDs, classifications and numeric metrics, without URLs, bodies, raw exception text, MACs or
+tokens. CI artifacts deliberately exclude raw logcat and provider request logs.
+
 ## Live channel switching (v1 blocker)
 
 RC1 report: fullscreen D-pad Up/Down updates the channel name immediately, while the previous

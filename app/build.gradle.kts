@@ -18,7 +18,7 @@ android {
         // RC and stable share one increasing sequence; see docs/releases.md#v100-rc1-version-plan.
         versionCode = 22
         versionName = "1.0.0-rc.1"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "app.opentv.iptv.IptvTestRunner"
     }
 
     val signingVariables = listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
@@ -164,4 +164,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

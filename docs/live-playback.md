@@ -1,5 +1,11 @@
 # Persistent live TV playback
 
+The [IPTV Playback Tests workflow](TESTING.md#automated-iptv-playback-tests) exercises the real
+session/controller/Media3 decoder with local generated HLS/TS, visible red/blue channel identity,
+retained surface rebinding, READY/first-frame timing, constrained/Unknown reservations and old
+player cleanup. It preserves PR #59's virtual constrained-portal and stale-callback regressions.
+Emulator results supplement the physical-TV/authorized-provider acceptance requirement.
+
 Start a live channel, then press Back to browse Home, Live TV/Guide, Sports, or Search.
 The active stream stays in the same live session. Select its preview or reopen the current
 channel to return to fullscreen without retuning. Explicitly choosing a different channel

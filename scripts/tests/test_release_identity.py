@@ -110,6 +110,16 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['build']['steps'][3].update({'continue-on-error': 'true'})]:
             self.mutate('build.yml', change)
 
+    def test_iptv_workflow_cannot_publish_skip_regressions_or_require_public_streams(self):
+        for change in [lambda w: w.update(permissions={'contents': 'write'}),
+                       lambda w: w['jobs']['media3'].update(env={'TOKEN': '${{ secrets.PROVIDER_TOKEN }}'}),
+                       lambda w: w['jobs']['media3'].update({'if': 'false'}),
+                       lambda w: w['jobs']['fixtures'].update({'continue-on-error': 'true'}),
+                       lambda w: w['jobs']['public-smoke'].pop('if'),
+                       lambda w: w['jobs']['fixtures']['steps'].append({'run': 'gh release create v1.0.0'}),
+                       lambda w: w['on'].update(schedule=[{'cron': '0 0 * * *'}])]:
+            self.mutate('iptv-playback.yml', change)
+
     def test_unsigned_apk_inspection_checks_binary_and_committed_versions(self):
         path = self.root / "output-metadata.json"
         gradle = (self.root / 'app/build.gradle.kts').read_text()
