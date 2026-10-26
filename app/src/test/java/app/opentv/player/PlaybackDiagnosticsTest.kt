@@ -68,6 +68,55 @@ internal class DiagnosticPlayer {
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34])
 class PlaybackDiagnosticsTest {
+    @Test fun `transition timings are monotonic bounded optional and ignore obsolete generations`() {
+        var now = 100L
+        var enabled = true
+        val timings = ChannelTransitionDiagnostics({ now }, { enabled })
+        timings.begin(1)
+        now = 110
+        timings.record(1, ChannelTransitionPhase.CLOSE_STARTED)
+        now = 115
+        timings.record(1, ChannelTransitionPhase.CLOSE_COMPLETED)
+        assertThat(timings.snapshot().last().elapsedMs).isEqualTo(15)
+        timings.begin(2)
+        timings.record(1, ChannelTransitionPhase.FIRST_FRAME)
+        assertThat(timings.snapshot().map { it.phase }).doesNotContain(ChannelTransitionPhase.FIRST_FRAME)
+        repeat(1000) { ChannelTransitionPhase.entries.forEach { timings.record(2, it) } }
+        assertThat(timings.snapshot()).hasSize(ChannelTransitionPhase.entries.size)
+        assertThat(timings.snapshot().toString()).doesNotContain("https:")
+        enabled = false
+        assertThat(timings.snapshot()).isEmpty()
+        timings.begin(3)
+        assertThat(timings.snapshot()).isEmpty()
+    }
+
+    @Test fun `first frame and ready timings belong only to the accepted media generation`() {
+        var now = 0L
+        val timings = ChannelTransitionDiagnostics({ now }, { true })
+        val fake = DiagnosticPlayer()
+        val observer = PlaybackDiagnostics(fake.player, clock = { now }, transitionDiagnostics = timings)
+        fun event(id: String): AnalyticsListener.EventTime {
+            val timeline = androidx.media3.exoplayer.source.SinglePeriodTimeline(1000, true, false, false, null,
+                MediaItem.Builder().setMediaId(id).build())
+            return AnalyticsListener.EventTime(0, timeline, 0, null, 0, timeline, 0, null, 0, 0)
+        }
+        timings.begin(1)
+        observer.beginSession("HLS", "old")
+        timings.begin(2)
+        now = 10
+        fake.analytics.single().onRenderedFirstFrame(event("old"), Any(), now)
+        observer.sample()
+        assertThat(observer.snapshot.value.transition.map { it.phase }).doesNotContain(ChannelTransitionPhase.FIRST_FRAME)
+        observer.beginSession("HLS", "new")
+        fake.item = MediaItem.Builder().setMediaId("new").build()
+        fake.state = Player.STATE_READY
+        fake.emit()
+        fake.analytics.single().onRenderedFirstFrame(event("new"), Any(), now)
+        observer.sample()
+        assertThat(observer.snapshot.value.transition.map { it.phase }).containsAtLeast(ChannelTransitionPhase.READY, ChannelTransitionPhase.FIRST_FRAME)
+        assertThat(observer.snapshot.value.transition.last().elapsedMs).isEqualTo(10)
+        observer.close()
+    }
     /** Checks: extracts known video audio and unavailable fields without inventing measurements. */
     @Test fun `extracts known video audio and unavailable fields without inventing measurements`() {
         val video = DiagnosticFormats.video(Format.Builder().setWidth(1920).setHeight(1080)

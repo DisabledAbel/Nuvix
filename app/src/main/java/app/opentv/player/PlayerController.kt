@@ -87,6 +87,7 @@ class PlayerController(
      * is a network round-trip — rides over the gaps instead of stalling on every one.
      */
     private val liveRecording: Boolean = false,
+    private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
 ) {
 
     /** Channel-surf debounce for this controller — longer for the preview so browsing is calm. */
@@ -250,6 +251,7 @@ class PlayerController(
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (released || suspended || current != loadedRequest) return
                     val title = current?.title.orEmpty()
                     _state.value = when (playbackState) {
                         Player.STATE_BUFFERING -> State.Buffering(title)
@@ -269,7 +271,7 @@ class PlayerController(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (released || suspended) return
+                    if (released || suspended || current != loadedRequest || player.playerError !== error) return
                     retryJob?.cancel()
                     consecutiveFailures++
                     val request = current
@@ -293,7 +295,7 @@ class PlayerController(
             })
         }
 
-    val diagnostics = PlaybackDiagnostics(player)
+    val diagnostics = PlaybackDiagnostics(player, transitionDiagnostics = transitionDiagnostics)
 
     private val bufferJob = scope.launch {
         bufferSettings.configuration.collectLatest {
@@ -329,12 +331,15 @@ class PlayerController(
         switchJob?.cancel()
         retryJob?.cancel()
         generation++
+        val switchGeneration = generation
+        val transitionGeneration = transitionDiagnostics?.generation ?: 0L
         current = request
         if (resetFailures) consecutiveFailures = 0
         if (suspended) return
 
         switchJob = scope.launch {
             if (debounce) delay(switchDebounceMillis)
+            if (released || suspended || generation != switchGeneration) return@launch
 
             httpFactory.setDefaultRequestProperties(mapOf("User-Agent" to request.userAgent))
             _state.value = State.Buffering(request.title)
@@ -368,11 +373,13 @@ class PlayerController(
                     diagnostics.beginSession(DiagnosticProtocol.identify(mediaItem), mediaItem.mediaId)
                 }
                 setMediaItem(mediaItem)
+                transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.MEDIA_SET)
                 if (!request.isLive && request.startPositionMillis > 0) {
                     seekTo(request.startPositionMillis)
                 }
                 loadedRequest = request
                 playWhenReady = !_userPaused.value
+                transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.PREPARE_STARTED)
                 prepare()
             }
         }

@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-No changes queued after the prepared first release candidate.
+### Fixed
+
+- Live channel switching: close constrained same-account viewing before resolving the next
+  provider link; preserve capacity and recording reservations, cancel obsolete portal requests,
+  navigate from the latest requested channel, and reattach retained video views after player
+  replacement. Stream Information includes sanitized elapsed transition timings. Representative
+  TV/provider acceptance remains a v1 release blocker; see `docs/TESTING.md`.
 
 ## [1.0.0-rc.1]
 

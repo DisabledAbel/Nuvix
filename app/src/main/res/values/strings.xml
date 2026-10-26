@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="player_switch_previous">Still playing: %1$s</string>
+    <string name="player_switch_loading">Loading: %1$s</string>
     <string name="app_name">Nuvix</string>
 
     <!-- ============================ Common / reused ============================ -->

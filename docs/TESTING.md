@@ -2,6 +2,86 @@
 
 # Testing Nuvix
 
+## Live channel switching (v1 blocker)
+
+RC1 report: fullscreen D-pad Up/Down updates the channel name immediately, while the previous
+same-provider video continues for approximately 60 seconds. Investigation of `537bd07` found:
+
+The reporter confirmed **Xtream Codes and MAC/Stalker portals**. Both share the retained-view
+binding path. Xtream resolves a stored URL without authenticating or refreshing its playlist;
+Stalker may additionally mint a short-lived link. The controlled portal-slot regression below
+therefore explains a possible MAC-portal wait, not a demonstrated Xtream 60-second timeout.
+
+- `LivePlaybackCoordinator` resolved provider links before account admission could close the old
+  stream. On constrained providers whose replacement link waits for the active slot to close,
+  this retains the resource needed by resolution. Preflight now closes a same-account viewer
+  without spare/known capacity before resolution; release ordering remains decoder/HTTP close,
+  then old reservation release. Capacity and Unknown approval are rechecked at admission.
+- `StalkerApi` used blocking HTTP and a blocking authentication lock, so canceling a tune did
+  not cancel its network request. The client has a 60-second catalog read timeout; this is a
+  possible waiting boundary, **not proof of the reported provider's exact timeout**. Cancellable
+  HTTP and a coroutine mutex now stop obsolete I/O while preserving cached authentication.
+- Remote zapping used the committed channel, so repeated inputs during lookup selected the
+  same neighbor. It now advances a synchronous requested-channel cursor; generation checks
+  protect resolution, release callbacks and UI ownership.
+- Retained fullscreen/preview AndroidViews did not rebind after replacing the player. Their
+  update callbacks now reattach through `PlayerSurfaceOwner`; the previous surface lease is
+  still cleared before player release. Requested/preparing/playing metadata is separate.
+
+`ChannelSwitchRegressionTest` runs the legacy resolve-before-close ordering against a virtual
+provider that retains its occupied slot for 60,000 ms. The fixed path uses preflight and the
+same fixture. It checks actual close and new engine play calls, not only labels. Observed
+controlled processing results are **60,000 ms before / 0 ms after** (virtual time, immediately
+available replacement). This models a reproducible ordering failure; no private provider or
+physical device was available to establish the original report's precise server behavior.
+First-frame latency on real hardware is not zero and is not measured by that fake engine.
+
+Timeout review: the catalog client uses 15-second connect, 60-second read and five-minute call
+timeouts; the streaming client uses 30-second read and no overall call timeout. Media loads retain
+bounded 500–8,000 ms backoff and controller restarts retain their 1,500 ms delay. The live session
+bypasses the controller's 350 ms surfing debounce. The Medium preset starts with 2,500 ms buffered,
+while its 60,000 ms maximum is a reservoir limit, not a startup wait. These settings are unchanged.
+Recent Sports commits `c1cb6ab` and `537bd07` add opt-in recovery/cushion and preserve initial Sports
+selection; ordinary zapping still clears Sports selection. No fixed 60-second coordinator timer
+was found. Reported physical Xtream/MAC first-frame delay remains unconfirmed until hardware runs.
+
+Additional tests cover Up/Down order and boundaries, Up/Up/Down/Up, late preflight/player
+callbacks, returning to an already closed channel, resolution failure/retry, HLS/MPEG-TS
+request preservation and persistent presentation changes. `LiveConnectionAdmissionTest` uses
+the real session/Room/allocator with suspended players to cover limits 1/3/Unknown, protected
+DVR ownership, fresh approval and stale token cleanup. `StalkerApiTest` uses MockWebServer to
+verify canceled HTTP and authenticated-session reuse. Diagnostics tests use a fake monotonic
+clock, fixed phases, generation/media filtering and disabled/clear behavior. Existing buffer,
+audio focus, surface, guide, lifecycle, Multi-View and recording suites remain required.
+`FullscreenChannelSwitchTest` sends real Compose Up/Down and rapid remote events through
+`PlayerScreen` with a real one-connection Xtream session and verifies the retained PlayerView is
+bound to each replacement Media3 player, including a subsequent persistent-preview switch.
+The suspended fixture opens no provider socket; it
+validates the actual view binding and ownership, not decoding or physical first-frame latency.
+
+Run the existing checks (no workflow or release gate changes):
+
+```sh
+./gradlew :app:testDebugUnitTest
+./gradlew :app:lintDebug
+./gradlew :app:assembleDebug
+python3 -m unittest discover -s scripts/tests -v
+bash scripts/test-supabase.sh
+```
+
+Physical acceptance remains **NOT TESTED / v1 blocker** until a representative Google TV or
+Android TV passes with an authorized provider. Record device/OS/build, provider type (no
+credentials), format, configured allowance, active DVR/Multi-View consumers and sanitized
+Stream Information phase times. Test Up/Down, rapid navigation, same-account limit 1 and spare
+capacity, Unknown approval/denial, authentication expiry, slow/failing streams, HLS and TS,
+Mini Guide overlay, full guide/preview/fullscreen transfers, Sports auto switching, pause and
+audio-focus loss, PiP, background/foreground, recording reclaim and protected ongoing DVR.
+Verify provider-side counts never exceed the allowance, old video is labeled when deliberately
+retained, the latest selection wins, and every replacement renders in the existing surface.
+Capture select→close, close→reservation, reservation→prepare, select→READY and select→first
+frame. A healthy fixture must show no artificial minute wait. Do not generalize its timing
+to all networks/providers; do not close the release-blocker row based only on JVM/CI results.
+
 ## v1.0 beta program
 
 Start with the [beta testing guide](BETA-TESTING.md) for availability, installation,

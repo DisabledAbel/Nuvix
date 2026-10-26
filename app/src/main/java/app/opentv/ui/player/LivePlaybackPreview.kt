@@ -61,8 +61,9 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
     val context = LocalContext.current
     val graph = remember { ServiceLocator.get(context) }
     val channel by session.currentChannel.collectAsState()
+    val requestedChannel by session.requestedChannel.collectAsState()
     val state by session.state.collectAsState()
-    val engineReady by session.engineReady.collectAsState()
+    val controller by session.controllerOrNull.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -104,7 +105,7 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
         ) {
             AsyncImage(channel?.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(0.55f))
             // Allocation belongs to the active session; attaching this View cannot open a stream.
-            if (engineReady) AndroidView(
+            if (controller != null) AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -113,11 +114,13 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
                         isFocusableInTouchMode = false
                         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                         setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                        surfaceAvailable = runCatching { session.surfaceOwner.attach(this) }.getOrDefault(false)
+                        surfaceAvailable = runCatching { session.attachVideoSurface(this, app.opentv.player.LivePresentation.BROWSING) }.getOrDefault(false)
                     }
                 },
                 onRelease = { session.surfaceOwner.detach(it) },
-                update = {},
+                update = {
+                    surfaceAvailable = controller != null && session.attachVideoSurface(it, app.opentv.player.LivePresentation.BROWSING)
+                },
             )
             if (!surfaceAvailable) Text(
                 stringResource(R.string.live_preview_surface_unavailable), color = Color.White,
@@ -133,7 +136,10 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(start = 8.dp)) {
                 Text(channel?.shownName.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
-                Text(programme?.title ?: stringResource(R.string.live_preview_fullscreen), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+                Text(if (state is PlayerController.State.Buffering && requestedChannel != null)
+                    stringResource(R.string.player_switch_loading, requestedChannel!!.shownName)
+                else programme?.title ?: stringResource(R.string.live_preview_fullscreen),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
             }
             IconButton(onClick = onFullscreen) {
                 Icon(Icons.Default.Fullscreen, contentDescription = stringResource(R.string.live_preview_fullscreen))

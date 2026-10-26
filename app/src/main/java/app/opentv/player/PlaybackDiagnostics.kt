@@ -14,6 +14,48 @@ import androidx.media3.exoplayer.DecoderCounters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Fixed vocabulary: provider strings and identifiers cannot enter tune measurements. */
+enum class ChannelTransitionPhase(val label: String) {
+    SELECTED("Channel selected"), SUBMITTED("Tune submitted"), CLOSE_STARTED("Previous stream close started"),
+    CLOSE_COMPLETED("Previous stream close completed"), RESERVATION_ACQUIRED("Reservation acquired"),
+    MEDIA_SET("Media item set"), PREPARE_STARTED("Preparation started"),
+    FIRST_FRAME("First frame rendered"), READY("Playback ready"), FAILED("Transition failed"),
+}
+
+/** Elapsed time from selection, never a wall-clock date or a provider identifier. */
+data class ChannelTransitionTiming(val phase: ChannelTransitionPhase, val elapsedMs: Long)
+
+/** Latest tune only, at most ten measurements, disabled with the existing diagnostics setting. */
+class ChannelTransitionDiagnostics(
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
+    private val enabled: () -> Boolean = { false },
+) {
+    var generation = 0L; private set
+    private var started = 0L
+    private val timings = linkedMapOf<ChannelTransitionPhase, Long>()
+    /** Starts the latest selection's bounded transition measurements. */
+    fun begin(generation: Long) {
+        this.generation = generation
+        started = clock()
+        timings.clear()
+        record(generation, ChannelTransitionPhase.SELECTED)
+        record(generation, ChannelTransitionPhase.SUBMITTED)
+    }
+    /** Records each fixed phase once and rejects an obsolete request's callbacks. */
+    fun record(generation: Long, phase: ChannelTransitionPhase) {
+        if (!enabled()) { timings.clear(); return }
+        if (generation != this.generation) return
+        timings.putIfAbsent(phase, (clock() - started).coerceAtLeast(0))
+    }
+    /** Returns elapsed measurements without retaining any provider metadata. */
+    fun snapshot(): List<ChannelTransitionTiming> {
+        if (!enabled()) timings.clear()
+        return timings.map { ChannelTransitionTiming(it.key, it.value) }
+    }
+    /** Clears transition measurements with the existing diagnostics action. */
+    fun clear() { timings.clear() }
+}
+
 /** Values are nullable when the renderer/source has not supplied them. No URLs or titles. */
 data class DiagnosticFormat(
     val codec: String? = null,
@@ -76,6 +118,7 @@ data class DiagnosticSnapshot(
     val rebuffers: Int = 0, val bufferingMs: Long = 0, val rebuffersPerMinute: Double? = null,
     val decoderErrors: Int = 0, val interruptions: Int = 0, val error: String? = null,
     val history: List<DiagnosticEvent> = emptyList(),
+    val transition: List<ChannelTransitionTiming> = emptyList(),
 )
 
 /** Main-thread event reducer; stores at most 300 entries and five minutes, using monotonic time. */
@@ -188,12 +231,14 @@ class PlaybackDiagnostics internal constructor(
     private val player: Player,
     private val exoPlayer: ExoPlayer? = player as? ExoPlayer,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
+    private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
 ) : AutoCloseable {
     private val timeline = DiagnosticTimeline(clock)
     private val _snapshot = MutableStateFlow(DiagnosticSnapshot())
     val snapshot = _snapshot.asStateFlow()
     private var closed = false
     private var mediaId: String? = null
+    private var transitionGeneration = 0L
     private val eventWindow = androidx.media3.common.Timeline.Window()
     private var decoder: String? = null
     private var renderedTotal = 0L
@@ -208,6 +253,9 @@ class PlaybackDiagnostics internal constructor(
         /** Updates the current snapshot from accepted player events. */
         override fun onEvents(player: Player, events: Player.Events) {
             timeline.state(player.playbackState, player.playWhenReady, player.isPlaying)
+            if (mediaId != null && player.currentMediaItem?.mediaId == mediaId && player.playbackState == Player.STATE_READY) {
+                transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.READY)
+            }
         }
         /** Records accepted seek and position-discontinuity events in the timeline. */
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
@@ -219,6 +267,10 @@ class PlaybackDiagnostics internal constructor(
         override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
             if (!accepts(eventTime, error)) return
             timeline.failure(PlaybackErrors.describe(error), error.errorCode in 4000..5999)
+            transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.FAILED)
+        }
+        override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
+            if (accepts(eventTime)) transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.FIRST_FRAME)
         }
         /** Updates video format diagnostics for the current generation. */
         override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?) { if (accepts(eventTime)) video = format }
@@ -277,6 +329,7 @@ class PlaybackDiagnostics internal constructor(
     fun beginSession(streamProtocol: String?, mediaId: String? = null) {
         if (closed) return
         this.mediaId = mediaId
+        transitionGeneration = transitionDiagnostics?.generation ?: 0L
         protocol = streamProtocol; video = null; audio = null; decoder = null
         currentCounters = null; renderedTotal = 0; counterBaseline = 0
         estimate = null; estimateAt = null; timeline.reset(); _snapshot.value = DiagnosticSnapshot()
@@ -285,6 +338,7 @@ class PlaybackDiagnostics internal constructor(
     fun clear() {
         if (closed) return
         timeline.reset(); renderedTotal = 0
+        transitionDiagnostics?.clear()
         currentCounters?.let { it.ensureUpdated(); counterBaseline = it.renderedOutputBufferCount }
         estimate = null; estimateAt = null
         sample()
@@ -313,6 +367,7 @@ class PlaybackDiagnostics internal constructor(
             rebuffers = timeline.rebuffers, bufferingMs = timeline.bufferingMs(), rebuffersPerMinute = timeline.frequency(),
             decoderErrors = timeline.decoderErrors, interruptions = timeline.interruptions, error = timeline.error,
             history = timeline.history(),
+            transition = transitionDiagnostics?.snapshot().orEmpty(),
         )
     }
     /** Detaches diagnostic listeners and releases references to the player. */

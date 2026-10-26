@@ -58,7 +58,18 @@ internal class LivePlaybackCoordinator(
     private val onRelease: () -> Unit = {},
     private val preparePlayback: suspend (Channel, releaseCurrent: () -> Unit) -> Unit = { _, _ -> },
     private val afterEngineRelease: () -> Unit = {},
+    private val beforeResolve: suspend (Channel, releaseCurrent: () -> Unit) -> Unit = { _, _ -> },
+    private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
 ) {
+    /** Synchronous selection cursor: repeated remote events must advance even during lookup. */
+    private val _requestedChannelId = MutableStateFlow<Long?>(null)
+    val requestedChannelId = _requestedChannelId.asStateFlow()
+    private val _requestedChannel = MutableStateFlow<Channel?>(null)
+    val requestedChannel = _requestedChannel.asStateFlow()
+    private val _preparingChannel = MutableStateFlow<Channel?>(null)
+    val preparingChannel = _preparingChannel.asStateFlow()
+    private val _playingChannel = MutableStateFlow<Channel?>(null)
+    val playingChannel = _playingChannel.asStateFlow()
     private val _currentChannel = MutableStateFlow<Channel?>(null)
     val currentChannel = _currentChannel.asStateFlow()
     private val _previousChannelId = MutableStateFlow<Long?>(null)
@@ -88,11 +99,13 @@ internal class LivePlaybackCoordinator(
     private var requestJob: Job? = null
     private var requestedId: Long? = null
     private var playingChannelId: Long? = null
+    private var lastTunedChannelId: Long? = null
     private var failedChannel: Channel? = null
     private var generation = 0L
     private var persistent = true
     private var continueAudio = true
     private var presentation = LivePresentation.FULLSCREEN
+    val presentationMode: LivePresentation get() = presentation
     private var foreground = true
     private var inPip = false
     private var destroyed = false
@@ -104,7 +117,15 @@ internal class LivePlaybackCoordinator(
             engine = created
             _engineReady.value = true
             engineStateJob = scope.launch {
-                created.state.collect { if (!resolving && !resolutionFailed) _state.value = it }
+                created.state.collect {
+                    if (engine === created && !resolving && !resolutionFailed) {
+                        _state.value = it
+                        if (it is PlayerController.State.Playing) {
+                            _playingChannel.value = _currentChannel.value
+                            _preparingChannel.value = null
+                        }
+                    }
+                }
             }
             created.setPaused(_paused.value)
             enginePausedJob = scope.launch { created.paused.collect { _paused.value = it } }
@@ -131,12 +152,16 @@ internal class LivePlaybackCoordinator(
         requestedId = null
         resolving = false
         resolutionFailed = false
+        _requestedChannelId.value = playingChannelId
+        _requestedChannel.value = _currentChannel.value
+        _preparingChannel.value = null
         _state.value = engine?.state?.value ?: PlayerController.State.Idle
     }
 
     /** Starts a resolved request only if it still belongs to the current tune generation. */
     private fun request(id: Long, rememberPrevious: Boolean, channel: suspend () -> Channel?) {
         if (destroyed || requestedId == id) return
+        _requestedChannelId.value = id
         setPolicyPreviewSuppressed(false)
         if (_active.value && !resolutionFailed && playingChannelId == id && _state.value !is PlayerController.State.Error) {
             // Returning to the current channel cancels an obsolete in-flight different selection.
@@ -145,16 +170,21 @@ internal class LivePlaybackCoordinator(
                 requestJob?.cancel()
                 requestedId = null
                 resolving = false
+                _requestedChannel.value = _currentChannel.value
+                _preparingChannel.value = null
                 engine?.state?.value?.let { _state.value = it }
             }
             return
         }
         requestedId = id
+        _requestedChannel.value = null
+        _preparingChannel.value = null
         resolving = true
         resolutionFailed = false
         _state.value = PlayerController.State.Buffering("")
         _active.value = true
         val token = ++generation
+        transitionDiagnostics?.begin(token)
         requestJob?.cancel()
         requestJob = scope.launch {
             var selected: Channel? = null
@@ -162,6 +192,7 @@ internal class LivePlaybackCoordinator(
             try {
                 selected = channel() ?: run {
                     if (token == generation) {
+                        transitionDiagnostics?.record(token, ChannelTransitionPhase.FAILED)
                         resolutionFailed = true
                         _state.value = PlayerController.State.Error("", "Channel is no longer available", false)
                     }
@@ -173,16 +204,23 @@ internal class LivePlaybackCoordinator(
                 }
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
+                _requestedChannel.value = selected
                 _state.value = PlayerController.State.Buffering(selected.shownName)
+                // Some portals cannot mint a replacement link while a constrained stream is open.
+                // Admission preflight closes only that account's viewer, before provider I/O.
+                beforeResolve(selected) { if (token == generation) releaseEngine() }
+                coroutineContext.ensureActive()
+                if (token != generation) return@launch
+                _preparingChannel.value = selected
                 val resolved = resolve(selected)
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
-                preparePlayback(resolved.channel, ::releaseEngine)
+                preparePlayback(resolved.channel) { if (token == generation) releaseEngine() }
                 admitted = true
                 coroutineContext.ensureActive()
                 if (token != generation) return@launch
                 val playback = ensureEngine()
-                if (rememberPrevious) playingChannelId?.takeIf { it != id }?.let { _previousChannelId.value = it }
+                if (rememberPrevious) lastTunedChannelId?.takeIf { it != id }?.let { _previousChannelId.value = it }
                 _currentChannel.value = resolved.channel
                 playingChannelId = resolved.channel.id
                 _variants.value = resolved.variants
@@ -190,6 +228,7 @@ internal class LivePlaybackCoordinator(
                 failedChannel = null
                 resolving = false
                 playback.play(resolved.request)
+                lastTunedChannelId = resolved.channel.id
                 playback.setPaused(false)
                 _state.value = playback.state.value.let {
                     if (it == PlayerController.State.Idle) PlayerController.State.Buffering(resolved.channel.shownName) else it
@@ -203,6 +242,8 @@ internal class LivePlaybackCoordinator(
             } catch (failure: Exception) {
                 // Provider exceptions often contain credential-bearing URLs. Keep them out of UI/logs.
                 if (token == generation) {
+                    transitionDiagnostics?.record(token, ChannelTransitionPhase.FAILED)
+                    _preparingChannel.value = null
                     if (admitted) releaseEngine()
                     failedChannel = selected
                     resolutionFailed = true
@@ -299,6 +340,11 @@ internal class LivePlaybackCoordinator(
         requestJob = null
         requestedId = null
         playingChannelId = null
+        lastTunedChannelId = null
+        _requestedChannelId.value = null
+        _requestedChannel.value = null
+        _preparingChannel.value = null
+        _playingChannel.value = null
         failedChannel = null
         resolving = false
         resolutionFailed = false
@@ -313,6 +359,8 @@ internal class LivePlaybackCoordinator(
 
     /** Closing the decoder/HTTP owner precedes releasing its account reservation. */
     private fun releaseEngine() {
+        val closing = engine != null
+        if (closing) transitionDiagnostics?.record(generation, ChannelTransitionPhase.CLOSE_STARTED)
         engineStateJob?.cancel()
         engineStateJob = null
         enginePausedJob?.cancel()
@@ -320,7 +368,10 @@ internal class LivePlaybackCoordinator(
         onRelease()
         engine?.release()
         engine = null
+        playingChannelId = null
         _engineReady.value = false
+        _playingChannel.value = null
+        if (closing) transitionDiagnostics?.record(generation, ChannelTransitionPhase.CLOSE_COMPLETED)
         afterEngineRelease()
     }
 

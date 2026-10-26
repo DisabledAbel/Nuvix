@@ -36,6 +36,37 @@ class StalkerApiTest {
     @After fun stop() = server.shutdown()
     private fun next() = server.takeRequest(5, TimeUnit.SECONDS)!!
 
+    @Test fun obsoleteCreateLinkCancelsHttpWithoutReauthenticatingNextTune() = runBlocking<Unit> {
+        val canceled = CountDownLatch(1)
+        val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS)
+            .eventListener(object : okhttp3.EventListener() {
+                override fun canceled(call: okhttp3.Call) { canceled.countDown() }
+            }).build()
+        val cancellableApi = StalkerApi(client)
+        val saved = source()
+        cancellableApi.createLink(saved, "warm")
+        repeat(3) { next() }
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.requestUrl!!.queryParameter("cmd") == "obsolete")
+                    MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                else response(request)
+        }
+        val pending = launch(Dispatchers.Default) { cancellableApi.createLink(saved, "obsolete") }
+        try {
+            assertEquals("create_link", next().requestUrl!!.queryParameter("action"))
+            withTimeout(2_000) { pending.cancelAndJoin() }
+            assertTrue(canceled.await(2, TimeUnit.SECONDS))
+            assertEquals("https://stream.example.invalid/synthetic", cancellableApi.createLink(saved, "latest"))
+            assertEquals("create_link", next().requestUrl!!.queryParameter("action"))
+            assertEquals(5, server.requestCount) // one handshake/profile, three link requests
+        } finally {
+            pending.cancel()
+            client.dispatcher.executorService.shutdownNow()
+            client.connectionPool.evictAll()
+        }
+    }
+
     @Test fun savedOverridesReachProfileMetricsAndEncodedCookie() = runBlocking<Unit> {
         val saved = source().copy(stalkerSerialNumber = "Serial/+=\"Mixed", stalkerDeviceId1 = "ID1 &=Mixed",
             stalkerDeviceId2 = "ID2; injected=Mixed", stalkerSignature = "Sign/+=Mixed")
