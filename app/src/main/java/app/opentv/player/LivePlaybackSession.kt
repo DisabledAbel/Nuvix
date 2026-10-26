@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -160,8 +161,11 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
                     val buffer = implementation?.controller?.bufferPolicy
                     sportsSwitch.observe(state, allowed, preferences.autoSwitchover,
                         buffer?.playbackMs ?: 0, buffer?.rebufferMs ?: 0)
-                    if (!active.value) sportsSwitch.clear()
                 }
+        }
+        viewModelScope.launch {
+            // The initial inactive value precedes the first explicit sports tune.
+            active.drop(1).collect { active -> if (!active) sportsSwitch.clear() }
         }
         viewModelScope.launch {
             SleepTimer.deadline.collectLatest { deadline ->
