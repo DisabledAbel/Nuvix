@@ -5,13 +5,22 @@ import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.room.Room
+import app.opentv.core.ServiceLocator
+import app.opentv.data.db.OpenTvDatabase
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import app.opentv.player.LivePlaybackSession
 import app.opentv.player.PlayerController
 import app.opentv.player.LivePresentation
+import app.opentv.player.LivePlaybackCoordinator
+import app.opentv.sports.SportsAutoSwitchover
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.cancel
 import okhttp3.OkHttpClient
 import com.google.common.truth.Truth.assertThat
@@ -34,6 +43,48 @@ import org.robolectric.annotation.Config
 class LivePlaybackSessionLifecycleTest {
     /** Minimal activity host for retained live-session lifecycle assertions. */
     class PlaybackOwnerActivity : ComponentActivity()
+
+    @Test fun `initial inactivity preserves sports selection but later inactivity clears it`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val activity = Robolectric.buildActivity(PlaybackOwnerActivity::class.java).setup()
+        val graph = ServiceLocator.Graph(activity.get().application)
+        val graphField = ServiceLocator::class.java.getDeclaredField("instance").apply { isAccessible = true }
+        val originalGraph = graphField.get(null)
+        graphField.set(null, graph)
+        val databaseField = ServiceLocator.Graph::class.java.getDeclaredField("database\$delegate").apply { isAccessible = true }
+        val database = Room.inMemoryDatabaseBuilder(activity.get().application, OpenTvDatabase::class.java).build()
+        databaseField.set(graph, lazyOf(database))
+        val session = ViewModelProvider(activity.get())[LivePlaybackSession::class.java]
+        try {
+            val recovery = LivePlaybackSession::class.java.getDeclaredField("sportsSwitch")
+                .apply { isAccessible = true }.get(session) as SportsAutoSwitchover
+            val coordinator = LivePlaybackSession::class.java.getDeclaredField("coordinator")
+                .apply { isAccessible = true }.get(session) as LivePlaybackCoordinator
+            @Suppress("UNCHECKED_CAST")
+            val active = LivePlaybackCoordinator::class.java.getDeclaredField("_active")
+                .apply { isAccessible = true }.get(coordinator) as MutableStateFlow<Boolean>
+
+            // Reproduce the interval between selecting a game and activating its tune,
+            // without resolving a provider or opening a stream.
+            recovery.start("game", 123L)
+            dispatcher.scheduler.runCurrent()
+            assertThat(recovery.selection.value?.eventId).isEqualTo("game")
+            active.value = true
+            dispatcher.scheduler.runCurrent()
+            assertThat(recovery.selection.value?.channelId).isEqualTo(123L)
+            active.value = false
+            dispatcher.scheduler.runCurrent()
+            assertThat(recovery.selection.value).isNull()
+        } finally {
+            activity.pause().stop().destroy()
+            dispatcher.scheduler.runCurrent()
+            session.viewModelScope.coroutineContext[Job]?.join()
+            database.close()
+            graphField.set(null, originalGraph)
+            Dispatchers.resetMain()
+        }
+    }
 
     /** Checks: automatic live request synchronously releases registered guide preview before resolving. */
     @Test fun `automatic live request synchronously releases registered guide preview before resolving`() {
