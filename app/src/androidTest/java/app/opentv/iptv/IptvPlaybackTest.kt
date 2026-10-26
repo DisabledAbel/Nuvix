@@ -200,6 +200,7 @@ class IptvPlaybackTest {
         rendered(2, true)
         main {
             assertTrue("Previous controller must be released", previous.isReleased)
+            assertTrue("Media3 must release the previous player", previous.player.isReleased)
             assertNotSame(previous, session.controllerOrNull.value)
             assertEquals(2L, session.currentChannel.value?.id)
             assertFalse("A stale reservation cannot free the new player", connections.release(previousToken))
@@ -213,7 +214,9 @@ class IptvPlaybackTest {
             assertTrue("Synthetic switch must finish before the historical minute stall", phases.getValue(ChannelTransitionPhase.FIRST_FRAME) < 15_000)
             assertEquals(1, requireNotNull(connections.snapshotForSource(1)).locallyReserved)
             metrics.put("reservations", 1)
+            val replacement = session.controller
             session.stop()
+            assertTrue("Stopping must release the replacement Media3 player", replacement.player.isReleased)
             assertEquals(0, requireNotNull(connections.snapshotForSource(1)).locallyReserved)
             assertNull(activity.video.player)
         }
