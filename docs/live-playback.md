@@ -119,7 +119,10 @@ global timeout reduction, buffer change, second live decoder or additional audio
 See [investigation and regression evidence](TESTING.md#live-channel-switching-v1-blocker).
 
 `PlayerSurfaceOwner` grants one surface attachment at a time. A replacement `PlayerView`
-first detaches its predecessor. An outgoing Compose `AndroidView` can only detach its own
+first detaches its predecessor. Automatic updates may rebind only the current view lease;
+a weak identity preserves that lease across player replacement without retaining an Activity.
+A newly created view explicitly acquires the lease, including when admission is still pending.
+An outgoing Compose `AndroidView` can only detach its own
 lease, so late disposal cannot remove the replacement's video. Detaching a View does not
 release playback or start a second decoder. If a device rejects attachment, a fallback
 message offers a return to fullscreen while retaining audio/session state; it does not

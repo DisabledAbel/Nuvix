@@ -19,6 +19,19 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class PlayerSurfaceOwnerTest {
+    @Test fun `view created before admission can rebind after the first player is allocated`() {
+        val context = RuntimeEnvironment.getApplication()
+        var player: ExoPlayer? = null
+        val owner = PlayerSurfaceOwner { player }
+        val view = PlayerView(context)
+        assertThat(owner.attach(view)).isFalse()
+        player = ExoPlayer.Builder(context).build()
+        try {
+            owner.reset()
+            assertThat(owner.rebind(view)).isTrue()
+            assertThat(view.player).isSameInstanceAs(player)
+        } finally { owner.clear(); player?.release() }
+    }
     @Test fun `same fullscreen view attaches replacement player after constrained stream release`() {
         val context = RuntimeEnvironment.getApplication()
         val first = ExoPlayer.Builder(context).build()
@@ -33,7 +46,7 @@ class PlayerSurfaceOwnerTest {
             active = replacement
             owner.reset()
             // AndroidView.update must run this for the retained View after engine replacement.
-            assertThat(owner.attach(view)).isTrue()
+            assertThat(owner.rebind(view)).isTrue()
             assertThat(view.player).isSameInstanceAs(replacement)
             assertThat(owner.attach(view)).isTrue()
             assertThat(replacement.mediaItemCount).isEqualTo(0)
@@ -69,6 +82,7 @@ class PlayerSurfaceOwnerTest {
             assertThat(owner.attach(preview)).isTrue()
             assertThat(fullscreen.player).isNull()
             assertThat(preview.player).isSameInstanceAs(player)
+            assertThat(owner.rebind(fullscreen)).isFalse()
 
             // Navigation disposal can arrive after the replacement already owns the surface.
             owner.detach(fullscreen)
@@ -77,6 +91,7 @@ class PlayerSurfaceOwnerTest {
             owner.detach(preview)
             assertThat(preview.player).isNull()
             assertThat(recreatedFullscreen.player).isSameInstanceAs(player)
+            assertThat(owner.rebind(preview)).isFalse()
             assertThat(player.trackSelectionParameters).isEqualTo(tracks)
             assertThat(player.playWhenReady).isFalse()
             assertThat(player.volume).isEqualTo(0.35f)

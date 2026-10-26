@@ -361,12 +361,12 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     videoView[0] = this
-                    surfaceAvailable = controller != null && liveSession.attachVideoSurface(this, app.opentv.player.LivePresentation.FULLSCREEN)
+                    surfaceAvailable = liveSession.attachVideoSurface(this, app.opentv.player.LivePresentation.FULLSCREEN)
                 }
             },
             update = {
                 it.resizeMode = resizeMode
-                surfaceAvailable = controller != null && liveSession.attachVideoSurface(it, app.opentv.player.LivePresentation.FULLSCREEN)
+                surfaceAvailable = controller != null && liveSession.attachVideoSurface(it, app.opentv.player.LivePresentation.FULLSCREEN, rebind = true)
             },
             onRelease = {
                 liveSession.surfaceOwner.detach(it)

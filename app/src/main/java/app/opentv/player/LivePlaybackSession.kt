@@ -123,10 +123,10 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     val state = coordinator.state
 
     /** An outgoing destination's update must not reclaim the current destination's surface. */
-    fun attachVideoSurface(view: androidx.media3.ui.PlayerView, presentation: LivePresentation): Boolean {
+    fun attachVideoSurface(view: androidx.media3.ui.PlayerView, presentation: LivePresentation, rebind: Boolean = false): Boolean {
         val current = coordinator.presentationMode
         if (current != presentation && !(current == LivePresentation.PIP && presentation == LivePresentation.FULLSCREEN)) return false
-        return surfaceOwner.attach(view)
+        return if (rebind) surfaceOwner.rebind(view) else surfaceOwner.attach(view)
     }
 
     private val sportsStore = SportsPreferencesStore(application)
