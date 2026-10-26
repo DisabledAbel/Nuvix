@@ -251,6 +251,8 @@ def main(argv=None):
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     args.output.with_suffix(".md").write_text(markdown(report))
     print(f"IPTV checks: {report['status']}; sanitized JSON and Markdown reports written.")
+    for row in report["android"]:
+        print("Media3 result: " + json.dumps(row, sort_keys=True))
     for row in report.get("test_failures", []):
         print(f"Device case failed: {row['id']} ({row['classification']})")
     return 0 if report["status"] == "passed" else 1
