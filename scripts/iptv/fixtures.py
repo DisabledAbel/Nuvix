@@ -110,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
                                  {"id": str(i), "name": f"Synthetic {c.upper()}", "number": i,
                                   "tv_genre_id": "1", "cmd": f"ffmpeg {base}/{c}.ts"}
                                  for i, c in enumerate(("a", "b"), 1)]},
-                             "create_link": {"cmd": f"ffmpeg {base}/b.ts"}}
+                             "create_link": {"cmd": f"ffmpeg {base}/{'a' if query.get('cmd') == ['a'] else 'b'}.ts"}}
                 self.reply({"js": responses.get(action, [])})
         elif path == "/fault/auth":
             self.reply({}, status=401)

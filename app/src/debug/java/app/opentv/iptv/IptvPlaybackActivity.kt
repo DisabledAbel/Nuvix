@@ -3,9 +3,12 @@ package app.opentv.iptv
 
 import android.app.Activity
 import android.os.Bundle
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 
 /** Debug-only surface host. The instrumentation owns the actual production live session. */
+@OptIn(UnstableApi::class)
 class IptvPlaybackActivity : Activity() {
     lateinit var video: PlayerView
         private set

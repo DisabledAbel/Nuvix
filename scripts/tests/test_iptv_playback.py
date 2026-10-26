@@ -1,5 +1,4 @@
 """Security boundaries and actual loopback behavior for the IPTV testing system."""
-import concurrent.futures
 import importlib.util
 import io
 import json
@@ -15,7 +14,7 @@ from unittest.mock import patch
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 from iptv.fixtures import serve
-from iptv.probe import Client, ProbeFailure, hls_references, playlist, probe_hls, validate_url
+from iptv.probe import Client, ProbeFailure, playlist, probe_hls, validate_url
 
 spec = importlib.util.spec_from_file_location("iptv_runner", SCRIPTS / "test-iptv-playback.py")
 runner = importlib.util.module_from_spec(spec)
