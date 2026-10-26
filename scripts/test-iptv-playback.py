@@ -90,7 +90,7 @@ def android_results(directory):
     if {row["id"] for row in results} != required or len(results) != len(required):
         raise ProbeFailure("android_report_incomplete")
     for row in results:
-        if row["id"] in {"hls-one", "hls-spare", "ts-unknown", "stalker-one"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
+        if row["status"] == "passed" and row["id"] in {"hls-one", "hls-spare", "ts-unknown", "stalker-one"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
             raise ProbeFailure("android_report_incomplete")
     return results
 
@@ -163,6 +163,7 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, default=Path("work/iptv-report.json"))
     parser.add_argument("--timeout", type=float, default=10, help="HTTP timeout in seconds (0 < value <= 30)")
     parser.add_argument("--android-report-dir", type=Path)
+    parser.add_argument("--android-exit-code", type=int, default=0, help="Propagate the instrumentation command result into JSON")
     parser.add_argument("--run-android", action="store_true", help="Run connectedDebugAndroidTest against an already started emulator")
     parser.add_argument("--baseline", type=Path)
     args = parser.parse_args(argv)
@@ -198,6 +199,10 @@ def main(argv=None):
             report["status"] = "failed"
     elif args.run_android:
         report["android"].append({"id": "instrumentation", "status": "not_collected"})
+    if args.android_exit_code:
+        report["android"].append({"id": "instrumentation", "status": "application_regression",
+                                  "classification": "instrumentation_command_failed"})
+        report["status"] = "failed"
     if args.baseline and args.baseline.is_file():
         try:
             report["comparison"] = comparison(report, json.loads(args.baseline.read_text()))
