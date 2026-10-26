@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import java.lang.ref.WeakReference
 
 /** The late disposal of an outgoing Compose view must never detach its replacement. */
 internal class ExclusiveSurfaceOwner<T : Any>(private val bind: (T, Boolean) -> Unit) {
@@ -54,14 +55,23 @@ internal class ExclusiveSurfaceOwner<T : Any>(private val bind: (T, Boolean) -> 
  */
 @OptIn(UnstableApi::class)
 class PlayerSurfaceOwner(private val player: () -> Player?) {
+    // The weak lease identity survives engine replacement without retaining an Activity or View.
+    private var currentView = WeakReference<PlayerView>(null)
     private val owner = ExclusiveSurfaceOwner<PlayerView> { view, attach ->
         view.player = if (attach) checkNotNull(player()) { "No active live player" } else null
     }
 
     /** Transfers the player's video surface to the requested presentation owner. */
-    fun attach(view: PlayerView): Boolean = owner.attach(view)
+    fun attach(view: PlayerView): Boolean = owner.attach(view).also {
+        currentView = WeakReference(view)
+    }
+    /** A late update from a transferred-away view cannot reclaim its replacement's lease. */
+    fun rebind(view: PlayerView): Boolean = currentView.get() === view && owner.attach(view)
     /** Detaches only the surface that still belongs to the supplied owner. */
-    fun detach(view: PlayerView) = owner.detach(view)
+    fun detach(view: PlayerView) {
+        owner.detach(view)
+        if (currentView.get() === view) currentView.clear()
+    }
     /** Clears the player's currently attached video surface. */
     fun clear(): Boolean = owner.clear()
     /** Clears saved presentation ownership so a new player can attach safely. */

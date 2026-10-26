@@ -119,7 +119,7 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
                 },
                 onRelease = { session.surfaceOwner.detach(it) },
                 update = {
-                    surfaceAvailable = controller != null && session.attachVideoSurface(it, app.opentv.player.LivePresentation.BROWSING)
+                    surfaceAvailable = controller != null && session.attachVideoSurface(it, app.opentv.player.LivePresentation.BROWSING, rebind = true)
                 },
             )
             if (!surfaceAvailable) Text(
