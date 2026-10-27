@@ -134,7 +134,11 @@ class CloudManagerClient internal constructor(
                 synchronized(this@CloudManagerClient) {
                     if (generation != current) return
                     if (runCatching { json.parseToJsonElement(text).jsonObject["type"]?.jsonPrimitive?.content == "paired" }.getOrDefault(false)) {
-                        val state = mutableState.value as? State.Ready ?: return
+                        val state = when (val state = mutableState.value) {
+                            is State.Ready -> state
+                            State.Expired -> State.Ready(origin, code)
+                            else -> return
+                        }
                         if (!state.paired) {
                             timer?.cancel(); timer = null
                             pairingDeadline = null
@@ -180,7 +184,10 @@ class CloudManagerClient internal constructor(
         val deadline = pairingDeadline ?: return null
         val remaining = deadline.remainingMillis(elapsedRealtime())
         if (remaining == 0L) {
-            stop()
+            // Hide the code locally, but let the Worker decide whether pairing succeeded.
+            // Its accepted pairing notification may still be in flight at this deadline.
+            timer?.cancel(); timer = null
+            pairingDeadline = null
             mutableState.value = State.Expired
             return null
         }
@@ -195,9 +202,11 @@ class CloudManagerClient internal constructor(
     @Synchronized
     private fun failed(current: Long) {
         if (generation != current) return
-        if (pairingDeadline != null && refreshPairing(current) == null) return
+        val expired = mutableState.value == State.Expired ||
+            pairingDeadline?.remainingMillis(elapsedRealtime()) == 0L
         stop()
-        mutableState.value = State.Failed("Manager disconnected or unavailable. Check the internet connection and start a new session.")
+        mutableState.value = if (expired) State.Expired else
+            State.Failed("Manager disconnected or unavailable. Check the internet connection and start a new session.")
     }
 
     @Synchronized

@@ -3,7 +3,6 @@ package app.opentv
 
 import app.opentv.pairing.CloudManagerClient
 import app.opentv.pairing.CloudPairingDeadline
-import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -11,16 +10,6 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import okio.ByteString
-import okio.Timeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -71,9 +60,9 @@ class CloudManagerClientTest {
         advanceTimeBy(1)
         runCurrent()
         assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
-        assertTrue(f.transport.sockets.last().closed)
+        assertFalse(f.transport.sockets.last().closed)
         assertEquals(1, f.transport.calls.count { it.request().url.encodedPath == "/api/create" })
-        assertEquals("/api/end", f.transport.calls.last().request().url.encodedPath)
+        assertFalse(f.transport.calls.any { it.request().url.encodedPath == "/api/end" })
     }
 
     @Test fun zeroOrAlreadyExpiredCreationNeverShowsACodeOrConnects() = runTest {
@@ -87,7 +76,7 @@ class CloudManagerClientTest {
         }
     }
 
-    @Test fun expiryAlsoCancelsAWebSocketThatIsStillConnecting() = runTest {
+    @Test fun expiryDuringConnectionHidesTheCodeWithoutRevokingTheWorkerSession() = runTest {
         val f = Fixture(this)
         f.client.start(ORIGIN)
         f.transport.calls.first().respond()
@@ -97,7 +86,8 @@ class CloudManagerClientTest {
         assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
         pendingSocket.open() // A late onOpen cannot restore the expired code.
         assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
-        assertTrue(pendingSocket.closed)
+        assertFalse(pendingSocket.closed)
+        assertFalse(f.transport.calls.any { it.request().url.encodedPath == "/api/end" })
     }
 
     @Test fun delayedOpenChecksTheDeadlineBeforePublishingReadyEvenIfTimerHasNotRun() = runTest {
@@ -107,7 +97,7 @@ class CloudManagerClientTest {
         f.slept = 300_000
         f.transport.sockets.last().open()
         assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
-        assertTrue(f.transport.sockets.last().closed)
+        assertFalse(f.transport.sockets.last().closed)
         runCurrent()
         assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
     }
@@ -125,6 +115,65 @@ class CloudManagerClientTest {
         // The existing Worker hard session limit still closes the transport.
         f.transport.sockets.last().disconnect()
         assertTrue(f.client.state.value is CloudManagerClient.State.Failed)
+    }
+
+    @Test fun pairingAtDeadlineBeforeTimerRunsKeepsTheCurrentSocketOpen() = runTest {
+        val f = Fixture(this).apply { startAndOpen() }
+        f.slept = 300_000 // Advance elapsed time without dispatching the expiry timer.
+        f.transport.sockets.last().paired()
+        assertTrue(f.ready().paired)
+        assertNull(f.ready().remainingSeconds)
+        assertFalse(f.transport.sockets.last().closed)
+        runCurrent()
+        assertTrue(f.ready().paired)
+        assertFalse(f.transport.calls.any { it.request().url.encodedPath == "/api/end" })
+    }
+
+    @Test fun workerPairingNotificationAfterLocalExpiryRestoresPairedStateWithoutRevocation() = runTest {
+        val f = Fixture(this).apply { startAndOpen() }
+        advanceTimeBy(300_000)
+        runCurrent()
+        assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
+        assertFalse(f.transport.sockets.last().closed)
+        assertFalse(f.transport.calls.any { it.request().url.encodedPath == "/api/end" })
+        f.transport.sockets.last().paired()
+        assertTrue(f.ready().paired)
+        assertNull(f.ready().remainingSeconds)
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertTrue(f.ready().paired)
+        assertFalse(f.transport.sockets.last().closed)
+        f.client.stop()
+        assertTrue(f.transport.sockets.last().closed)
+        assertEquals("/api/end", f.transport.calls.last().request().url.encodedPath)
+    }
+
+    @Test fun disconnectAtOrAfterDeadlineStillRevokesAndRejectsDelayedPairing() = runTest {
+        for (runTimer in listOf(false, true)) {
+            val f = Fixture(this).apply { startAndOpen() }
+            f.slept = 300_000
+            if (runTimer) runCurrent()
+            val socket = f.transport.sockets.last()
+            socket.disconnect()
+            assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
+            assertTrue(socket.closed)
+            assertEquals("/api/end", f.transport.calls.last().request().url.encodedPath)
+            socket.paired()
+            assertEquals(CloudManagerClient.State.Expired, f.client.state.value)
+        }
+    }
+
+    @Test fun restartingAfterLocalExpiryRevokesOldSessionAndIgnoresItsLatePairing() = runTest {
+        val f = Fixture(this).apply { startAndOpen() }
+        advanceTimeBy(300_000)
+        runCurrent()
+        val oldSocket = f.transport.sockets.last()
+        f.startAndOpen()
+        assertTrue(oldSocket.closed)
+        assertEquals(1, f.transport.calls.count { it.request().url.encodedPath == "/api/end" })
+        oldSocket.paired()
+        assertFalse(f.ready().paired)
+        assertEquals(300L, f.ready().remainingSeconds)
     }
 
     @Test fun stopAndRestartCancelOldTimersAndIgnoreStaleSocketCallbacks() = runTest {
@@ -200,7 +249,7 @@ class CloudManagerClientTest {
 
     private class Fixture(scope: TestScope) {
         var slept = 0L
-        val transport = ManualTransport()
+        val transport = ManualCloudManagerTransport()
         val client = CloudManagerClient(scope.backgroundScope, { error("No commands expected") },
             transport, transport, { scope.testScheduler.currentTime + slept })
         fun startAndOpen() {
@@ -211,49 +260,8 @@ class CloudManagerClientTest {
         fun ready() = client.state.value as CloudManagerClient.State.Ready
     }
 
-    private class ManualTransport : Call.Factory, WebSocket.Factory {
-        val calls = mutableListOf<ManualCall>()
-        val sockets = mutableListOf<ManualSocket>()
-        override fun newCall(request: Request): Call = ManualCall(request).also { calls.add(it) }
-        override fun newWebSocket(request: Request, listener: WebSocketListener): WebSocket =
-            ManualSocket(request, listener).also { sockets.add(it) }
-    }
-
-    private class ManualCall(private val request: Request) : Call {
-        private lateinit var callback: Callback
-        private var canceled = false
-        private var executed = false
-        override fun request() = request
-        override fun enqueue(responseCallback: Callback) { callback = responseCallback; executed = true }
-        override fun execute(): Response = error("Async calls only")
-        override fun cancel() { canceled = true }
-        override fun isExecuted() = executed
-        override fun isCanceled() = canceled
-        override fun timeout() = Timeout.NONE
-        override fun clone(): Call = ManualCall(request)
-        fun respond(pairUntil: Long = SERVER + 300_000, serverNow: Long = SERVER,
-                    body: String = "{\"ok\":true,\"pairUntil\":$pairUntil,\"serverNow\":$serverNow}") {
-            callback.onResponse(this, response(request, 201).newBuilder().body(body.toResponseBody()).build())
-        }
-    }
-
-    private class ManualSocket(private val request: Request, private val listener: WebSocketListener) : WebSocket {
-        var closed = false
-        override fun request() = request
-        override fun queueSize() = 0L
-        override fun send(text: String) = !closed
-        override fun send(bytes: ByteString) = !closed
-        override fun close(code: Int, reason: String?): Boolean { closed = true; return true }
-        override fun cancel() { closed = true }
-        fun open() = listener.onOpen(this, response(request, 101))
-        fun paired() = listener.onMessage(this, "{\"type\":\"paired\"}")
-        fun disconnect() = listener.onFailure(this, IOException("Disconnected"), null)
-    }
-
     private companion object {
         const val ORIGIN = "https://manager.example"
         const val SERVER = 1_800_000_000_000L
-        fun response(request: Request, code: Int): Response = Response.Builder()
-            .request(request).protocol(Protocol.HTTP_1_1).code(code).message("Test").build()
     }
 }

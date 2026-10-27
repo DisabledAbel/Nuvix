@@ -10,11 +10,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import app.opentv.pairing.CloudManagerClient
+import app.opentv.ManualCloudManagerTransport
+import app.opentv.ui.WebManagerViewModel
+import com.disabledabel.nuvix.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -22,6 +26,43 @@ import org.robolectric.annotation.Config
 @OptIn(ExperimentalTestApi::class)
 class WebManagerScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun screenWiresObservableViewModelStartStopBackAndDisposal() {
+        val events = mutableListOf<String>()
+        val transport = ManualCloudManagerTransport { request ->
+            if (request.url.encodedPath == "/api/end") events.add("stop")
+        }
+        val model = WebManagerViewModel(RuntimeEnvironment.getApplication()) { scope ->
+            CloudManagerClient(scope, { error("No commands expected") }, transport, transport, { 0L })
+        }
+        val visible = mutableStateOf(true)
+        val origin = BuildConfig.MANAGER_URL.ifBlank { "https://manager.example" }.trimEnd('/')
+        compose.setContent {
+            MaterialTheme {
+                if (visible.value) {
+                    WebManagerScreen(onBack = {
+                        assertEquals(CloudManagerClient.State.Idle, model.state.value)
+                        events.add("back")
+                    }, viewModel = model)
+                }
+            }
+        }
+        if (BuildConfig.MANAGER_URL.isBlank()) {
+            compose.onNode(hasSetTextAction()).performTextReplacement(origin)
+        }
+        remote("Start browser session")
+        compose.onNodeWithText("Connecting to manager…").assertIsDisplayed()
+        assertEquals("$origin/api/create", transport.calls.single().request().url.toString())
+        remote("Done")
+        assertEquals(listOf("stop", "back"), events)
+        // Leave an active, newly started session by removing the screen from composition.
+        remote("Start browser session")
+        compose.onNodeWithText("Connecting to manager…").assertIsDisplayed()
+        compose.runOnIdle { visible.value = false }
+        compose.waitForIdle()
+        assertEquals(CloudManagerClient.State.Idle, model.state.value)
+        assertEquals(listOf("stop", "back", "stop"), events)
+    }
 
     @Test fun countdownUpdatesPreserveRemoteFocusAndExpiredOrPairedCodesDisappear() {
         val ready = CloudManagerClient.State.Ready("https://manager.example", "ABCDEFGH2345",
@@ -61,5 +102,11 @@ class WebManagerScreenTest {
         done.performKeyInput { pressKey(Key.DirectionCenter) }
         assertEquals(1, stops)
         assertEquals(1, backs)
+    }
+
+    private fun remote(text: String) {
+        val node = compose.onNodeWithText(text)
+        node.performSemanticsAction(SemanticsActions.RequestFocus)
+        node.performKeyInput { pressKey(Key.DirectionCenter) }
     }
 }

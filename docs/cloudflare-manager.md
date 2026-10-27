@@ -66,7 +66,10 @@ charging the entire creation round trip to that budget. The local deadline may t
 one request round trip early; it never gains time from network delays or device clock differences.
 WebSocket connection time consumes the same budget. Timer wakeups recalculate elapsed time, including
 time spent asleep, instead of subtracting one second per wakeup. State collection and recomposition
-do not restart it. The Worker remains authoritative for pairing and the thirty-minute session limit.
+do not restart it. Local expiry hides the code and stops refreshes without revoking the session:
+a delayed Worker pairing notification can still show the paired state. Explicit stop, disconnect
+and leaving the screen continue to revoke access. The Worker remains authoritative for pairing
+and the thirty-minute session limit.
 
 ## Security, privacy and limits
 
