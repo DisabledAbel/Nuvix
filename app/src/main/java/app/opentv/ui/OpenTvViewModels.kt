@@ -1398,28 +1398,18 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-/**
- * Owns the "manage channels from your phone or laptop" web server for the manage screen.
- *
- * Same ownership shape as [SyncViewModel]: the server is bound to [viewModelScope] (so its idle
- * watchdog is torn down with the screen) and stopped in [onCleared]. The screen also starts it on
- * open and stops it on leave, mirroring the phone-pairing lifecycle — so no socket is ever left
- * listening on the user's network once they navigate away.
- */
+/** Owns the explicitly opened Cloudflare management session and closes it on exit. */
 class WebManagerViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
-    private val server = ManagerServer(viewModelScope, graph.catalogRepository, graph.settings, graph.sourceRepository)
+    private val manager = ManagerServer(viewModelScope, graph.catalogRepository, graph.settings, graph.sourceRepository)
+    private val remote = app.opentv.pairing.CloudManagerClient(viewModelScope, manager)
 
-    val state: StateFlow<ManagerServer.State> = server.state
+    val state = remote.state
 
-    /** Starts the local web manager and exposes its session to the settings UI. */
-    fun start() = server.start()
+    fun start(origin: String) = remote.start(origin)
+    fun stop() = remote.stop()
 
-    /** Stops the local web manager and clears the displayed session. */
-    fun stop() = server.stop()
-
-    /** Closes the web manager when its owning view model is cleared. */
     override fun onCleared() {
-        server.stop()
+        remote.stop()
     }
 }

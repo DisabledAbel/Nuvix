@@ -410,6 +410,15 @@
     <string name="webmanager_open_browser">Camera won\'t scan it? Open this in any browser on the same wifi:</string>
     <string name="webmanager_local_only">This page is served by this television, over your own network — it never leaves your home.</string>
     <string name="webmanager_stopped">Manager closed</string>
+    <string name="cloudmanager_consent">Start a private browser management session through Cloudflare. Channel details and changes, including provider or NAS details you submit, pass through this service over HTTPS. Only share your code with a browser you trust.</string>
+    <string name="cloudmanager_not_configured">This build has no public manager address configured. Enter your trusted self-hosted manager address, or install a build configured by the Nuvix maintainer.</string>
+    <string name="cloudmanager_address">Manager HTTPS website</string>
+    <string name="cloudmanager_start">Start browser session</string>
+    <string name="cloudmanager_connecting">Connecting to manager…</string>
+    <string name="cloudmanager_enter_code">Open the website above and enter this code:</string>
+    <string name="cloudmanager_code_expiry">Code expires in 5 minutes and pairs one browser. No QR code needed.</string>
+    <string name="cloudmanager_paired">Browser connected. Changes apply to this TV.</string>
+    <string name="cloudmanager_keep_open">Keep this screen open. Done disconnects the browser. Sessions last at most 30 minutes; your TV must stay online.</string>
 
     <!-- ============================ Channel manager ============================ -->
     <string name="channels_manager_title">Channel manager</string>

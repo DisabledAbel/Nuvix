@@ -43,6 +43,12 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 
 ## Setup
 
+- **Manage from a phone, iPad or laptop:** Open **Settings → Manage on phone or laptop**,
+  start a Cloudflare browser session, open the displayed HTTPS website and type the TV code.
+  No QR code or same-Wi-Fi requirement. Keep the TV manager open; pairing codes expire after
+  five minutes and sessions after thirty minutes. The maintainer must deploy the service and
+  configure its URL before public use. See [Cloudflare manager setup and privacy](docs/cloudflare-manager.md).
+
 - **Stalker portal identity:** Edit your authorized portal MAC and independently select Automatic or provider-supplied Serial Number, Device ID 1, Device ID 2 and Signature under **Settings → Providers → Advanced Configuration**. Saved locally in encrypted storage; the physical network MAC and account connection limits are preserved. See the [configuration and beta guide](docs/stalker-configuration.md).
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.
 - **Connections:** Open a provider's **Connection Management** to set its local allowance,

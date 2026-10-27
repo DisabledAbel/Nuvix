@@ -1,0 +1,104 @@
+<!-- Derived from OpenTV ManagerPage, Copyright 2026 OpenTV Contributors; Nuvix modifications. GPL-3.0-or-later. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Nuvix — manage your TV</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Nuvix — manage your TV</h1>
+      <p class="hint">Changes apply to your TV the moment you make them.</p>
+    </header>
+
+    <section id="pairPanel">
+<h2>Connect to your TV</h2>
+<p>On Nuvix, open Settings → Manage on phone or laptop and start a browser session.</p>
+<form id="pairForm">
+<label class="field"><span>Code from your TV</span>
+<input id="pairCode" autocomplete="off" autocapitalize="characters" spellcheck="false"
+ placeholder="ABCD-EFGH-2345" maxlength="16" required aria-describedby="pairMessage"></label>
+<button class="save" id="pairSubmit" type="submit">Connect</button>
+</form>
+<p id="pairMessage" role="status" aria-live="polite">No QR code or account needed. Codes expire in 5 minutes.</p>
+</section>
+<section id="manager" hidden>
+<button class="back" id="disconnect" type="button">Disconnect</button>
+<details class="rec" id="provCard">
+      <summary>Add a provider</summary>
+      <div class="body">
+        <p class="hint">Add an Xtream, M3U or Stalker portal from here — a real keyboard beats the TV remote. Details pass through Cloudflare over HTTPS and are saved on the TV.</p>
+        <label class="field"><span>Type</span>
+          <select id="provKind">
+            <option value="xtream">Xtream Codes login</option>
+            <option value="m3u">M3U playlist URL</option>
+            <option value="stalker">Stalker portal</option>
+          </select></label>
+        <label class="field"><span>Name (optional)</span>
+          <input id="provName" placeholder="My provider" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field"><span id="provUrlLabel">Server address</span>
+          <input id="provUrl" placeholder="http://example.com:8080" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field" id="provUserField"><span>Username</span>
+          <input id="provUser" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field" id="provPassField"><span>Password</span>
+          <input id="provPass" type="password" autocomplete="off"></label>
+        <label class="field" id="provMacField"><span>MAC address</span>
+          <input id="provMac" placeholder="00:1A:79:xx:xx:xx" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <button class="save" id="provSave">Add &amp; load channels</button>
+        <button class="save" id="provTest" style="background:var(--surface2);border-color:var(--line);margin-left:8px;">Test</button>
+      </div>
+    </details>
+
+    <details class="rec" id="recCard">
+      <summary>Recording to NAS (SMB)</summary>
+      <div class="body">
+        <p class="hint">Point recordings at a network drive. Saved straight to your TV — the password stays on the TV.</p>
+        <label class="field"><span>Server (IP address)</span>
+          <input id="recHost" placeholder="192.168.0.214" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field"><span>Share</span>
+          <input id="recShare" placeholder="Nuvix" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field"><span>Folder (optional)</span>
+          <input id="recFolder" placeholder="(leave blank)" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field"><span>Username</span>
+          <input id="recUser" placeholder="record" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field"><span>Password</span>
+          <input id="recPass" type="password" autocomplete="off"></label>
+        <button class="save" id="recSave">Save &amp; use NAS</button>
+        <button class="save" id="recTest" style="background:var(--surface2);border-color:var(--line);margin-left:8px;">Test connection</button>
+      </div>
+    </details>
+
+    <section id="catView">
+      <div id="srcBar" class="chips" hidden></div>
+      <input id="catSearch" class="search" type="text" placeholder="Filter categories…"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div id="catList" class="list"></div>
+      <div id="catEmpty" class="empty" hidden></div>
+    </section>
+
+    <section id="chanView" hidden>
+      <div id="back" class="back">&#8249;&nbsp;Categories</div>
+      <h2 id="chanHead" class="chanhead"></h2>
+      <p class="hint" id="chanHint">Tap a name to rename. Star to favourite, eye to hide, arrows to reorder.</p>
+      <div id="chanList" class="list"></div>
+      <div id="chanEmpty" class="empty" hidden></div>
+    </section>
+
+    <p class="privacy">
+Cloudflare relays channel details and changes to your TV over HTTPS. Provider and NAS details
+you submit pass through the service; they are saved on the TV and are not stored by this manager.
+This is not end-to-end encryption. Only connect to a manager service you trust.
+Refresh or close this tab to forget the browser token; start a new session on the TV to reconnect.
+</p>
+  </div>
+
+  </section>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
