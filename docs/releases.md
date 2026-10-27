@@ -12,6 +12,15 @@ The [v1 tracker](V1-RELEASE-CHECKLIST.md), [beta guide](BETA-TESTING.md) and
 [feedback triage](BETA-FEEDBACK.md) record product acceptance separately from release automation.
 Changing the workflow does not establish that a signing identity or device-test evidence exists.
 
+## First stable signing reset
+
+The owner authorized replacement of the unavailable RC1 key on October 26, 2026.
+Follow [lost-RC1 recovery](signing.md#authorized-recovery-after-loss-of-the-rc1-signing-key)
+before publishing the prepared `1.0.0` / code `24`. RC1 users must uninstall and reinstall;
+private app data will be deleted. Do not promise an in-place update from RC1 or generate
+keys in the Release workflow. RC2/code 23 was not published. Preserve the RC1 tag and assets.
+Publication still requires exact-commit CI and a separate review of device acceptance.
+
 ## Repository signing configuration
 
 For the first signed release, follow [one-password setup](signing.md#first-release-setup-in-github):

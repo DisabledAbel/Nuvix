@@ -151,7 +151,10 @@ def check_workflows(root=ROOT):
 
 def check_signing_setup(workflow):
     require(workflow.get("name") == "Setup Production Signing" and
-            workflow.get("on") == {"workflow_dispatch": ""}, "Signing setup must be manual-only with no inputs")
+            workflow.get("on") == {"workflow_dispatch": {"inputs": {"lost_rc1_key_confirmation": {
+                "description": "Leave empty for first setup. Lost RC1 only: REPLACE LOST RC1 KEY; REINSTALL REQUIRED",
+                "required": "false", "type": "string", "default": ""}}}},
+            "Signing setup must be manual-only with explicit lost-RC1 acknowledgment")
     require(workflow.get("permissions") == {"contents": "write", "actions": "read"},
             "Setup needs only contents write to store the encrypted key; no secret-management token")
     require(workflow.get("concurrency") == {"group": "nuvix-release-publication", "cancel-in-progress": "false"},
@@ -179,6 +182,12 @@ def check_signing_setup(workflow):
                         "SIGNING_BACKUP_PASSWORD": "${{ secrets.SIGNING_BACKUP_PASSWORD }}"}
         if command != "save":
             expected_env["EXISTING_SIGNING_IDENTITY"] = "${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}"
+            expected_env.update({
+                "LOST_RC1_KEY_CONFIRMATION": "${{ inputs.lost_rc1_key_confirmation }}",
+                "LEGACY_SIGNING_PRESENT": "${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' }}",
+                "SIGNING_STORE_RELEASE_ID": "${{ vars.SIGNING_STORE_RELEASE_ID }}",
+                "PINNED_SIGNING_CERT_SHA256": "${{ vars.SIGNING_CERT_SHA256 }}",
+            })
         require(step.get("run") == "python3 scripts/production-signing.py " + command and
                 step.get("env") == expected_env, "Use only the built-in token, saved password and existing-key presence check")
     require(cleanup.get("if") == "always()" and cleanup.get("run") == 'rm -rf "$RUNNER_TEMP/nuvix-first-signing"' and

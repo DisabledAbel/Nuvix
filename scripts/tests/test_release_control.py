@@ -171,6 +171,35 @@ class ReleasePolicyTest(unittest.TestCase):
         control.check_history("v1.0.0", 23, [({"tag_name": "v1.0.0-rc.1"}, metadata)])
         control.check_history("v1.0.0", 23, [({"tag_name": "nightly-20261015.1.1"}, None)])
 
+    def test_stable_notes_explain_signing_break_without_claiming_data_retention(self):
+        self.assertEqual(24, control.source_metadata('1.0.0'))
+        notes = control.release.release_notes(ROOT / 'CHANGELOG.md', '1.0.0')
+        for text in ('RC1 users must uninstall and reinstall', 'deletes private app data',
+                     '1.0.0', '24', 'com.nuvix.player', 'GPL-3.0-or-later', 'OpenTV',
+                     'https://github.com/DisabledAbel/Nuvix/issues'):
+            self.assertIn(text, notes)
+        self.assertNotIn('### Nuvix v1.0.0 Release Candidate 2', notes)
+        self.assertNotRegex(notes, r'\]\((?!https://|#)[^)]+\)')
+
+    def test_only_exact_lost_rc1_can_precede_a_new_signer(self):
+        item = {'id': control.LOST_RC1_RELEASE_ID, 'tag_name': 'v1.0.0-rc.1',
+                'draft': False, 'prerelease': True}
+        metadata = {'applicationId': control.release.APPLICATION_ID, 'versionCode': 22,
+                    'versionName': '1.0.0-rc.1', 'signingCertificateSha256': control.LOST_RC1_CERTIFICATE}
+        control.check_history('v1.0.0', 24, [(item, metadata)], 'a' * 64)
+        for change in ({'id': 1}, {'prerelease': False}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'certificate differs'):
+                control.check_history('v1.0.0', 24, [(dict(item, **change), metadata)], 'a' * 64)
+        with self.assertRaisesRegex(ValueError, 'certificate differs'):
+            control.check_history('v1.0.0', 24, [(item, dict(metadata, signingCertificateSha256='b' * 64))], 'a' * 64)
+        stable = ({'tag_name': 'v1.0.0'}, dict(metadata, versionCode=24, versionName='1.0.0', signingCertificateSha256='a' * 64))
+        control.check_history('v1.0.1', 25, [(item, metadata), stable], 'a' * 64)
+        with self.assertRaisesRegex(ValueError, 'certificate differs'):
+            control.check_history('v1.0.1', 25, [(item, metadata), stable], 'b' * 64)
+        for version, code in [('v1.0.0', 22), ('v1.0.0-rc.1', 24)]:
+            with self.subTest(version=version, code=code), self.assertRaises(ValueError):
+                control.check_history(version, code, [(item, metadata)], 'a' * 64)
+
     def test_permanent_signing_draft_is_not_treated_as_an_apk_release(self):
         saved = {"tag_name": "nuvix-signing-key", "draft": True,
                  "assets": [{"name": "nuvix-signing-backup.zip"}]}

@@ -15,9 +15,9 @@ android {
         applicationId = "com.nuvix.player"
         minSdk = 23
         targetSdk = 35
-        // RC and stable share one increasing sequence; see docs/releases.md#v100-rc2-version-plan.
-        versionCode = 23
-        versionName = "1.0.0-rc.2"
+        // Stable follows RC1/code 22 and the unpublished RC2/code 23; see docs/signing.md.
+        versionCode = 24
+        versionName = "1.0.0"
         testInstrumentationRunner = "app.opentv.iptv.IptvTestRunner"
     }
 

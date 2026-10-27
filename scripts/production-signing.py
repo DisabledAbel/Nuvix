@@ -109,10 +109,27 @@ def preflight():
     password = os.environ.get('SIGNING_BACKUP_PASSWORD', '')
     require(len(password) >= 24 and not password.isspace(),
             'Add SIGNING_BACKUP_PASSWORD as a repository secret: at least 24 characters, saved privately outside GitHub')
-    require(os.environ.get('EXISTING_SIGNING_IDENTITY') == 'false',
-            'Signing credentials already exist or are partial; preserve the existing key')
-    require(not control.pages(f'{control.BASE}/releases'),
-            'A release or signing backup already exists; use the permanent key instead of generating another')
+    confirmation = os.environ.get('LOST_RC1_KEY_CONFIRMATION', '')
+    if confirmation:
+        require(confirmation == 'REPLACE LOST RC1 KEY; REINSTALL REQUIRED',
+                'Confirm RC1 data loss with the exact documented replacement acknowledgment')
+        require(os.environ.get('LEGACY_SIGNING_PRESENT') == 'false',
+                'Manual signing credentials still exist; recover them instead of replacing a key')
+        require(os.environ.get('SIGNING_STORE_RELEASE_ID', '') in ('', str(control.LOST_RC1_STORE_ID)),
+                'Unexpected signing-store ID; inspect it without replacing any key')
+        require(not os.environ.get('PINNED_SIGNING_CERT_SHA256'),
+                'A certificate pin is configured; review and remove only the lost RC1 pin before replacement')
+        # Require both direct lookup and complete authenticated inventory to prove absence.
+        require(control.api(f'{control.BASE}/releases/{control.LOST_RC1_STORE_ID}', missing=True) is None,
+                'Original signing store still exists; recover it instead of replacing a key')
+        history = control.published_history()
+        require(len(history) == 1 and control.is_lost_rc1(*history[0]),
+                'Replacement is limited to the exact RC1-only history with no surviving drafts')
+    else:
+        require(os.environ.get('EXISTING_SIGNING_IDENTITY') == 'false',
+                'Signing credentials already exist or are partial; preserve the existing key')
+        require(not control.pages(f'{control.BASE}/releases'),
+                'A release or signing backup already exists; use the permanent key instead of generating another')
 
 
 
@@ -239,7 +256,8 @@ def save():
                       '`SIGNING_STORE_RELEASE_ID` for durable lookup even if GitHub changes the draft tag.\n\n'
                       f"[Download an encrypted backup]({completed['html_url']}) and save your password separately. "
                       'The backup stays in the signing draft without Actions artifact expiration. '
-                      'You can now run Release. No APK was published.\n')
+                      'Download the backup before running Release. If replacing the lost RC1 key, RC1 users must reinstall; '
+                      'no in-place upgrade or data retention is possible. No APK was published.\n')
 
 
 def load():

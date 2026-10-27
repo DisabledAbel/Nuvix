@@ -1,6 +1,16 @@
 # Nuvix v1.0 release readiness
 
 **Decision: blocked. No beta or stable release is authorized by this checklist.**
+Current stable preparation: `v1.0.0`, versionName `1.0.0` / versionCode `24`.
+Owner authorized replacement of the lost RC1 key on October 26, 2026, accepting mandatory
+uninstall/reinstall and private-data loss for RC1 users. See [recovery steps](signing.md#authorized-recovery-after-loss-of-the-rc1-signing-key).
+Replacement setup, new store ID, offline backup, actual signed APK certificate validation,
+exact-commit CI and physical-device acceptance remain pending. Prior claims of RC1-to-RC2
+signing continuity below are historical and no longer apply to the replacement build.
+No untested device row has been marked passed. RC1 in-place data-retention acceptance is
+superseded by a documented clean reinstall; future updates must retain the replacement signer.
+
+Historical RC2 preparation:
 Prepared second candidate: `v1.0.0-rc.2`, versionName `1.0.0-rc.2` / versionCode `23`,
 production package `com.nuvix.player`, minimum API 23. RC1/code 22 is already published.
 RC2 is not published; this preparation creates no release tag, signs no production APK,

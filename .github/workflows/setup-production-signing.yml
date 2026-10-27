@@ -2,6 +2,12 @@ name: Setup Production Signing
 
 on:
   workflow_dispatch:
+    inputs:
+      lost_rc1_key_confirmation:
+        description: 'Leave empty for first setup. Lost RC1 only: REPLACE LOST RC1 KEY; REINSTALL REQUIRED'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -17,7 +23,7 @@ env:
 
 jobs:
   setup:
-    name: Create first signing key and encrypted backup
+    name: Create signing key and encrypted backup
     if: github.repository == 'DisabledAbel/Nuvix' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -31,6 +37,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
           EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}
+          LOST_RC1_KEY_CONFIRMATION: ${{ inputs.lost_rc1_key_confirmation }}
+          LEGACY_SIGNING_PRESENT: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' }}
+          SIGNING_STORE_RELEASE_ID: ${{ vars.SIGNING_STORE_RELEASE_ID }}
+          PINNED_SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
         run: python3 scripts/production-signing.py preflight
       - name: Set up JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -44,6 +54,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SIGNING_BACKUP_PASSWORD: ${{ secrets.SIGNING_BACKUP_PASSWORD }}
           EXISTING_SIGNING_IDENTITY: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' || vars.SIGNING_CERT_SHA256 != '' || vars.SIGNING_SETUP_RUN_ID != '' || vars.SIGNING_STORE_RELEASE_ID != '' }}
+          LOST_RC1_KEY_CONFIRMATION: ${{ inputs.lost_rc1_key_confirmation }}
+          LEGACY_SIGNING_PRESENT: ${{ secrets.KEYSTORE_BASE64 != '' || secrets.KEYSTORE_PASSWORD != '' || secrets.KEY_ALIAS != '' || secrets.KEY_PASSWORD != '' }}
+          SIGNING_STORE_RELEASE_ID: ${{ vars.SIGNING_STORE_RELEASE_ID }}
+          PINNED_SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
         run: python3 scripts/production-signing.py generate
       - name: Save permanent encrypted key and backup using the workflow token
         env:
