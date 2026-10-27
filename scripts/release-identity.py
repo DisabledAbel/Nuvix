@@ -46,7 +46,7 @@ def check_source(root=ROOT):
 
 def check_workflows(root=ROOT):
     paths = list((root / ".github/workflows").iterdir())
-    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml", "setup-production-signing.yml", "iptv-playback.yml"},
+    require({p.name for p in paths} == {"build.yml", "release.yml", "pages.yml", "setup-production-signing.yml", "iptv-playback.yml", "cloudflare-manager.yml"},
             "Workflow inventory changed; review release capability before updating the allowlist")
     workflows = {p.name: yaml.load(p.read_text(), Loader=yaml.BaseLoader) for p in paths}
     for name, workflow in workflows.items():
@@ -58,16 +58,18 @@ def check_workflows(root=ROOT):
         for job_id, job in workflow.get("jobs", {}).items():
             publisher = name == "release.yml" and job_id == "publish"
             setup = name == "setup-production-signing.yml" and job_id == "setup"
+            cloud_deploy = name == "cloudflare-manager.yml" and job_id == "deploy"
             require(not job.get("uses"), "Reusable workflows require explicit release-policy review")
             permissions = job.get("permissions", workflow["permissions"])
             require(permissions.get("contents", "none") == ("write" if publisher or setup else "read"),
                     "Only the trusted publisher may write repository contents")
-            if not publisher and not setup:
+            if not publisher and not setup and not cloud_deploy:
                 require("secrets." not in json.dumps(job), "Validation/PR jobs must not access secrets")
             for step in job.get("steps", []):
                 command = step.get("run", "")
                 require(publisher or not re.search(r'gh\s+release|action-gh-release|release-control\.py\s+(?:sign|publish)',
                                                   command + " " + step.get("uses", "")), "Alternate release publisher detected")
+    check_cloudflare_manager(workflows["cloudflare-manager.yml"])
     iptv = workflows["iptv-playback.yml"]
     require(set(iptv.get("on", {})) == {"pull_request", "workflow_dispatch"} and
             iptv.get("permissions") == {"contents": "read"}, "IPTV validation must be read-only PR/manual work")
@@ -147,6 +149,29 @@ def check_workflows(root=ROOT):
         require(any(run.startswith("./gradlew ") and ":app:assembleRelease" in run for run in runs),
                 "Validation must build the actual unsigned release APK")
     check_signing_setup(workflows["setup-production-signing.yml"])
+
+
+def check_cloudflare_manager(workflow):
+    """The web service can deploy manually; it has no APK/repository publication capability."""
+    require(set(workflow.get("on", {})) == {"pull_request", "workflow_dispatch"} and
+            workflow.get("permissions") == {"contents": "read"} and
+            set(workflow.get("jobs", {})) == {"test", "deploy"},
+            "Cloudflare manager must retain read-only PR tests and a separate manual deploy job")
+    tests, deploy = workflow["jobs"]["test"], workflow["jobs"]["deploy"]
+    require(not tests.get("if") and not tests.get("continue-on-error"), "Cloudflare tests cannot be skipped")
+    require(deploy.get("if") == "github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'" and
+            deploy.get("needs") == "test" and deploy.get("environment") == "cloudflare-manager" and
+            not deploy.get("continue-on-error") and not deploy.get("env"),
+            "Cloudflare credentials require tested manual main deployment in its own environment")
+    commands = [s for s in deploy.get("steps", []) if s.get("run")]
+    require([s["run"] for s in commands] == ["npm ci", "npm run deploy"], "Cloudflare may only install and deploy its web service")
+    secret_steps = [s for s in deploy.get("steps", []) if "secrets." in json.dumps(s)]
+    require(len(secret_steps) == 1 and secret_steps[0].get("run") == "npm run deploy" and
+            secret_steps[0].get("env") == {
+                "CLOUDFLARE_API_TOKEN": "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+                "CLOUDFLARE_ACCOUNT_ID": "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"} and
+            not secret_steps[0].get("if") and not secret_steps[0].get("continue-on-error"),
+            "Only the Cloudflare deployment step may access its two deployment secrets")
 
 
 def check_signing_setup(workflow):
