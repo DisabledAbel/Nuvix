@@ -49,7 +49,7 @@
         <label class="field" id="provMacField"><span>MAC address</span>
           <input id="provMac" placeholder="00:1A:79:xx:xx:xx" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <button class="save" id="provSave">Add &amp; load channels</button>
-        <button class="save" id="provTest" style="background:var(--surface2);border-color:var(--line);margin-left:8px;">Test</button>
+        <button class="save secondary" id="provTest">Test</button>
       </div>
     </details>
 
@@ -68,7 +68,7 @@
         <label class="field"><span>Password</span>
           <input id="recPass" type="password" autocomplete="off"></label>
         <button class="save" id="recSave">Save &amp; use NAS</button>
-        <button class="save" id="recTest" style="background:var(--surface2);border-color:var(--line);margin-left:8px;">Test connection</button>
+        <button class="save secondary" id="recTest">Test connection</button>
       </div>
     </details>
 
@@ -94,10 +94,10 @@ you submit pass through the service; they are saved on the TV and are not stored
 This is not end-to-end encryption. Only connect to a manager service you trust.
 Refresh or close this tab to forget the browser token; start a new session on the TV to reconnect.
 </p>
-  </div>
-
   </section>
-<div id="status" role="status" aria-live="polite"></div>
+</div>
+
+  <div id="status" role="status" aria-live="polite"></div>
 
 <script src="/app.js" defer></script>
 </body>
