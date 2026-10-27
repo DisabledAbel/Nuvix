@@ -68,6 +68,17 @@ class IdentityContractsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             identity.check_workflows(self.root)
 
+    def test_cloudflare_deployment_cannot_expose_secrets_to_prs_or_sign_apks(self):
+        for change in [lambda w: w['jobs']['deploy'].pop('if'),
+                       lambda w: w['jobs']['deploy'].update({'if': "github.event_name == 'pull_request'"}),
+                       lambda w: w['jobs']['deploy'].pop('needs'),
+                       lambda w: w['jobs']['deploy'].update(env={'TOKEN': '${{ secrets.CLOUDFLARE_API_TOKEN }}'}),
+                       lambda w: w['jobs']['test'].update(env={'TOKEN': '${{ secrets.CLOUDFLARE_API_TOKEN }}'}),
+                       lambda w: w['jobs']['deploy']['steps'][-1]['env'].update(SIGNING_BACKUP_PASSWORD='${{ secrets.SIGNING_BACKUP_PASSWORD }}'),
+                       lambda w: w['jobs']['deploy']['steps'].append({'run': 'gh release create v1.0.0'}),
+                       lambda w: w['jobs']['deploy'].update(permissions={'contents': 'write'})]:
+            self.mutate('cloudflare-manager.yml', change)
+
     def mutate(self, filename, change):
         path = self.root / ".github/workflows" / filename
         original = path.read_text()
