@@ -38,6 +38,7 @@ import app.opentv.data.repo.PersonTitle
 import app.opentv.data.repo.distinctByQuality
 import com.disabledabel.nuvix.R
 import app.opentv.pairing.ManagerServer
+import app.opentv.pairing.CloudManagerClient
 import app.opentv.sync.NasSync
 import app.opentv.sync.SyncBundle
 import app.opentv.sync.SyncClient
@@ -1402,7 +1403,7 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
 class WebManagerViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     private val manager = ManagerServer(viewModelScope, graph.catalogRepository, graph.settings, graph.sourceRepository)
-    private val remote = app.opentv.pairing.CloudManagerClient(viewModelScope, manager)
+    private val remote = CloudManagerClient(viewModelScope, manager)
 
     val state = remote.state
 
