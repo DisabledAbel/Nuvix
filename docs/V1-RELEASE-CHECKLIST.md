@@ -1,16 +1,35 @@
 # Nuvix v1.0 release readiness
 
-**Decision: blocked. No beta or stable release is authorized by this checklist.**
-Current stable preparation: `v1.0.0`, versionName `1.0.0` / versionCode `24`.
-Owner authorized replacement of the lost RC1 key on October 26, 2026, accepting mandatory
-uninstall/reinstall and private-data loss for RC1 users. See [recovery steps](signing.md#authorized-recovery-after-loss-of-the-rc1-signing-key).
-Replacement setup, new store ID, offline backup, actual signed APK certificate validation,
-exact-commit CI and physical-device acceptance remain pending. Prior claims of RC1-to-RC2
-signing continuity below are historical and no longer apply to the replacement build.
-No untested device row has been marked passed. RC1 in-place data-retention acceptance is
-superseded by a documented clean reinstall; future updates must retain the replacement signer.
+## v1.0.0 publication — October 26, 2026
 
-Historical RC2 preparation:
+**Published at the owner's direction:** [Nuvix v1.0.0](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0),
+versionName `1.0.0`, versionCode `24`, package `com.nuvix.player`.
+The stable tag identifies commit `54513275521154b825dd32364e8e2676f0f0d690`.
+
+- [x] [Release run #13](https://github.com/DisabledAbel/Nuvix/actions/runs/40448178148) passed all three jobs:
+  Android tests/lint/debug and release builds, Python policy/branding tests, unsigned APK inspection,
+  Sports benchmark, isolated database security, signing and verified publication.
+- [x] Signed APK package, version, certificate and release-asset checksums verified by the publisher.
+  Public download identity and checksum verification is recorded in the release completion report.
+- [x] Published as stable/Latest with APK, update manifest, checksums, release notes and corresponding source.
+- [x] Replacement signing key created in [setup #5](https://github.com/DisabledAbel/Nuvix/actions/runs/40429382357).
+  Its initial draft later became unavailable; restored the identical encrypted ZIP from the saved copy,
+  without creating another key. Current unpublished signing-store release ID: **425024844**;
+  `SIGNING_STORE_RELEASE_ID` updated accordingly. Preserve this draft and the separate backup/password.
+- [x] Encrypted ZIP SHA-256: `703e77d93c3b0dfa26fdb3812a83400f860c7f5298c09227e507f3178a5f3658`.
+  Replacement certificate SHA-256: `da426e68fd853da2b6e3ecf805b02b2ef6ac290def5bc5ec4565526ec189ca22`.
+- [x] RC1 reinstall/private-data-loss requirement included prominently in the stable notes.
+  RC1 cannot update in place; subsequent stable updates must retain the replacement signing identity.
+- [ ] Physical-TV/live-provider channel switching, Multi-View, DVR, remotes, cloud sync and
+  future compatible update/data-retention acceptance remain unverified. Automated results do not
+  certify these checks. These gaps remain disclosed in the stable release notes.
+
+## Historical prepublication audit
+
+The sections below retain the RC2 preparation audit and its then-current status statements;
+they do not describe the current publication or signing-store status above. RC2 was not published.
+No historical physical-device check has been changed to a pass.
+
 Prepared second candidate: `v1.0.0-rc.2`, versionName `1.0.0-rc.2` / versionCode `23`,
 production package `com.nuvix.player`, minimum API 23. RC1/code 22 is already published.
 RC2 is not published; this preparation creates no release tag, signs no production APK,
