@@ -28,7 +28,7 @@ class CandidatePreparationTest(unittest.TestCase):
 
     def test_committed_candidate_version_code_and_permanent_identity(self):
         identity.check_source()
-        self.assertEqual(CODE, control.source_metadata(VERSION))
+        self.assertEqual(24, control.source_metadata("1.0.0"))
         self.assertEqual("v" + VERSION, control.version_tag(VERSION, "rc"))
         identity.check_workflows()
 
@@ -110,7 +110,7 @@ class CandidatePreparationTest(unittest.TestCase):
         # dispatching those commands. Any API, signing, tag or publication call is a failure.
         with patch.object(control, "api", side_effect=AssertionError("No remote actions")), \
              patch.object(control.subprocess, "run", side_effect=AssertionError("No external commands")):
-            self.assertEqual(CODE, control.source_metadata(VERSION))
+            self.assertEqual(24, control.source_metadata("1.0.0"))
             self.assertIn("Release Candidate 2", control.release.release_notes(ROOT / "CHANGELOG.md", VERSION))
 
 

@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.0.0]
+
+### Nuvix v1.0.0 — first stable release
+
+**RC1 users must uninstall and reinstall.** The RC1 private signing key and its
+backup are unavailable. The owner authorized a replacement signing identity on
+October 26, 2026. Android will reject an in-place update from RC1 even though the
+package remains `com.nuvix.player`. Uninstalling deletes private app data, including
+saved providers/credentials, preferences, favorites and recording schedules/history.
+Save provider details privately, finish active recordings, and retain any accessible
+recording files before uninstalling. Re-add providers and storage permissions after
+installation. Optional cloud sync restores only its supported metadata categories;
+it is not a complete backup. Future stable updates must retain the replacement key.
+
+Includes the RC1 feature set plus the channel-switch repairs, optional Sports
+playback recovery/cushion and automated Media3 playback coverage described in the
+RC2 section below. RC2 was prepared but was not published. This stable preparation
+uses `versionName` **1.0.0**, `versionCode` **24** and package **com.nuvix.player**.
+
+Known limitations remain: provider/hardware-dependent playback and decoder limits,
+direct MPEG-TS-only DVR capture, vendor background execution restrictions,
+EPG-dependent Sports matching and partial opt-in cloud sync. No universal
+channel-switch latency, uninterrupted DVR or full settings restoration is promised.
+
+Publication is pending replacement-key setup and review of the exact-commit CI and
+physical-TV acceptance evidence in [the readiness tracker](https://github.com/DisabledAbel/Nuvix/blob/main/docs/V1-RELEASE-CHECKLIST.md).
+Preparing this section does not establish that untested device checks passed.
+When published, use the exact `v1.0.0` GitHub release and verify its checksums and
+replacement certificate before installing `nuvix.apk` through Android's prompt.
+An RC1 installation cannot accept the new signer through the in-app updater;
+use the release page manually after preserving what you can.
+
+
+### Licensing and feedback
+
+Requires Android 6.0/API 23 or newer. Nuvix provides no channels, playlists or media;
+use authorized sources. GPL-3.0-or-later, with OpenTV copyright, attribution and
+third-party notices retained. Nuvix is an independent modified version of OpenTV,
+with no official affiliation with OpenTV or DIRECTV. The release includes corresponding
+source. Report reproducible bugs at https://github.com/DisabledAbel/Nuvix/issues;
+redact provider credentials, private URLs, MAC addresses, tokens and device identifiers.
+
 ## [1.0.0-rc.2]
 
 ### Nuvix v1.0.0 Release Candidate 2

@@ -18,6 +18,21 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 REPO = "DisabledAbel/Nuvix"
 BASE = f"repos/{REPO}"
+# Owner-authorized loss of RC1's private key (2026-10-26). This exact historical
+# release is the only signer discontinuity allowed; later releases must agree.
+LOST_RC1_RELEASE_ID = 423729970
+LOST_RC1_STORE_ID = 423036468
+LOST_RC1_CERTIFICATE = "2a6571bc8e4fa5cf303faf0aa70fd436a8360ba99d4b274edeedabeb0d191928"
+
+
+def is_lost_rc1(item, metadata):
+    return (item.get("id") == LOST_RC1_RELEASE_ID and item.get("tag_name") == "v1.0.0-rc.1"
+            and not item.get("draft") and item.get("prerelease") is True
+            and isinstance(metadata, dict) and metadata.get("applicationId") == release.APPLICATION_ID
+            and metadata.get("versionName") == "1.0.0-rc.1" and type(metadata.get("versionCode")) is int
+            and metadata["versionCode"] == 22 and metadata.get("signingCertificateSha256") == LOST_RC1_CERTIFICATE)
+
+
 ACTIVE_RUN_STATUSES = {"queued", "requested", "waiting", "pending", "in_progress"}
 
 
@@ -168,7 +183,7 @@ def check_history(tag, code, history, expected_certificate=None):
             continue
         require(code > metadata["versionCode"], "versionCode must exceed every published stable and RC version")
         require(current > previous, "Release version must follow every published stable and RC version")
-        if expected_certificate is not None:
+        if expected_certificate is not None and not is_lost_rc1(item, metadata):
             require(metadata.get("signingCertificateSha256", "").lower() == expected_certificate.lower(),
                     "Published production certificate differs from the independently configured signing baseline")
 

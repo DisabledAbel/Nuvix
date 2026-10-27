@@ -2,6 +2,50 @@
 
 Every stable Nuvix update must retain the release application ID `com.nuvix.player` and the same private signing key. Increment Android `versionCode` for every distributed update; the prepared first candidate uses code 22, versionName `1.0.0-rc.1`. The `vX.Y.Z` Git tag must match `versionName` exactly. The updater uses `versionCode` to prevent downgrades.
 
+## Authorized recovery after loss of the RC1 signing key
+
+On October 26, 2026 the owner confirmed that the original signing draft and local
+backup are unavailable, and authorized a new key with a documented reinstall requirement.
+The original store ID is `423036468`; the only distributed predecessor is RC1 release
+`423729970`, `v1.0.0-rc.1`, code `22`, certificate
+`2a6571bc8e4fa5cf303faf0aa70fd436a8360ba99d4b274edeedabeb0d191928`.
+The historical recovery instructions later in this document describe that former store;
+they do not establish that it is still accessible.
+
+After these changes are merged to `main`:
+
+1. Keep the existing saved `SIGNING_BACKUP_PASSWORD`. If its value is also lost, save a
+   new password privately and update that secret before setup; it will encrypt the new key.
+   Do not enter passwords in chat or workflow inputs.
+2. If `SIGNING_CERT_SHA256` is configured, review it against the lost RC1 certificate
+   above. Remove only that obsolete pin for this authorized reset. If it differs, stop
+   and investigate. Keep any existing legacy signing credentials: setup refuses them
+   because they might recover the original key. No secret removal is needed otherwise.
+3. Open **Actions → Setup Production Signing → Run workflow**, select `main`, and enter
+   exactly `REPLACE LOST RC1 KEY; REINSTALL REQUIRED` in **lost_rc1_key_confirmation**.
+   This is a fresh run, not a rerun of an old job. The normal empty-input setup still
+   refuses existing releases. This exceptional path requires the original store to return
+   404, no surviving draft/backup, and exactly the known RC1 release/metadata in the full
+   authenticated inventory. Other API errors stop recovery. It never deletes or overwrites
+   a store. Generation reserves a new draft first, so a failed or repeated run cannot
+   silently create another identity. If setup fails, inspect that reserved draft.
+4. From the successful setup summary, replace repository Actions variable
+   `SIGNING_STORE_RELEASE_ID` (`423036468`) with the **new numeric ID**. Retain the
+   new draft. Download `nuvix-signing-backup.zip` immediately and save it outside GitHub,
+   with its password separately. Record the new public certificate fingerprint securely.
+5. Review CI and remaining physical-TV acceptance. When releasing, use a fresh **Release**
+   run on `main`, version `1.0.0`, channel `stable`, title `Nuvix v1.0.0`.
+   Never rerun the failed RC2 release or overwrite the RC1 tag/assets.
+
+This replacement breaks Android update continuity from RC1. Users must manually uninstall
+RC1 and reinstall; uninstalling erases private app data. Preserve provider details privately,
+finish recordings, save accessible recording files and explain that cloud sync is not a
+complete backup. Keep RC1 available as historical source; do not relabel it as stable.
+The new stable uses code 24. The release policy exempts only the exact known RC1 record
+from certificate continuity checks; every later release must match the replacement signer.
+This is not Android signing-key rotation: the old key cannot authorize a signing lineage.
+Normal releases still never generate a key, and APK certificate verification remains required.
+
 ## First release setup in GitHub
 
 **One password, one setup run. No PAT, keystore upload, alias or fingerprint entry is needed.**
@@ -35,7 +79,7 @@ and are removed at job completion. No release generates a new key.
 Setup refuses an existing or partial manual signing configuration, any release or draft
 backup, and workflow reruns. It reserves the signing draft before generation; failures never
 silently generate a replacement identity. On failure, inspect the run and existing draft.
-Never create another key after distributing signed APKs. Restore the same key from your
+Except for the explicitly authorized lost-RC1 recovery above, never create another key after distributing signed APKs. Restore the same key from your
 backup if necessary. Complete legacy configurations using the four repository signing
 secrets and a pinned fingerprint continue to work without changing the signing identity.
 
@@ -76,7 +120,7 @@ end-to-end publication. Inspect existing release versions/tags before any fresh 
 
 ## Signing key
 
-Reuse the existing long-lived production keystore. Do not generate or replace it as part of release setup. If no production installation has ever been distributed and no signing identity exists, establish that identity separately and record its certificate before enabling releases. The normal Release workflow never generates a key; one-time Setup creates only the first identity.
+Reuse the existing long-lived production keystore. Do not generate or replace it as part of release setup. If no production installation has ever been distributed and no signing identity exists, establish that identity separately and record its certificate before enabling releases. The normal Release workflow never generates a key; Setup creates the first identity or performs the narrowly guarded lost-RC1 replacement above.
 
 Back up the key and passwords securely in multiple protected locations. Losing the private key prevents ordinary in-place updates of existing installations. A different key generally requires users to uninstall the app, which can erase app data and launcher choices. The shared Android debug key is unsuitable for public distribution. Never commit private keys or passwords.
 

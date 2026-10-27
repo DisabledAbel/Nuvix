@@ -44,6 +44,7 @@ class SetupPolicyTest(unittest.TestCase):
         self.reject(lambda w: w['concurrency'].update(group='separate-from-releases'))
         self.reject(lambda w: w['concurrency'].update({'cancel-in-progress': 'true'}))
         self.reject(lambda w: w['permissions'].update(contents='read'))
+        self.reject(lambda w: w['on']['workflow_dispatch']['inputs']['lost_rc1_key_confirmation'].update(default='REPLACE LOST RC1 KEY; REINSTALL REQUIRED'))
         self.reject(lambda w: w['env'].update(TRUSTED_RELEASE_ACTORS='anyone'))
 
     def test_no_plaintext_upload_or_password_in_dependencies(self):
@@ -137,6 +138,64 @@ class SetupPreflightTest(unittest.TestCase):
         for releases in ([], [dict(saved, draft=False)], [saved, saved]):
             with patch.object(signing.control, 'pages', return_value=releases), self.assertRaises(ValueError):
                 signing.store_release()
+
+
+class LostRc1ReplacementTest(unittest.TestCase):
+    def setUp(self):
+        self.env = {
+            'SIGNING_BACKUP_PASSWORD': 'disposable-backup-password-for-tests',
+            'LOST_RC1_KEY_CONFIRMATION': 'REPLACE LOST RC1 KEY; REINSTALL REQUIRED',
+            'LEGACY_SIGNING_PRESENT': 'false', 'EXISTING_SIGNING_IDENTITY': 'true',
+            'SIGNING_STORE_RELEASE_ID': str(signing.control.LOST_RC1_STORE_ID),
+            'PINNED_SIGNING_CERT_SHA256': '',
+        }
+        self.item = {'id': signing.control.LOST_RC1_RELEASE_ID, 'tag_name': 'v1.0.0-rc.1',
+                     'draft': False, 'prerelease': True}
+        self.metadata = {'applicationId': signing.control.release.APPLICATION_ID, 'versionCode': 22,
+                         'versionName': '1.0.0-rc.1',
+                         'signingCertificateSha256': signing.control.LOST_RC1_CERTIFICATE}
+
+    def preflight(self, *, history=None, original=None):
+        with patch.dict(os.environ, self.env, clear=True), patch.object(signing, 'validate_context') as context, \
+             patch.object(signing.control, 'api', return_value=original) as api, \
+             patch.object(signing.control, 'published_history', return_value=history if history is not None else [(self.item, self.metadata)]):
+            signing.preflight()
+        context.assert_called_once_with()
+        api.assert_called_once_with(f'{signing.control.BASE}/releases/{signing.control.LOST_RC1_STORE_ID}', missing=True)
+
+    def test_acknowledged_missing_rc1_store_can_be_replaced(self):
+        self.preflight()
+        self.env['SIGNING_STORE_RELEASE_ID'] = ''
+        self.preflight()
+
+    def test_replacement_refuses_any_surviving_store_or_other_history(self):
+        for history in ([], [(self.item, self.metadata), ({'draft': True}, None)],
+                        [(dict(self.item, id=1), self.metadata)],
+                        [(self.item, dict(self.metadata, signingCertificateSha256='b' * 64))],
+                        [(dict(self.item, tag_name='v1.0.0'), self.metadata)]):
+            with self.subTest(history=history), self.assertRaisesRegex(ValueError, 'RC1-only'):
+                self.preflight(history=history)
+        with self.assertRaisesRegex(ValueError, 'still exists'):
+            self.preflight(original={'id': signing.control.LOST_RC1_STORE_ID})
+
+    def test_replacement_cannot_bypass_acknowledgment_credentials_pin_or_id(self):
+        for key, value in [('LOST_RC1_KEY_CONFIRMATION', 'yes'),
+                           ('LOST_RC1_KEY_CONFIRMATION', 'REPLACE LOST RC1 KEY; REINSTALL REQUIRED\n'),
+                           ('LEGACY_SIGNING_PRESENT', 'true'), ('LEGACY_SIGNING_PRESENT', ''),
+                           ('PINNED_SIGNING_CERT_SHA256', signing.control.LOST_RC1_CERTIFICATE),
+                           ('SIGNING_STORE_RELEASE_ID', '999')]:
+            original = self.env[key]
+            self.env[key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                self.preflight()
+            self.env[key] = original
+
+    def test_api_error_is_not_proof_of_missing_backup(self):
+        with patch.dict(os.environ, self.env, clear=True), patch.object(signing, 'validate_context'), \
+             patch.object(signing.control, 'api', side_effect=RuntimeError('HTTP 403')), \
+             patch.object(signing.control, 'published_history') as history, self.assertRaises(RuntimeError):
+            signing.preflight()
+        history.assert_not_called()
 
 
 class StoreDiscoveryTest(unittest.TestCase):
