@@ -22,12 +22,26 @@ var sessionTimer = null;
 async function api(action, payload, token) {
   var headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
-  var r = await fetch('/api/' + action, {
-    method: 'POST', headers: headers, body: JSON.stringify(payload),
-    cache: 'no-store', credentials: 'omit', redirect: 'error',
-    signal: AbortSignal.timeout(35000)
-  });
-  var value = await r.json();
+  var timeout = null;
+  var signal;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    signal = AbortSignal.timeout(35000);
+  } else {
+    var controller = new AbortController();
+    signal = controller.signal;
+    timeout = setTimeout(function() { controller.abort(); }, 35000);
+  }
+  var r;
+  var value;
+  try {
+    r = await fetch('/api/' + action, {
+      method: 'POST', headers: headers, body: JSON.stringify(payload),
+      cache: 'no-store', credentials: 'omit', redirect: 'error',
+      signal: signal
+    });
+    value = await r.json().catch(function() { return {}; });
+    if (!value || typeof value !== 'object') value = {};
+  } finally { if (timeout !== null) clearTimeout(timeout); }
   if (!r.ok) {
     if (r.status === 401 || r.status === 404) disconnect();
     throw new Error(value.error || 'The TV could not complete this action.');
@@ -37,16 +51,34 @@ async function api(action, payload, token) {
 function disconnect() {
   activeCode = ''; browserToken = ''; pairAttemptCode = ''; pairAttemptToken = '';
   clearTimeout(sessionTimer);
+  meta = { sources: [], categories: [] };
+  channels = []; currentCat = null; currentSource = null;
+  document.getElementById('catList').replaceChildren();
+  document.getElementById('chanList').replaceChildren();
+  document.getElementById('srcBar').replaceChildren();
+  document.getElementById('srcBar').hidden = true;
+  document.getElementById('chanHead').textContent = '';
+  document.getElementById('chanView').hidden = true;
+  document.getElementById('catView').hidden = false;
+  document.querySelectorAll('#manager input').forEach(function(input) { input.value = ''; });
+  document.querySelectorAll('#manager select').forEach(function(select) { select.selectedIndex = 0; });
+  document.getElementById('recPass').placeholder = '';
+  document.querySelectorAll('#manager details').forEach(function(details) { details.open = false; });
+  syncProvFields();
+  clearTimeout(statusTimer);
+  document.getElementById('status').textContent = '';
+  document.getElementById('status').className = '';
   document.getElementById('manager').hidden = true;
   document.getElementById('pairPanel').hidden = false;
   document.getElementById('pairMessage').textContent = 'Session ended. Start a new session on the TV.';
-  document.querySelectorAll('input[type="password"]').forEach(function(input) { input.value = ''; });
 }
 async function remote(method, path, body) {
   if (!activeCode || !browserToken) throw new Error('Connect to your TV first.');
+  var requestToken = browserToken;
   var reply = await api('request', {
     code: activeCode, method: method, path: path, body: body || ''
   }, browserToken);
+  if (requestToken !== browserToken) throw new Error('Session ended.');
   if (reply.status < 200 || reply.status >= 300) throw new Error('TV action failed (' + reply.status + ').');
   return JSON.parse(reply.body);
 }

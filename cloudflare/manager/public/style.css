@@ -80,3 +80,4 @@
 
 [hidden] { display:none !important; }
 button { font:inherit; }
+.save.secondary { background:var(--surface2); border-color:var(--line); margin-left:8px; }

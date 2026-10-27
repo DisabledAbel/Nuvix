@@ -69,7 +69,7 @@ def check_workflows(root=ROOT):
                 command = step.get("run", "")
                 require(publisher or not re.search(r'gh\s+release|action-gh-release|release-control\.py\s+(?:sign|publish)',
                                                   command + " " + step.get("uses", "")), "Alternate release publisher detected")
-    check_cloudflare_manager(workflows["cloudflare-manager.yml"])
+    check_cloudflare_manager(workflows["cloudflare-manager.yml"], root)
     iptv = workflows["iptv-playback.yml"]
     require(set(iptv.get("on", {})) == {"pull_request", "workflow_dispatch"} and
             iptv.get("permissions") == {"contents": "read"}, "IPTV validation must be read-only PR/manual work")
@@ -151,7 +151,7 @@ def check_workflows(root=ROOT):
     check_signing_setup(workflows["setup-production-signing.yml"])
 
 
-def check_cloudflare_manager(workflow):
+def check_cloudflare_manager(workflow, root=ROOT):
     """The web service can deploy manually; it has no APK/repository publication capability."""
     require(set(workflow.get("on", {})) == {"pull_request", "workflow_dispatch"} and
             workflow.get("permissions") == {"contents": "read"} and
@@ -159,12 +159,25 @@ def check_cloudflare_manager(workflow):
             "Cloudflare manager must retain read-only PR tests and a separate manual deploy job")
     tests, deploy = workflow["jobs"]["test"], workflow["jobs"]["deploy"]
     require(not tests.get("if") and not tests.get("continue-on-error"), "Cloudflare tests cannot be skipped")
+    for command in ("npm test", "npm run check"):
+        steps = [s for s in tests.get("steps", []) if command in s.get("run", "").splitlines()]
+        require(len(steps) == 1 and "if" not in steps[0] and "continue-on-error" not in steps[0],
+                "Cloudflare tests and packaging checks must run directly and block on failure")
     require(deploy.get("if") == "github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'" and
             deploy.get("needs") == "test" and deploy.get("environment") == "cloudflare-manager" and
             not deploy.get("continue-on-error") and not deploy.get("env"),
             "Cloudflare credentials require tested manual main deployment in its own environment")
-    commands = [s for s in deploy.get("steps", []) if s.get("run")]
-    require([s["run"] for s in commands] == ["npm ci", "npm run deploy"], "Cloudflare may only install and deploy its web service")
+    steps = deploy.get("steps", [])
+    require(len(steps) == 4 and steps[:2] == [
+        {"uses": "actions/checkout@v7", "with": {"persist-credentials": "false"}},
+        {"uses": "actions/setup-node@v6", "with": {"node-version": "24"}}] and
+        steps[2] == {"run": "npm ci"} and
+        set(steps[3]) == {"name", "run", "env"} and steps[3].get("run") == "npm run deploy",
+        "Cloudflare permits only the approved checkout, Node setup, install and deployment steps")
+    scripts = json.loads((root / "cloudflare/manager/package.json").read_text()).get("scripts", {})
+    require(scripts.get("deploy") == "wrangler deploy" and
+            not any(hook in scripts for hook in ("predeploy", "postdeploy")),
+            "Cloudflare deploy must invoke only the approved Wrangler command without lifecycle hooks")
     secret_steps = [s for s in deploy.get("steps", []) if "secrets." in json.dumps(s)]
     require(len(secret_steps) == 1 and secret_steps[0].get("run") == "npm run deploy" and
             secret_steps[0].get("env") == {

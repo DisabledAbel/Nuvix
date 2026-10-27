@@ -128,7 +128,11 @@ class CloudManagerClient(
                         synchronized(this@CloudManagerClient) {
                             if (generation != current || !completedIds.add(command.id)) return@launch
                             // Never replay a mutation after transport interruption.
-                            if (completedIds.size > 512) { failed(current); return@launch }
+                            if (completedIds.size > 512) {
+                                val oldest = completedIds.iterator()
+                                oldest.next()
+                                oldest.remove()
+                            }
                         }
                         val reply = try { manager.executeRemote(command) }
                         catch (_: Exception) { CloudManagerReply(command.id, 500, "{\"error\":\"Management action failed\"}") }

@@ -25,7 +25,8 @@ class IdentityContractsTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         for name in ("app/build.gradle.kts", "app/src/main/AndroidManifest.xml", "scripts/create-release.py",
-                     "scripts/release-control.py", "scripts/release-identity.py", "scripts/production-signing.py"):
+                     "scripts/release-control.py", "scripts/release-identity.py", "scripts/production-signing.py",
+                     "cloudflare/manager/package.json"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, path)
@@ -78,6 +79,28 @@ class IdentityContractsTest(unittest.TestCase):
                        lambda w: w['jobs']['deploy']['steps'].append({'run': 'gh release create v1.0.0'}),
                        lambda w: w['jobs']['deploy'].update(permissions={'contents': 'write'})]:
             self.mutate('cloudflare-manager.yml', change)
+
+    def test_cloudflare_required_tests_cannot_be_removed_or_skipped(self):
+        for command in ('npm test', 'npm run check'):
+            def step(w):
+                return next(s for s in w['jobs']['test']['steps'] if command in s.get('run', '').splitlines())
+            for change in [lambda w: w['jobs']['test']['steps'].remove(step(w)),
+                           lambda w: step(w).update({'if': 'false'}),
+                           lambda w: step(w).update({'continue-on-error': 'true'})]:
+                self.mutate('cloudflare-manager.yml', change)
+
+    def test_cloudflare_deploy_rejects_extra_actions_and_changed_package_commands(self):
+        for extra in ({'uses': 'someone/action@v1'}, {'run': 'echo extra'}):
+            self.mutate('cloudflare-manager.yml', lambda w: w['jobs']['deploy']['steps'].append(extra))
+        path = self.root / 'cloudflare/manager/package.json'
+        original = path.read_text()
+        for scripts in ({'deploy': 'echo changed'}, {'deploy': 'wrangler deploy', 'predeploy': 'echo hook'}):
+            package = json.loads(original)
+            package['scripts'] = scripts
+            path.write_text(json.dumps(package))
+            with self.assertRaises(ValueError):
+                identity.check_workflows(self.root)
+        path.write_text(original)
 
     def mutate(self, filename, change):
         path = self.root / ".github/workflows" / filename
