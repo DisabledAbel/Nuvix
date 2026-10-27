@@ -14,20 +14,31 @@ recording files before uninstalling. Re-add providers and storage permissions af
 installation. Optional cloud sync restores only its supported metadata categories;
 it is not a complete backup. Future stable updates must retain the replacement key.
 
-Includes the RC1 feature set plus the channel-switch repairs, optional Sports
-playback recovery/cushion and automated Media3 playback coverage described in the
-RC2 section below. RC2 was prepared but was not published. This stable preparation
-uses `versionName` **1.0.0**, `versionCode` **24** and package **com.nuvix.player**.
+### What's included
+
+- Live IPTV with M3U/M3U8, Xtream Codes and authorized Stalker portals, plus movies,
+  series, favorites, search, XMLTV guide and retained playback while browsing.
+- Mini TV Guide, Sports Hub, optional Sports playback recovery/cushion, customizable
+  Home and optional TV launcher.
+- Multi-View with up to four streams where provider capacity and hardware allow.
+- Background DVR with scheduling, provider conflict handling, protected recordings,
+  padding and late-start controls.
+- Optional category-controlled cloud sync and stable-release update discovery.
+- Channel-switch repairs for stale playback surfaces and callbacks, cancellation of
+  superseded requests, and provider connection transitions. Physical-TV resolution
+  of the original one-minute delay is not yet confirmed by recorded acceptance.
+
+RC2 was prepared but was not published. This release uses `versionName` **1.0.0**, `versionCode` **24** and package **com.nuvix.player**.
 
 Known limitations remain: provider/hardware-dependent playback and decoder limits,
 direct MPEG-TS-only DVR capture, vendor background execution restrictions,
 EPG-dependent Sports matching and partial opt-in cloud sync. No universal
 channel-switch latency, uninterrupted DVR or full settings restoration is promised.
 
-Publication is pending replacement-key setup and review of the exact-commit CI and
-physical-TV acceptance evidence in [the readiness tracker](https://github.com/DisabledAbel/Nuvix/blob/main/docs/V1-RELEASE-CHECKLIST.md).
-Preparing this section does not establish that untested device checks passed.
-When published, use the exact `v1.0.0` GitHub release and verify its checksums and
+Physical-TV and live-provider acceptance remain unverified in
+[the readiness tracker](https://github.com/DisabledAbel/Nuvix/blob/main/docs/V1-RELEASE-CHECKLIST.md).
+Passing automated tests does not certify those device checks.
+Use the exact `v1.0.0` GitHub release and verify its checksums and
 replacement certificate before installing `nuvix.apk` through Android's prompt.
 An RC1 installation cannot accept the new signer through the in-app updater;
 use the release page manually after preserving what you can.
