@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.opentv.pairing.CloudManagerClient
 import app.opentv.pairing.CloudManagerProtocol
+import app.opentv.pairing.CloudPairingDeadline
 import app.opentv.ui.WebManagerViewModel
 import com.disabledabel.nuvix.BuildConfig
 import com.disabledabel.nuvix.R
@@ -39,6 +40,18 @@ fun WebManagerScreen(onBack: () -> Unit, viewModel: WebManagerViewModel = viewMo
     var origin by rememberSaveable { mutableStateOf(BuildConfig.MANAGER_URL) }
     DisposableEffect(Unit) { onDispose { viewModel.stop() } }
 
+    WebManagerContent(state, origin, { origin = it }, { viewModel.start(origin) }, viewModel::stop, onBack)
+}
+
+@Composable
+internal fun WebManagerContent(
+    state: CloudManagerClient.State,
+    origin: String,
+    onOriginChange: (String) -> Unit,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onBack: () -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -47,7 +60,12 @@ fun WebManagerScreen(onBack: () -> Unit, viewModel: WebManagerViewModel = viewMo
         Text(stringResource(R.string.webmanager_title), style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
         when (val current = state) {
-            CloudManagerClient.State.Idle, is CloudManagerClient.State.Failed -> {
+            CloudManagerClient.State.Idle, CloudManagerClient.State.Expired, is CloudManagerClient.State.Failed -> {
+                if (current == CloudManagerClient.State.Expired) {
+                    Text(stringResource(R.string.cloudmanager_code_expired),
+                        color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(12.dp))
+                }
                 if (current is CloudManagerClient.State.Failed) {
                     Text(current.reason, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(12.dp))
@@ -56,13 +74,13 @@ fun WebManagerScreen(onBack: () -> Unit, viewModel: WebManagerViewModel = viewMo
                 if (BuildConfig.MANAGER_URL.isBlank()) {
                     Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.cloudmanager_not_configured), textAlign = TextAlign.Center)
-                    OutlinedTextField(value = origin, onValueChange = { origin = it }, singleLine = true,
+                    OutlinedTextField(value = origin, onValueChange = onOriginChange, singleLine = true,
                         label = { Text(stringResource(R.string.cloudmanager_address)) })
                 } else {
                     Text(origin, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.start(origin) }, enabled = CloudManagerProtocol.origin(origin) != null) {
+                Button(onClick = onStart, enabled = CloudManagerProtocol.origin(origin) != null) {
                     Text(stringResource(R.string.cloudmanager_start))
                 }
             }
@@ -78,14 +96,16 @@ fun WebManagerScreen(onBack: () -> Unit, viewModel: WebManagerViewModel = viewMo
                 } else {
                     Text(stringResource(R.string.cloudmanager_enter_code))
                     Text(CloudManagerProtocol.displayCode(current.code), style = MaterialTheme.typography.displayMedium)
-                    Text(stringResource(R.string.cloudmanager_code_expiry), textAlign = TextAlign.Center)
+                    // Ordinary accessible text: no live region announcing every tick.
+                    Text(stringResource(R.string.cloudmanager_code_countdown,
+                        CloudPairingDeadline.format(current.remainingSeconds ?: 0)), textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(stringResource(R.string.cloudmanager_keep_open), textAlign = TextAlign.Center)
             }
         }
         Spacer(Modifier.height(24.dp))
-        OutlinedButton(onClick = { viewModel.stop(); onBack() }) {
+        OutlinedButton(onClick = { onStop(); onBack() }) {
             Text(stringResource(R.string.common_done))
         }
     }

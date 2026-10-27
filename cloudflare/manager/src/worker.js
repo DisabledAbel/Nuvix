@@ -52,13 +52,16 @@ export class ManagerRoom {
       if (!TOKEN.test(payload.tvToken)) return json({ error: 'Invalid token' }, 400);
       const tvHash = await hash(payload.tvToken);
       const created = await this.ctx.storage.transaction(async txn => {
-        if (await txn.get('session')) return false;
+        if (await txn.get('session')) return null;
         const now = Date.now();
-        await txn.put('session', { tvHash, pairUntil: now + PAIR_MS, expires: now + SESSION_MS });
+        const pairUntil = now + PAIR_MS;
+        await txn.put('session', { tvHash, pairUntil, expires: now + SESSION_MS });
         await txn.setAlarm(now + PAIR_MS);
-        return true;
+        return pairUntil;
       });
-      return json({ ok: created }, created ? 201 : 409);
+      // Additive metadata for native clients; no device wall-clock synchronization required.
+      return json(created === null ? { ok: false } :
+        { ok: true, pairUntil: created, serverNow: Date.now() }, created === null ? 409 : 201);
     }
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer /, '');
     // Hash before the authoritative storage read: revocation may run while crypto awaits.
@@ -155,6 +158,9 @@ export class ManagerRoom {
       for (const ws of this.devices()) ws.close(1000, 'Session expired');
       this.failPending();
       await this.ctx.storage.deleteAll();
+    } else if (session && (session.browserHash || Date.now() < session.pairUntil)) {
+      // A queued pairing alarm must not revoke a browser that paired before the deadline.
+      await this.ctx.storage.setAlarm(session.browserHash ? session.expires : session.pairUntil);
     } else { await this.expire(); }
   }
 }

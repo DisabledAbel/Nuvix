@@ -416,7 +416,8 @@
     <string name="cloudmanager_start" tools:ignore="MissingTranslation">Start browser session</string>
     <string name="cloudmanager_connecting" tools:ignore="MissingTranslation">Connecting to manager…</string>
     <string name="cloudmanager_enter_code" tools:ignore="MissingTranslation">Open the website above and enter this code:</string>
-    <string name="cloudmanager_code_expiry" tools:ignore="MissingTranslation">Code expires in 5 minutes and pairs one browser. No QR code needed.</string>
+    <string name="cloudmanager_code_countdown" tools:ignore="MissingTranslation">Code expires in %1$s</string>
+    <string name="cloudmanager_code_expired" tools:ignore="MissingTranslation">Code expired. Start a new session to get a new code.</string>
     <string name="cloudmanager_paired" tools:ignore="MissingTranslation">Browser connected. Changes apply to this TV.</string>
     <string name="cloudmanager_keep_open" tools:ignore="MissingTranslation">Keep this screen open. Done disconnects the browser. Sessions last at most 30 minutes; your TV must stay online.</string>
 
