@@ -22,6 +22,15 @@ Signing out removes local cloud tokens and account-bound synchronization state a
 
 Legacy LAN/NAS sync is explicitly user controlled and preserved. Its original bundles use stream URLs as cross-device identifiers; those may contain provider credentials. Use only trusted local peers/private NAS storage, protect NAS accounts, and do not expose pairing/sync servers publicly. The new Supabase path never reuses those bundles.
 
+The optional Cloudflare browser manager starts only after **Start browser session** is selected.
+It relays channel/category details, management actions and provider/NAS details submitted in forms
+through the displayed HTTPS service. This traffic is not end-to-end encrypted: Cloudflare and the
+service operator can inspect it. The manager stores only credential hashes and short session
+deadlines, not provider/NAS credentials or catalogs; it does not log command bodies. Browser tokens
+stay in memory and are not included in URLs or persistent browser storage. Existing NAS passwords
+are not returned to the browser. Codes expire in five minutes, sessions in at most thirty minutes,
+and leaving the TV manager ends access. See [service setup, privacy and limits](cloudflare-manager.md).
+
 HTTP-only providers remain supported. On HTTP, usernames, passwords, and stream requests are unencrypted in transit. Prefer provider HTTPS addresses. Local encryption does not protect network HTTP or a fully compromised/rooted device. Do not paste secrets in public bug reports; diagnostics should classify failures without credential-bearing URLs or raw exceptions.
 
 Updates contact only the explicitly configured `DisabledAbel/Nuvix` GitHub release origin and its approved HTTPS download destinations. The APK must match declared SHA-256/size, installed package, increasing numeric version code, and the installed signing certificate. The OS validates installation and asks for required user approval. Debug and release signatures/identities are distinct.

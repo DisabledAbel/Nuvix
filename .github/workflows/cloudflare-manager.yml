@@ -1,0 +1,72 @@
+name: Cloudflare Manager
+
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/manager/**'
+      - 'app/src/main/java/app/opentv/pairing/**'
+      - '.github/workflows/cloudflare-manager.yml'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy the shared manager to Cloudflare after tests pass'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-manager-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cloudflare/manager
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: cloudflare/manager/package-lock.json
+      - name: Verify generated manager assets
+        run: python3 generate-page.py --check
+      - name: Install locked deployment dependencies
+        run: npm ci
+      - name: Test pairing, isolation, expiry and relay failures
+        run: npm test
+      - name: Validate browser and Worker packaging
+        run: |
+          node --check public/app.js
+          npm run check
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: cloudflare-manager
+    defaults:
+      run:
+        working-directory: cloudflare/manager
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Deploy manager
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run deploy

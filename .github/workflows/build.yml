@@ -4,6 +4,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  NUVIX_MANAGER_URL: ${{ vars.NUVIX_MANAGER_URL }}
+
 permissions:
   contents: read
 

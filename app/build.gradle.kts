@@ -19,6 +19,13 @@ android {
         versionCode = 24
         versionName = "1.0.0"
         testInstrumentationRunner = "app.opentv.iptv.IptvTestRunner"
+        // Public service address, never a credential. Blank builds offer explicit self-host setup.
+        val managerUrl = providers.gradleProperty("nuvixManagerUrl")
+            .orElse(providers.environmentVariable("NUVIX_MANAGER_URL")).getOrElse("").trim()
+        require(managerUrl.isEmpty() || Regex("https://[A-Za-z0-9.-]+(?::443)?/?").matches(managerUrl)) {
+            "NUVIX_MANAGER_URL must be an HTTPS origin without a path or credentials."
+        }
+        buildConfigField("String", "MANAGER_URL", "\"$managerUrl\"")
     }
 
     val signingVariables = listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")

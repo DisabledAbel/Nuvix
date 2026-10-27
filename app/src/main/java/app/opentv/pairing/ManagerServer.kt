@@ -18,6 +18,7 @@ import app.opentv.data.repo.SourceRepository
 import app.opentv.recording.SmbClient
 import app.opentv.recording.SmbConfig
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.InetAddress
@@ -221,6 +222,28 @@ class ManagerServer(
 
         val body = if (method == "POST") readBody(reader, headers) else ""
 
+        dispatch(output, method, path, query, body)
+    }
+
+    /** Reuses catalog operations without opening a LAN socket or exposing arbitrary routes. */
+    internal fun executeRemote(command: CloudManagerCommand): CloudManagerReply {
+        if (!CloudManagerProtocol.allowed(command.method, command.path) ||
+            command.body.toByteArray(Charsets.UTF_8).size > CloudManagerProtocol.MAX_REQUEST_BYTES
+        ) return CloudManagerReply(command.id, 400, "{\"error\":\"Unsupported command\"}")
+        val parsed = PairingHttp.parseRequestLine("${command.method} ${command.path} HTTP/1.1")
+            ?: return CloudManagerReply(command.id, 400, "{\"error\":\"Invalid path\"}")
+        val output = ByteArrayOutputStream()
+        dispatch(output, parsed.first, parsed.second, parsed.third, command.body)
+        val response = output.toString(Charsets.UTF_8.name())
+        val body = response.substringAfter("\r\n\r\n", "")
+        // Leave room for JSON escaping in the WebSocket envelope.
+        if (body.toByteArray(Charsets.UTF_8).size > CloudManagerProtocol.MAX_REPLY_BYTES / 3) {
+            return CloudManagerReply(command.id, 413, "{\"error\":\"Category too large for remote management\"}")
+        }
+        return CloudManagerReply(command.id, response.substringBefore("\r\n").split(' ')[1].toInt(), body)
+    }
+
+    private fun dispatch(output: OutputStream, method: String, path: String, query: Map<String, String>, body: String) {
         when {
             method == "GET" && path == "/" ->
                 output.write(PairingHttp.httpResponse("200 OK", "text/html", ManagerPage.page(token)))
