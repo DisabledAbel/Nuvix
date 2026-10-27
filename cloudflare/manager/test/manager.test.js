@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { ManagerRoom } from '../src/worker.js';
-import { allowedCommand, normalizeCode, hash, readJson, MAX_REQUEST } from '../src/protocol.js';
+import { allowedCommand, normalizeCode, hash, readJson, MAX_REQUEST, PAIR_MS, SESSION_MS } from '../src/protocol.js';
 
 const TV = 'a'.repeat(64), BROWSER = 'b'.repeat(64), OTHER = 'c'.repeat(64);
 function room() {
@@ -55,6 +55,53 @@ test('stores hashes only and refuses collision/overwrite', async () => {
   assert.equal(r.data.get('session').tvHash, await hash(TV));
   assert.ok(!JSON.stringify([...r.data]).includes(TV));
   assert.equal((await r.instance.fetch(request('/create', { tvToken: OTHER }))).status, 409);
+});
+
+test('creation returns the stored deadline and response time without extending pairing', async t => {
+  const now = 1_800_000_000_000;
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const r = room();
+  const setAlarm = r.storage.setAlarm.bind(r.storage);
+  r.storage.setAlarm = async time => { await setAlarm(time); t.mock.timers.tick(2500); };
+  const response = await r.instance.fetch(request('/create', { tvToken: TV }));
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { ok: true, pairUntil: now + PAIR_MS, serverNow: now + 2500 });
+  assert.equal(r.data.get('session').pairUntil, now + PAIR_MS);
+  assert.equal(r.data.get('session').expires, now + SESSION_MS);
+  assert.equal(r.storage.alarm, now + PAIR_MS);
+  const collision = await r.instance.fetch(request('/create', { tvToken: OTHER }));
+  assert.equal(collision.status, 409);
+  assert.deepEqual(await collision.json(), { ok: false });
+  assert.equal(r.data.get('session').pairUntil, now + PAIR_MS);
+});
+
+test('pairUntil rejects pairing at the exact boundary even before the alarm runs', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 });
+  const r = await created();
+  t.mock.timers.tick(PAIR_MS);
+  assert.equal((await r.instance.fetch(request('/pair', { browserToken: BROWSER }))).status, 404);
+  await r.instance.alarm();
+  assert.equal(r.socket.readyState, 3);
+  assert.equal((await r.instance.fetch(request('/pair', { browserToken: BROWSER }))).status, 404);
+});
+
+test('pairing just before expiry survives a queued pairing alarm until the hard limit', async t => {
+  const now = 1_800_000_000_000;
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const r = await created();
+  t.mock.timers.tick(PAIR_MS - 1);
+  assert.equal((await r.instance.fetch(request('/pair', { browserToken: BROWSER }))).status, 200);
+  assert.deepEqual(r.sent, [{ type: 'paired' }]);
+  t.mock.timers.tick(1);
+  await r.instance.alarm();
+  assert.equal(r.socket.readyState, 1);
+  assert.equal(r.storage.alarm, now + SESSION_MS);
+  assert.equal((await r.instance.fetch(request('/pair', { browserToken: BROWSER }))).status, 200);
+  t.mock.timers.tick(SESSION_MS - PAIR_MS);
+  assert.equal((await r.instance.fetch(request('/pair', { browserToken: BROWSER }))).status, 404);
+  await r.instance.alarm();
+  assert.equal(r.socket.readyState, 3);
+  assert.equal(r.data.size, 0);
 });
 
 test('unknown code and expired code cannot pair', async () => {
