@@ -16,6 +16,15 @@ import org.junit.Test
 /** Exercises the production lifecycle with manual transport callbacks and virtual elapsed time. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CloudManagerClientTest {
+    @Test fun olderWorkerRequiresExplicitUpgradeBeforeConnecting() = runTest {
+        val f = Fixture(this)
+        f.client.start(ORIGIN)
+        f.transport.calls.first().respond(body = "{\"ok\":true,\"pairUntil\":1800000300000,\"serverNow\":1800000000000}")
+        assertTrue(f.client.state.value is CloudManagerClient.State.Failed)
+        assertTrue((f.client.state.value as CloudManagerClient.State.Failed).reason.contains("Worker"))
+        assertTrue(f.transport.sockets.isEmpty())
+    }
+
     @Test fun countdownRoundsUpAtSecondBoundariesAndClampsAtZero() {
         for ((millis, expected) in listOf(
             -1L to "0:00", 0L to "0:00", 1L to "0:01", 999L to "0:01",

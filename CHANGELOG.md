@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Add bounded web-manager channel pages and provider/category search over original, display and
+  custom names; stable ID tie-breaking and revision checks reject stale catalog/provider edits.
+- Add explicit selection across pages, page-only Select All, reviewed Favorite/Unfavorite/Hide/Unhide
+  batches, accurate partial/unknown outcomes and read-only TV-state reconciliation after lost replies.
+- Preserve individual rename/move controls, repository sync flags, pairing expiry and relay security;
+  omit credential-bearing logo URLs, enforce protocol-2 compatibility and document Worker-before-APK
+  rollout. Add large-catalog, browser and relay regressions; physical TV/iPad Safari checks remain pending.
+
 - Configure Cloudflare Worker previews with isolated browser-manager session storage and
   separate rate-limit namespaces; document the Workers Builds root and commands.
 

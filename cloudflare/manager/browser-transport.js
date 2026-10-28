@@ -28,12 +28,13 @@ async function api(action, payload, token) {
     if (!value || typeof value !== 'object') value = {};
   } finally { if (timeout !== null) clearTimeout(timeout); }
   if (!r.ok) {
-    if (r.status === 401 || r.status === 404) disconnect();
-    throw new Error(value.error || 'The TV could not complete this action.');
+    if ((r.status === 401 || r.status === 404) && token && token === browserToken) disconnect('Session expired or revoked. Start a new session on the TV.');
+    var error = new Error(value.error || 'The TV could not complete this action.'); error.status = r.status; throw error;
   }
   return value;
 }
-function disconnect() {
+function disconnect(reason) {
+  if (typeof resetChannelState === 'function') resetChannelState();
   activeCode = ''; browserToken = ''; pairAttemptCode = ''; pairAttemptToken = '';
   clearTimeout(sessionTimer);
   meta = { sources: [], categories: [] };
@@ -41,6 +42,7 @@ function disconnect() {
   document.getElementById('catList').replaceChildren();
   document.getElementById('chanList').replaceChildren();
   document.getElementById('srcBar').replaceChildren();
+  document.getElementById('channelSource').replaceChildren();
   document.getElementById('srcBar').hidden = true;
   document.getElementById('chanHead').textContent = '';
   document.getElementById('chanView').hidden = true;
@@ -55,7 +57,7 @@ function disconnect() {
   document.getElementById('status').className = '';
   document.getElementById('manager').hidden = true;
   document.getElementById('pairPanel').hidden = false;
-  document.getElementById('pairMessage').textContent = 'Session ended. Start a new session on the TV.';
+  document.getElementById('pairMessage').textContent = typeof reason === 'string' ? reason : 'Session ended. Start a new session on the TV.';
 }
 async function remote(method, path, body) {
   if (!activeCode || !browserToken) throw new Error('Connect to your TV first.');
@@ -64,8 +66,12 @@ async function remote(method, path, body) {
     code: activeCode, method: method, path: path, body: body || ''
   }, browserToken);
   if (requestToken !== browserToken) throw new Error('Session ended.');
-  if (reply.status < 200 || reply.status >= 300) throw new Error('TV action failed (' + reply.status + ').');
-  return JSON.parse(reply.body);
+  var value = JSON.parse(reply.body);
+  if (reply.status < 200 || reply.status >= 300) {
+    var error = new Error(value.error || (reply.status === 426 ? 'Update the TV APK, Worker and browser for paginated channels.' : 'TV action failed (' + reply.status + ').'));
+    error.status = reply.status; throw error;
+  }
+  return value;
 }
 async function getJson(path) { return remote('GET', path, ''); }
 async function post(path, bodyObj) { return remote('POST', path, JSON.stringify(bodyObj)); }
@@ -87,11 +93,12 @@ function setupPairing() {
     message.textContent = 'Connecting…';
     try {
       var result = await api('pair', { code: code, browserToken: pairAttemptToken });
+      if (result.managerVersion !== 2) throw new Error('Update the Worker before the TV APK, then reload this browser. Manager protocol 2 is required.');
       activeCode = code; browserToken = pairAttemptToken;
       document.getElementById('pairCode').value = '';
       document.getElementById('pairPanel').hidden = true;
       document.getElementById('manager').hidden = false;
-      sessionTimer = setTimeout(disconnect, Math.max(0, result.expires - Date.now()));
+      sessionTimer = setTimeout(function(){ disconnect('Session expired. Start a new session on the TV.'); }, Math.max(0, result.expires - Date.now()));
       await loadMeta(); await loadRecording();
     } catch (e) { message.textContent = e.message; }
     finally { button.disabled = false; }

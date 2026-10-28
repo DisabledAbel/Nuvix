@@ -13,6 +13,8 @@ import app.opentv.data.model.Channel
 import app.opentv.data.model.Source
 import app.opentv.data.model.SourceKind
 import app.opentv.data.model.shownName
+import app.opentv.data.db.ManagerConflict
+import app.opentv.data.db.ManagerChange
 import app.opentv.data.repo.CatalogRepository
 import app.opentv.data.repo.SourceRepository
 import app.opentv.recording.SmbClient
@@ -238,13 +240,13 @@ class ManagerServer(
         val body = response.substringAfter("\r\n\r\n", "")
         // Leave room for JSON escaping in the WebSocket envelope.
         if (body.toByteArray(Charsets.UTF_8).size > CloudManagerProtocol.MAX_REPLY_BYTES / 3) {
-            return CloudManagerReply(command.id, 413, "{\"error\":\"Category too large for remote management\"}")
+            return CloudManagerReply(command.id, 413, "{\"error\":\"Management response too large. Narrow the filters or use a smaller page.\"}")
         }
         return CloudManagerReply(command.id, response.substringBefore("\r\n").split(' ')[1].toInt(), body)
     }
 
     private fun dispatch(output: OutputStream, method: String, path: String, query: Map<String, String>, body: String) {
-        when {
+        try { when {
             method == "GET" && path == "/" ->
                 output.write(PairingHttp.httpResponse("200 OK", "text/html", ManagerPage.page(token)))
 
@@ -252,7 +254,15 @@ class ManagerServer(
                 output.write(PairingHttp.httpResponse("200 OK", "application/json", metaJson()))
 
             method == "GET" && path == "/channels" ->
-                output.write(PairingHttp.httpResponse("200 OK", "application/json", channelsJson(query)))
+                output.write(PairingHttp.httpResponse("426 Upgrade Required", "application/json", "{\"error\":\"Update the browser and Worker for paginated channels.\"}"))
+
+            method == "GET" && path == "/channels/page" -> handlePage(output, query)
+            method == "POST" && path == "/channels/state" -> runBlocking {
+                val request = json.decodeFromString(StateReq.serializer(), body)
+                writeJson(output, ListSerializer(ChannelDto.serializer()), catalog.managerState(request.source, request.revision, request.ids).map { it.toDto() })
+            }
+            method == "POST" && path == "/channels/bulk" -> handleBulk(output, body)
+            method == "POST" && path == "/channels/move" -> handleMove(output, body)
 
             method == "POST" && path == "/channel" -> handleChannelPatch(output, body)
 
@@ -270,6 +280,11 @@ class ManagerServer(
             method == "POST" && path == "/source/test" -> handleTestSource(output, body)
 
             else -> output.write(PairingHttp.httpResponse("404 Not Found", "text/plain", "Not found."))
+        } } catch (e: ManagerConflict) {
+            output.write(PairingHttp.httpResponse("409 Conflict", "application/json",
+                json.encodeToString(ErrorDto.serializer(), ErrorDto(e.message ?: "Refresh TV state."))))
+        } catch (_: IllegalArgumentException) {
+            output.write(PairingHttp.httpResponse("400 Bad Request", "application/json", "{\"error\":\"Invalid management request\"}"))
         }
     }
 
@@ -288,6 +303,9 @@ class ManagerServer(
     /** `{ sources:[{id,name}], categories:[{id,label,sourceId,count}] }` */
     private fun metaJson(): String = runBlocking {
         val sources = catalog.enabledSources()
+        if (sources.any { it.id !in 1..9_007_199_254_740_991L }) {
+            throw ManagerConflict("Provider identifiers exceed this browser's safe range. Manage them on the TV.")
+        }
         val sourceIds = sources.map { it.id }.toSet()
         val counts = catalog.categoryChannelCounts()
             .associateBy({ it.sourceId to it.categoryId }, { it.count })
@@ -299,22 +317,37 @@ class ManagerServer(
             .mapNotNull { cat ->
                 val count = counts[cat.sourceId to cat.id] ?: 0
                 if (count <= 0) null
-                else CategoryDto(id = cat.id, label = cat.name, sourceId = cat.sourceId, count = count)
+                else CategoryDto(id = cat.id, label = cat.name.take(512), sourceId = cat.sourceId, count = count)
             }
         json.encodeToString(
             MetaDto.serializer(),
-            MetaDto(sources = sources.map { SourceDto(it.id, it.name) }, categories = categories),
+            MetaDto(sources = sources.map { SourceDto(it.id, it.name.take(120)) }, categories = categories),
         )
     }
 
-    /** `GET /channels?cat=<id>[&source=<id>]` → the category's channels, hidden included. */
-    private fun channelsJson(query: Map<String, String>): String = runBlocking {
-        val serializer = ListSerializer(ChannelDto.serializer())
-        val cat = query["cat"]
-        if (cat.isNullOrBlank()) return@runBlocking json.encodeToString(serializer, emptyList())
-        val source = query["source"]?.toLongOrNull()
-        val rows = catalog.channelsInCategoryForManager(source, cat).map { it.toDto() }
-        json.encodeToString(serializer, rows)
+    private fun handlePage(output: OutputStream, query: Map<String, String>) = runBlocking {
+        require(query.keys.all { it in setOf("source", "cat", "q", "limit", "offset", "revision", "t") })
+        val source = requireNotNull(query["source"]?.toLongOrNull())
+        val limit = query["limit"]?.let { requireNotNull(it.toIntOrNull()) } ?: 50
+        val offset = query["offset"]?.let { requireNotNull(it.toIntOrNull()) } ?: 0
+        val cat = query["cat"]?.also { require(it.length in 1..512) }
+        val revision = query["revision"]?.also { require(it.matches(Regex("[0-9]{1,19}"))) }
+        val page = catalog.managerPage(source, cat, query["q"].orEmpty().trim(), limit, offset, revision)
+        writeJson(output, ChannelPageDto.serializer(), ChannelPageDto(page.revision, page.rows.map { it.toDto() }, page.total, offset, limit))
+    }
+
+    private fun handleBulk(output: OutputStream, body: String) = runBlocking {
+        val request = json.decodeFromString(BulkReq.serializer(), body)
+        require(request.source > 0 && request.revision.matches(Regex("[0-9]{1,19}")))
+        val results = catalog.managerBulk(request.source, request.revision, request.ids, request.action)
+        writeJson(output, BulkResult.serializer(), BulkResult(results))
+    }
+
+    private fun handleMove(output: OutputStream, body: String) = runBlocking {
+        val request = json.decodeFromString(MoveReq.serializer(), body)
+        require(request.source > 0 && request.id > 0 && request.revision.matches(Regex("[0-9]{1,19}")))
+        catalog.managerMove(request.source, request.revision, request.id, request.direction)
+        writeOk(output)
     }
 
     /** `POST /channel {id, hidden?|favourite?|name?}` → apply the given field(s). */
@@ -324,27 +357,14 @@ class ManagerServer(
             output.write(PairingHttp.httpResponse("400 Bad Request", "text/plain", "Bad request."))
             return
         }
-        // Unknown ids simply update zero rows — harmless, so no existence check.
-        runBlocking {
-            patch.hidden?.let { catalog.setChannelHidden(patch.id, it) }
-            patch.favourite?.let { catalog.setChannelFavourite(patch.id, it) }
-            // A blank name clears the rename back to the provider's own (see setChannelCustomName).
-            patch.name?.let { catalog.setChannelCustomName(patch.id, it) }
-        }
+        require(patch.source > 0 && patch.revision.matches(Regex("[0-9]{1,19}")) && (patch.name?.length ?: 0) <= 512)
+        runBlocking { catalog.managerPatch(patch.source, patch.revision, patch.id, patch.hidden, patch.favourite, patch.name) }
         writeOk(output)
     }
 
-    /** `POST /reorder {ids:[orderedChannelIds]}` → assign sortIndex by position. */
+    /** Old browsers must upgrade rather than submit category-wide positional edits. */
     private fun handleReorder(output: OutputStream, body: String) {
-        val req = runCatching { json.decodeFromString(ReorderReq.serializer(), body) }.getOrNull()
-        if (req == null) {
-            output.write(PairingHttp.httpResponse("400 Bad Request", "text/plain", "Bad request."))
-            return
-        }
-        runBlocking {
-            req.ids.forEachIndexed { index, id -> if (id > 0L) catalog.setChannelSortIndex(id, index) }
-        }
-        writeOk(output)
+        output.write(PairingHttp.httpResponse("426 Upgrade Required", "application/json", "{\"error\":\"Update the browser for revision-checked channel moves.\"}"))
     }
 
     /** Writes a successful local management response. */
@@ -401,8 +421,7 @@ class ManagerServer(
         val dto = if (result.isSuccess) {
             TestDto(ok = true, error = null)
         } else {
-            val e = result.exceptionOrNull()
-            TestDto(ok = false, error = e?.message ?: e?.javaClass?.simpleName ?: "Connection failed")
+            TestDto(ok = false, error = "Could not connect to the NAS. Check the address, share and permissions.")
         }
         output.write(PairingHttp.httpResponse("200 OK", "application/json", json.encodeToString(TestDto.serializer(), dto)))
     }
@@ -480,16 +499,21 @@ class ManagerServer(
     }
 
     /** Maps a local channel to the web manager's response representation. */
-    private fun Channel.toDto() = ChannelDto(
+    private fun Channel.toDto(): ChannelDto {
+        if (id !in 1..9_007_199_254_740_991L) {
+            throw ManagerConflict("Channel identifiers exceed this browser's safe range. Manage them on the TV.")
+        }
+        return ChannelDto(
         id = id,
-        name = shownName,
-        original = displayName,
+        name = shownName.take(512),
+        original = name.take(512),
         hidden = hidden,
         favourite = favourite,
         sortIndex = sortIndex,
-        logo = logoUrl,
+        logo = null,
         number = number,
-    )
+        )
+    }
 
     // ---- Finding our own address ---------------------------------------------------------------
 
@@ -527,8 +551,7 @@ class ManagerServer(
         const val SOCKET_TIMEOUT_MILLIS = 15_000
         const val IDLE_TIMEOUT_MINUTES = 30L
 
-        // Generous next to pairing's 16 KB: a /reorder body carries every channel id in a
-        // category, which can be a few thousand on a big provider.
+        // Overall transport cap; individual page, state and bulk operations impose smaller limits.
         const val MAX_BODY_BYTES = 256 * 1024
     }
 }
@@ -538,7 +561,7 @@ class ManagerServer(
 // and unicode, and hand-rolled string concatenation is exactly where that goes wrong.
 
 /** Provider and category summaries used by the local web manager's filters. */
-@Serializable private data class MetaDto(val sources: List<SourceDto>, val categories: List<CategoryDto>)
+@Serializable private data class MetaDto(val sources: List<SourceDto>, val categories: List<CategoryDto>, val managerVersion: Int = 2)
 
 /** Provider summary exposed to the authenticated local web manager. */
 @Serializable private data class SourceDto(val id: Long, val name: String)
@@ -564,13 +587,12 @@ class ManagerServer(
 /** Requested edits to a channel's local management fields. */
 @Serializable private data class ChannelPatch(
     val id: Long,
+    val source: Long = 0,
+    val revision: String = "",
     val hidden: Boolean? = null,
     val favourite: Boolean? = null,
     val name: String? = null,
 )
-
-/** Requested channel ordering from the local web manager. */
-@Serializable private data class ReorderReq(val ids: List<Long>)
 
 /** Recording destination settings exposed to the local web manager without the stored NAS password. */
 @Serializable private data class RecordingDto(
@@ -609,3 +631,11 @@ class ManagerServer(
 
 /** Provider connection-test result returned to the local web manager. */
 @Serializable private data class TestResultDto(val ok: Boolean, val message: String? = null, val error: String? = null)
+
+@Serializable private data class ErrorDto(val error: String)
+@Serializable private data class ChannelPageDto(val revision: String, val rows: List<ChannelDto>, val total: Int, val offset: Int, val limit: Int)
+@Serializable private data class BulkReq(val source: Long, val revision: String, val ids: List<Long>, val action: String)
+@Serializable private data class BulkResult(val results: List<ManagerChange>)
+@Serializable private data class MoveReq(val source: Long, val revision: String, val id: Long, val direction: Int)
+
+@Serializable private data class StateReq(val source: Long, val revision: String, val ids: List<Long>)

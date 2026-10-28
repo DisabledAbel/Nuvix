@@ -10,7 +10,8 @@ QR code, port forwarding, router change or always-on computer. This is managemen
 2. Read the service address and disclosure, then select **Start browser session**.
 3. Open that HTTPS website in Safari, Chrome or another modern browser on a phone, iPad or laptop.
 4. Enter the 12-character code shown on the TV. Hyphens and spaces are optional.
-5. Browse categories; hide, favorite, rename or reorder channels; add/test providers; or configure/test
+5. Browse categories or search a selected provider; select channels for reviewed bulk edits;
+   hide, favorite, rename or reorder individual channels; add/test providers; or configure/test
    the NAS recording destination. Existing repository operations apply changes directly to this TV.
 6. Select **Disconnect** in the browser, or **Done** / Back on the TV, to end the session.
 
@@ -112,7 +113,7 @@ and the thirty-minute session limit.
 - HTTPS/WSS encrypts transit; **this is not end-to-end encryption**. The operator and Cloudflare can
   inspect traffic. Channel data, provider/NAS details submitted in forms and responses cross the
   service. No provider stream URL is included in the channel DTO. Existing NAS passwords are not
-  returned to the browser. Channel logos can load directly from provider-specified HTTPS image hosts.
+  returned to the browser. Channel responses omit logos and all playback URLs; browsing makes no provider image requests.
 - Browser tokens are never placed in URLs, cookies, localStorage or sessionStorage. Static assets
   use a restrictive CSP, no third-party script, no camera permissions and no cache/referrer storage.
   API responses disable caching. Provider names are rendered using the existing DOM text operations.
@@ -122,8 +123,85 @@ and the thirty-minute session limit.
 - Commands are not queued for an offline TV, automatically retried, or replayed after reconnection.
   A lost reply may follow a successful change. Refresh/review the result before manually repeating
   a mutation, especially adding a provider. Slow provider imports/tests can exceed the relay deadline.
-- Large individual categories can exceed the remote reply limit and return an error. Full catalog
-  pagination, persistent pairing, multi-TV accounts and screen-off background access are out of scope.
+- Channel pages contain at most 100 rows (the browser uses 50). Channel names are capped at 512
+  characters in responses; search text at 120 and page offsets at 1,000,000. Channel responses omit stream commands, URLs,
+  provider credentials and logos (logo URLs can contain credentials). Persistent pairing, multi-TV
+  accounts and screen-off background access remain out of scope.
+
+## Large playlists, search and explicit selection (manager protocol 2)
+
+Choose a provider and **Browse or search provider channels**, or open a category. Search checks
+original provider names, cleaned display names and custom renames, including hidden channels.
+**Only this category** restricts search when a category is open. Matching uses SQLite's literal,
+case-insensitive substring comparison (SQLite `lower` folds ASCII; full Unicode case folding is
+not provided). `%` and `_` are ordinary search text. Browse order is `sortIndex`, `displayName`,
+then local channel ID, so duplicate names have a stable tie-breaker. Responses never contain an
+entire category beyond the requested page.
+
+Use the labeled checkboxes, **Select All on This Page** or **Clear Selection**. The count explicitly
+separates current-page selections from other pages/filters. Selection is limited to 500 explicit
+IDs in one provider; it survives page/search/filter changes while that provider and catalog revision
+remain valid. No action selects a whole provider or all search results. The selection review lists
+last known favorite/visibility state, including off-page selections. A different provider clears it.
+
+Choose **Favorite**, **Unfavorite**, **Hide** or **Unhide**, then **Review action**. The review shows
+the requested action and exact selected count before **Apply reviewed action** sends anything.
+Changing selection/navigation cancels the review. Batches contain at most 100 unique IDs and run
+sequentially. **Stop after current batch** leaves remaining IDs selected and reports them as
+not attempted; an accepted TV batch may finish. Searches are debounced and coalesced with at most one outstanding read. Navigating,
+editing the search or ending the session cancels the old result locally. It does not replay or
+cancel an already accepted TV transaction. All operations stay off the Android/UI main thread.
+
+Each page has an opaque revision. Database triggers advance it for channel insertion/deletion,
+refresh stamps, names, order and provider configuration changes, including changes outside the
+manager. The additive v17→v18 migration adds the revision and triggers, without replacing catalog
+rows. A fresh provider incarnation receives a fresh revision even if its local ID is reused.
+Page reads and revision checks are transactional. Before each mutation batch, the TV checks the
+provider is still enabled and its revision still matches, in the same transaction as the edits.
+A refresh, removal or configuration change before a batch rejects that batch with HTTP 409;
+already committed earlier batches remain applied, and subsequent batches stop. Favorite/hidden
+edits intentionally leave the browse revision valid because they do not change membership/order.
+
+The outcome reports successful, failed, skipped (already explicitly at the requested value, or absent from the
+provider), unknown and not-attempted counts. Only confirmed success/skipped rows leave selection;
+failed, uncertain and unattempted rows remain. Each TV batch is atomic: a database write error
+rolls back that batch, and results are classified from actual state after rollback. Previously
+committed batches remain applied; failure in one batch does not claim success for rolled-back rows. An HTTP rejection is a known failure; a timeout,
+disconnect or malformed/lost reply leaves the sent batch unknown. **No mutation is automatically
+retried**, including on reconnect. Further edits are blocked until **Refresh TV state** reads all
+selected IDs in bounded batches and reloads the page. Review actual state before explicitly
+confirming another action; refresh itself only reads. If the revision changed, stale selection is
+cleared and the user must select again. If the session expired, start a new code-only session.
+A batch accepted before expiry/disconnect may finish; no later batch is sent automatically.
+
+Single-channel rename, favorite/visibility and move actions remain available and use the same
+revision check. Move operates within the original category, including across page boundaries,
+preserving other rows' relative order. It normalizes category ranks transactionally, using a
+bounded ID-only read of at most 100,001 entries; categories above 100,000 cannot be reordered.
+A very large category move can exceed the relay deadline: refresh and reconcile rather than
+repeating it. Bulk edits record explicit intent through the existing flag setters even when the visible flag
+already matches but has no local sync-intent bit. They preserve names, order, guide
+mappings, playback fields and existing `syncTouched`/cloud-sync behavior.
+
+### Compatibility and deployment order
+
+Deploy the **Worker and its generated browser assets before distributing the APK**. Creation and
+pair responses advertise `managerVersion: 2`; `/meta` advertises the APK's version. A new APK
+against an older Worker displays an upgrade message without opening a session; a new browser
+against an older Worker/APK displays an explicit compatibility message. Old browsers calling
+`/channels` or `/reorder` against the updated Worker or APK get HTTP 426 instead of an oversized fallback or unsafe
+positional edit. The updated Worker also rejects legacy single-channel bodies without a provider/revision.
+Existing old APK/old browser sessions are not retrofitted; reload the browser and
+update the APK. No Durable Object storage migration is required. Android's database migration is
+additive. Pairing deadlines, hard session expiry, authentication, command allowlists, rate limits,
+CSP and memory-only browser tokens remain enforced.
+
+API additions: `GET /channels/page?source=<id>[&cat=<id>&q=<text>&limit=50&offset=0&revision=<revision>]`,
+`POST /channels/bulk {source,revision,ids,action}`, read-only
+`POST /channels/state {source,revision,ids}` and `POST /channels/move {source,revision,id,direction}`.
+`/channel` now requires `source` and `revision`. Worker and Android reject invalid page parameters
+and oversized/duplicate batches independently. Existing overall request/reply limits still apply.
+There is no batch queue, streaming data, credential storage or new dependency.
 
 ## Validation and acceptance
 
@@ -135,7 +213,14 @@ also cover countdown rounding, connection delays, collection/restart/cancellatio
 sleep and pairing before expiry; Worker tests verify timing metadata and both expiry boundaries. Existing Android CI
 compiles/tests/lints the app; the Cloudflare workflow verifies generated assets and Worker packaging.
 
-Before public rollout, use an actual Cloudflare deployment, TV and iPad browser:
+New focused automated tests exercise 40,001 synthetic channels, duplicate-name page boundaries,
+original/custom-name search, revision conflicts, removed providers, oversized batches, partial
+SQLite failures, unrelated-setting and sync-bit preservation, browser selections across pages,
+stale searches, lost replies and session expiry. Browser tests use the generated production JS
+with a minimal DOM; headless Chromium smoke checks cover phone (390px), iPad-sized (1024px) and
+desktop (1440px) layouts. These are not physical-TV or iPad Safari checks.
+
+Before public rollout, use an actual Cloudflare deployment, TV and iPad browser (unverified here):
 
 - Pair with only the displayed code on separate networks; verify channels, rename/hide/favorite/order,
   provider test/add and NAS test/save against authorized test resources.
@@ -144,7 +229,9 @@ Before public rollout, use an actual Cloudflare deployment, TV and iPad browser:
   network interruption, app shutdown and TV sleep all deny further management.
 - Confirm no secrets appear in browser URLs, browser persistent storage, job output or application logs.
 - Check small-screen touch controls, TV D-pad focus, status/error messages, Safari session expiry and
-  very large categories. An automated mock test is not a substitute for these device checks.
+  very large categories, search keyboard behavior, VoiceOver/focus, selection across pages,
+  confirmation, refresh during browsing/batches, removed/changed providers, partial failures and
+  a lost reply after a successful TV edit. An automated test is not a substitute for these checks.
 
 The public HTML/CSS/JS are derived from the existing GPL manager rather than a separate feature fork.
 After changing `ManagerPage.kt` or `browser-transport.js`, regenerate them with

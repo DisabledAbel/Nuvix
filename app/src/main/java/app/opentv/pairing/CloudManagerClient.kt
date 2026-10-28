@@ -3,6 +3,7 @@ package app.opentv.pairing
 
 import android.os.SystemClock
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Semaphore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,6 +65,7 @@ class CloudManagerClient internal constructor(
     private var activeCode = ""
     private var activeToken = ""
     private val commands = Mutex()
+    private val commandSlots = Semaphore(4)
     private val completedIds = LinkedHashSet<String>()
 
     @Synchronized
@@ -87,14 +89,21 @@ class CloudManagerClient internal constructor(
             request.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: java.io.IOException) = failed(current)
                 override fun onResponse(call: Call, response: Response) {
+                    var incompatible = false
                     val deadline = response.use {
                         if (it.code != 201) null else runCatching {
                             val created = json.decodeFromString<Created>(it.body!!.string())
-                            CloudPairingDeadline.fromServer(created.pairUntil, created.serverNow, requestStarted)
+                            incompatible = created.managerVersion != 2
+                            if (incompatible) null else CloudPairingDeadline.fromServer(created.pairUntil, created.serverNow, requestStarted)
                         }.getOrNull()
                     }
                     synchronized(this@CloudManagerClient) {
                         if (current != generation) return
+                        if (incompatible) {
+                            stop()
+                            mutableState.value = State.Failed("Update the manager Worker before using this APK. Manager protocol 2 is required.")
+                            return
+                        }
                         if (deadline == null) { failed(current); return }
                         pairingDeadline = deadline
                         if (refreshPairing(current) == null) return
@@ -150,8 +159,12 @@ class CloudManagerClient internal constructor(
                 }
                 val command = runCatching { json.decodeFromString<CloudManagerCommand>(text) }.getOrNull() ?: return
                 if (command.id.length !in 1..64) return
+                if (!commandSlots.tryAcquire()) {
+                    webSocket.send(json.encodeToString(CloudManagerReply(command.id, 429, "{\"error\":\"TV busy\"}")))
+                    return
+                }
                 scope.launch(Dispatchers.IO) {
-                    commands.withLock {
+                    try { commands.withLock {
                         synchronized(this@CloudManagerClient) {
                             if (generation != current || !completedIds.add(command.id)) return@launch
                             // Never replay a mutation after transport interruption.
@@ -166,7 +179,7 @@ class CloudManagerClient internal constructor(
                         synchronized(this@CloudManagerClient) {
                             if (generation == current) webSocket.send(json.encodeToString(reply))
                         }
-                    }
+                    } } finally { commandSlots.release() }
                 }
             }
 
@@ -230,7 +243,7 @@ class CloudManagerClient internal constructor(
     }
 
     @Serializable
-    private data class Created(val pairUntil: Long, val serverNow: Long)
+    private data class Created(val pairUntil: Long, val serverNow: Long, val managerVersion: Int = 1)
 
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()

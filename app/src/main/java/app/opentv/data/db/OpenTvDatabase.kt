@@ -90,7 +90,7 @@ class Converters {
         SportsEvent::class, SportsProgramme::class, SportsDecision::class, SportsFavorite::class,
         SportsPreferred::class, SportsFeedState::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, CustomGroupConverters::class)
@@ -411,6 +411,34 @@ abstract class OpenTvDatabase : RoomDatabase() {
             }
         }
 
+        /** Invalidate remote pages atomically with catalog/configuration edits, including sync. */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sources ADD COLUMN managerRevision INTEGER NOT NULL DEFAULT 0")
+                installManagerTriggers(db)
+            }
+        }
+
+        /** Also installed on newly created databases. Flags intentionally do not invalidate selection. */
+        val MANAGER_CALLBACK = object : Callback() {
+            override fun onOpen(db: SupportSQLiteDatabase) { installManagerTriggers(db) }
+        }
+
+        private fun installManagerTriggers(db: SupportSQLiteDatabase) {
+            // A new incarnation of an explicitly reused provider ID must not revive old selections.
+            db.execSQL("CREATE TRIGGER IF NOT EXISTS manager_source_insert AFTER INSERT ON sources BEGIN UPDATE sources SET managerRevision = abs(random() % 1000000000000) + 1 WHERE id = NEW.id; END")
+            for ((event, row) in listOf("INSERT" to "NEW", "DELETE" to "OLD")) {
+                db.execSQL("CREATE TRIGGER IF NOT EXISTS manager_channels_${event.lowercase()} AFTER $event ON channels BEGIN UPDATE sources SET managerRevision = managerRevision + 1 WHERE id = $row.sourceId; END")
+            }
+            db.execSQL("""CREATE TRIGGER IF NOT EXISTS manager_channels_update AFTER UPDATE OF
+                sourceId, streamId, name, displayName, customName, categoryId, sortIndex, lastSeenMillis, streamUrl, cmd ON channels
+                BEGIN UPDATE sources SET managerRevision = managerRevision + 1 WHERE id IN (OLD.sourceId, NEW.sourceId); END""")
+            db.execSQL("""CREATE TRIGGER IF NOT EXISTS manager_source_update AFTER UPDATE OF
+                name, kind, url, username, password, macAddress, enabled, epgUrl, userAgent, liveFormat,
+                stalkerRevision, stalkerSerialNumber, stalkerDeviceId1, stalkerDeviceId2, stalkerSignature, lastCatalogSyncMillis ON sources
+                BEGIN UPDATE sources SET managerRevision = OLD.managerRevision + 1 WHERE id = NEW.id; END""")
+        }
+
         /** Builds the encrypted database with all supported schema migrations registered. */
         fun build(context: Context): OpenTvDatabase =
             Room.databaseBuilder(context, OpenTvDatabase::class.java, "opentv.db")
@@ -423,8 +451,9 @@ abstract class OpenTvDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                 )
+                .addCallback(MANAGER_CALLBACK)
                 .build()
     }
 }

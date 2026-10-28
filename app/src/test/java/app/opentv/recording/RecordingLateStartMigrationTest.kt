@@ -52,7 +52,7 @@ class RecordingLateStartMigrationTest {
             }).build())
         helper.writableDatabase; helper.close()
         val migrated = Room.databaseBuilder(context, OpenTvDatabase::class.java, name)
-            .addMigrations(OpenTvDatabase.MIGRATION_15_16, OpenTvDatabase.MIGRATION_16_17).allowMainThreadQueries().build()
+            .addMigrations(OpenTvDatabase.MIGRATION_15_16, OpenTvDatabase.MIGRATION_16_17, OpenTvDatabase.MIGRATION_17_18).allowMainThreadQueries().build()
         try {
             val r = migrated.recordings().byId(7)!!
             assertEquals("/keep.ts", r.filePath); assertEquals(564, r.sizeBytes)

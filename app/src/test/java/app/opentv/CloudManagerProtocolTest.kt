@@ -23,6 +23,17 @@ class CloudManagerProtocolTest {
         assertFalse(Protocol.allowed("DELETE", "/channel"))
     }
 
+    @Test fun paginatedCommandsHaveBoundedUnambiguousParameters() {
+        assertTrue(Protocol.allowed("GET", "/channels/page?source=1&limit=100&offset=100&q=Custom&revision=42"))
+        assertTrue(Protocol.allowed("POST", "/channels/bulk"))
+        assertTrue(Protocol.allowed("POST", "/channels/state"))
+        assertTrue(Protocol.allowed("POST", "/channels/move"))
+        for (query in listOf("source=1&limit=101", "source=1&limit=0", "source=1&offset=-1", "source=1&offset=1000001",
+            "source=1&source=2", "source=1&q=" + "x".repeat(121), "source=1&cat=", "source=1&revision=bad", "cat=only")) {
+            assertFalse(query, Protocol.allowed("GET", "/channels/page?$query"))
+        }
+    }
+
     @Test fun pairingCodesAndCredentialsAreIndependentAndUnambiguous() {
         val codes = (1..100).map { Protocol.newCode() }
         assertEquals(100, codes.toSet().size)

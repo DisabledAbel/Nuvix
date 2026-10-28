@@ -74,6 +74,21 @@
   .field select { width:100%; padding:11px 12px; font-size:16px; background:var(--bg); color:var(--text);
                   border:1px solid var(--line); border-radius:9px; }
   .field select:focus { outline:none; border-color:var(--accent); }
+  button, input, select { font:inherit; }
+  select { min-height:44px; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--line); border-radius:8px; }
+  button { min-height:44px; color:var(--text); background:var(--surface2); border:1px solid var(--line); border-radius:8px; }
+  button:focus-visible, input.search:focus-visible, .field input:focus-visible, .field select:focus-visible, :focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0; }
+  .selection { width:44px; height:44px; flex:none; }
+  .row { flex-wrap:wrap; }
+  .rowmeta { min-width:160px; overflow-wrap:anywhere; }
+  .row .name { background:transparent; text-align:left; white-space:normal; }
+  .ctrls { flex-wrap:wrap; }
+  .ctrls .back { margin:0; font-size:.85rem; }
+  #channelStatus { min-height:48px; overflow-wrap:anywhere; }
+  #bulkReview { border:2px solid var(--accent); padding:16px; border-radius:12px; }
+  [hidden] { display:none !important; }
+  @media (max-width:600px) { .ctrls { width:100%; } .ctrls button { flex:1; } }
   /* `.field { display:block }` above would otherwise override the [hidden] attribute, leaving
      a type's irrelevant fields (e.g. username/password on a Stalker portal) on screen. */
   .field[hidden] { display:none; }
