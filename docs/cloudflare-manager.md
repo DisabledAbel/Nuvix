@@ -49,21 +49,30 @@ No Cloudflare API/admin token belongs in the APK, web assets, Gradle properties,
 ### Cloudflare Workers Builds (optional)
 
 If the repository is also connected through **Workers & Pages → nuvix-manager → Settings → Build**,
-set **Root directory** to `cloudflare/manager` and use Node.js 24. Set the **Build command** to
+set **Root directory** to `cloudflare/manager` and the build variable `NODE_VERSION` to `24`.
+Set the **Build command** to
 `npm ci && python3 generate-page.py --check && npm test && npm run check` and the
-**Non-production branch deploy command** to `npx wrangler preview`. These dashboard settings are
+**Non-production branch deploy command** to `npm run preview`. These dashboard settings are
 separate from the GitHub Actions workflow; changing this repository does not update them.
 Use `npm run deploy` as the production deploy command only if you intend Workers Builds to deploy
 production instead of the manual GitHub workflow above.
 
 Run commands from that root so npm installs the locked Wrangler version and Wrangler reads
 `wrangler.toml`. Running `npx wrangler preview` from the repository root can download an unpinned
-Wrangler and miss this configuration. The `previews` configuration explicitly supplies `ROOMS`
-and both rate limiters; an empty block would leave required runtime bindings unavailable.
+Wrangler and miss this configuration. `npm run preview` uses the Wrangler installed by `npm ci`
+and explicitly loads `wrangler.toml`; it does not ask npx to download a different version.
+The `previews` configuration explicitly supplies `ROOMS` and both rate limiters; an empty block would leave required runtime bindings unavailable.
 Each Preview gets its own Durable Object namespace and storage, and its rate-limit namespace IDs
 differ from production. Assets, compatibility settings and migrations remain at the top level.
 See [Preview configuration](https://developers.cloudflare.com/workers/previews/configuration/)
 and [resource isolation](https://developers.cloudflare.com/workers/previews/resources/).
+
+If the log goes straight from cloning to `Executing user deploy command: npx wrangler preview`,
+then downloads a Wrangler version absent from this lockfile and reports a missing `previews`
+block, check the dashboard root and build command first. This repository already has that block
+in `cloudflare/manager/wrangler.toml`; adding an empty block at the repository root would omit the
+required isolated session and rate-limit bindings. The expected log runs `npm ci`, tests and
+packaging checks before `npm run preview`, using the locked Wrangler version.
 
 Retry the failed Cloudflare build after saving the dashboard settings and making the updated
 configuration available on the branch. Local tests and packaging checks do not verify a hosted
