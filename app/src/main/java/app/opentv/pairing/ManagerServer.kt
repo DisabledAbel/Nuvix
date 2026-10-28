@@ -19,9 +19,8 @@ import app.opentv.data.repo.CatalogRepository
 import app.opentv.data.repo.SourceRepository
 import app.opentv.recording.SmbClient
 import app.opentv.recording.SmbConfig
-import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
-import java.io.InputStreamReader
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -199,13 +198,13 @@ class ManagerServer(
             return
         }
 
-        val reader = BufferedReader(InputStreamReader(client.getInputStream(), Charsets.UTF_8))
-        val requestLine = reader.readLine() ?: return
+        val input = client.getInputStream().buffered()
+        val requestLine = readHttpLine(input) ?: return
         val (method, path, query) = PairingHttp.parseRequestLine(requestLine) ?: return
 
         val headers = HashMap<String, String>()
         while (true) {
-            val line = reader.readLine() ?: break
+            val line = readHttpLine(input) ?: break
             if (line.isEmpty()) break
             PairingHttp.parseHeader(line)?.let { (name, value) -> headers[name] = value }
         }
@@ -222,7 +221,7 @@ class ManagerServer(
         // A valid request counts as activity; the idle watchdog measures from here.
         lastActivityMillis = System.currentTimeMillis()
 
-        val body = if (method == "POST") readBody(reader, headers) else ""
+        val body = if (method == "POST") readBody(input, headers) else ""
 
         dispatch(output, method, path, query, body)
     }
@@ -286,16 +285,6 @@ class ManagerServer(
         } catch (_: IllegalArgumentException) {
             output.write(PairingHttp.httpResponse("400 Bad Request", "application/json", "{\"error\":\"Invalid management request\"}"))
         }
-    }
-
-    /** Reads request text up to the bounded Content-Length accepted by the local manager. */
-    private fun readBody(reader: BufferedReader, headers: Map<String, String>): String {
-        val contentLength = (headers["content-length"]?.toIntOrNull() ?: 0)
-            .coerceAtMost(MAX_BODY_BYTES)
-        if (contentLength <= 0) return ""
-        val buffer = CharArray(contentLength)
-        val read = reader.read(buffer, 0, contentLength)
-        return if (read > 0) String(buffer, 0, read) else ""
     }
 
     // ---- Routes --------------------------------------------------------------------------------
@@ -546,13 +535,39 @@ class ManagerServer(
             ?.hostAddress
     }
 
-    private companion object {
-        const val TAG = "ManagerServer"
-        const val SOCKET_TIMEOUT_MILLIS = 15_000
-        const val IDLE_TIMEOUT_MINUTES = 30L
+    companion object {
+        /** Headers and body share one buffered byte stream, so header reads cannot lose body bytes. */
+        internal fun readHttpLine(input: InputStream): String? {
+            val line = ByteArrayOutputStream()
+            while (true) {
+                val byte = input.read()
+                if (byte == -1) return if (line.size() == 0) null else line.toString("UTF-8").removeSuffix("\r")
+                if (byte == '\n'.code) return line.toString("UTF-8").removeSuffix("\r")
+                require(line.size() < 8192) { "Request header too large" }
+                line.write(byte)
+            }
+        }
+
+        /** Content-Length counts UTF-8 bytes; TCP reads may end anywhere, even inside a code point. */
+        internal fun readBody(input: InputStream, headers: Map<String, String>): String {
+            val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+            require(contentLength in 0..MAX_BODY_BYTES) { "Invalid request body length" }
+            val bytes = ByteArray(contentLength)
+            var received = 0
+            while (received < contentLength) {
+                val read = input.read(bytes, received, contentLength - received)
+                if (read == -1) break
+                received += read
+            }
+            return String(bytes, 0, received, Charsets.UTF_8)
+        }
+
+        private const val TAG = "ManagerServer"
+        private const val SOCKET_TIMEOUT_MILLIS = 15_000
+        private const val IDLE_TIMEOUT_MINUTES = 30L
 
         // Overall transport cap; individual page, state and bulk operations impose smaller limits.
-        const val MAX_BODY_BYTES = 256 * 1024
+        private const val MAX_BODY_BYTES = 256 * 1024
     }
 }
 
