@@ -11,7 +11,8 @@
   rollout. Add large-catalog, browser and relay regressions; physical TV/iPad Safari checks remain pending.
 
 - Configure Cloudflare Worker previews with isolated browser-manager session storage and
-  separate rate-limit namespaces; document the Workers Builds root and commands.
+  separate rate-limit namespaces; add a local preview command and document the Workers Builds
+  root, dependency installation and pinned Wrangler commands.
 
 - Harden storage review paths: match USB receipts to their tree on older Android versions,
   isolate recording mutation locks, remove receipts for discarded empty outputs, retry failed
