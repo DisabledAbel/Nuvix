@@ -1,6 +1,9 @@
 # Nuvix
 
 **Your television. Your way.**
+
+[Documentation](https://disabledabel.github.io/Nuvix/) · [Web manager](https://nuvix-manager.blazersboy1.workers.dev/) · [Published releases](https://github.com/DisabledAbel/Nuvix/releases)
+
 Nuvix is a free, open-source IPTV player and optional home launcher for Android TV, Google TV, and compatible Fire TV devices. Bring your own authorized provider—no channels, accounts, playlists, or media are included.
 
 An independent modified version of [OpenTV](https://github.com/opentvproject/opentv),  Nuvix is not affiliated with OpenTV or DIRECTV and uses no DIRECTV assets.
@@ -46,8 +49,10 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 - **Manage from a phone, iPad or laptop:** Open **Settings → Manage on phone or laptop**,
   start a Cloudflare browser session, open the displayed HTTPS website and type the TV code.
   No QR code or same-Wi-Fi requirement. Keep the TV manager open; pairing codes expire after
-  five minutes and sessions after thirty minutes. The maintainer must deploy the service and
-  configure its URL before public use. See [Cloudflare manager setup and privacy](docs/cloudflare-manager.md).
+  five minutes and sessions after thirty minutes. The public manager is available at
+  [nuvix-manager.blazersboy1.workers.dev](https://nuvix-manager.blazersboy1.workers.dev/).
+  If the TV asks for a service address, enter that HTTPS origin. See [pairing instructions](docs/browser-manager.md)
+  and [service setup and privacy](docs/cloudflare-manager.md).
 
 - **Stalker portal identity:** Edit your authorized portal MAC and independently select Automatic or provider-supplied Serial Number, Device ID 1, Device ID 2 and Signature under **Settings → Providers → Advanced Configuration**. Saved locally in encrypted storage; the physical network MAC and account connection limits are preserved. See the [configuration and beta guide](docs/stalker-configuration.md).
 - **Providers:** Open **Settings → Providers** or **Add provider** on Home. Add your authorized playlist, Xtream account, or assigned Stalker portal/MAC, then configure XMLTV if needed. Prefer HTTPS.

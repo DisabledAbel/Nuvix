@@ -51,3 +51,27 @@ The Android tests use Robolectric; the first run downloads its Android test runt
 Nightly publishing remains removed. The [beta program](BETA-TESTING.md) prepares manual
 GitHub release candidates through the existing protected Release workflow; signing recovery
 and production approval remain blockers. Do not distribute unsigned CI artifacts as beta APKs.
+
+
+## Documentation website
+
+GitHub Pages builds the existing Markdown guides into static HTML, using
+`scripts/build-docs.py` and the pinned dependencies in `scripts/requirements-docs.txt`.
+Edit `docs/index.html` for the shared page shell, `docs/_home.html` for the documentation
+home, and `docs/site.css` / `docs/site.js` for presentation and local search. Markdown
+links are rewritten to the generated HTML guides; source-code links point to GitHub.
+Raw HTML in Markdown is escaped. Search requests only the local index and sends no query
+to an external service. Guides and navigation remain usable without JavaScript.
+
+```sh
+python3 -m venv work/docs-env
+work/docs-env/bin/pip install -r scripts/requirements-docs.txt
+work/docs-env/bin/python scripts/build-docs.py
+work/docs-env/bin/python -m unittest scripts.tests.test_docs_site -v
+python3 -m http.server 8000 --directory _site
+```
+
+Open `http://localhost:8000/`. The generated `_site/` directory is ignored by Git.
+Pages CI validates pull requests without deployment, then publishes `_site/` on a matching
+push to `main` or an explicit manual Pages run. This workflow does not deploy the Cloudflare
+manager or publish an APK. The permanent `apk/` route is preserved in the generated site.

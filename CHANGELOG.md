@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Turn GitHub Pages into a documentation hub with static rendered guides, local search,
+  responsive navigation and code-only pairing instructions for the live web manager.
+  Preserve the permanent APK shortcut and keep documentation free of analytics and remote scripts.
+
 - Configure Cloudflare Worker previews with isolated browser-manager session storage and
   separate rate-limit namespaces; document the Workers Builds root and commands.
 

@@ -1,5 +1,8 @@
 # Manage Nuvix from a browser
 
+The public service is live at [nuvix-manager.blazersboy1.workers.dev](https://nuvix-manager.blazersboy1.workers.dev/).
+For pairing instructions, start with the [browser manager guide](browser-manager.md).
+
 The Cloudflare manager is an optional public service for everyone running a configured Nuvix
 build. Each TV creates an isolated session; there is no shared TV list, Nuvix account, subscription,
 QR code, port forwarding, router change or always-on computer. This is management, not streaming.
@@ -24,8 +27,9 @@ the TV for a new code. There is no unattended/background remote administration i
 
 ## Deploy once for all users, entirely through GitHub
 
-The service is **not deployed automatically by this PR**. Until the maintainer deploys and configures
-its URL, builds explain that no public service is configured and accept a trusted self-hosted URL.
+The public service above is already deployed. The following instructions are for operating the
+service or hosting another instance. APKs without a configured service URL accept a trusted
+HTTPS origin on the TV manager screen.
 
 1. In the Cloudflare dashboard, find your account ID and create an account-scoped API token with
    **Workers Scripts: Edit** and **Account Settings: Read**, scoped to that account. Workers deployment
