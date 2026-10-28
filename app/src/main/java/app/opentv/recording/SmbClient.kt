@@ -208,13 +208,35 @@ object SmbClient {
         val cfg = config.copy(host = parsed.host, share = parsed.share)
         val q = connect(cfg)
         try {
-            runCatching { q.share.rm(parsed.path.replace('/', '\\')) }
+            q.share.rm(parsed.path.replace('/', '\\'))
         } finally {
             runCatching { q.share.close() }
             runCatching { q.session.close() }
             runCatching { q.connection.close() }
             runCatching { q.client.close() }
         }
+    }
+
+    /** Read/write directory access check without creating a file or folder. Capacity is unsupported. */
+    fun probe(config: SmbConfig): StorageAvailability {
+        return try {
+            val q = connect(config)
+            try {
+                q.share.openDirectory(config.folder.replace('/', '\\'),
+                    EnumSet.of(AccessMask.FILE_LIST_DIRECTORY, AccessMask.FILE_ADD_FILE, AccessMask.FILE_DELETE_CHILD),
+                    null, SMB2ShareAccess.ALL, SMB2CreateDisposition.FILE_OPEN, null).use { }
+                StorageAvailability.AVAILABLE
+            } finally {
+                runCatching { q.share.close() }; runCatching { q.session.close() }
+                runCatching { q.connection.close() }; runCatching { q.client.close() }
+            }
+        } catch (e: com.hierynomus.mssmb2.SMBApiException) {
+            when (e.statusCode) {
+                0xC0000022L, 0xC000006DL -> StorageAvailability.PERMISSION_DENIED
+                0xC00000A2L -> StorageAvailability.READ_ONLY
+                else -> StorageAvailability.DISCONNECTED
+            }
+        } catch (_: Exception) { StorageAvailability.DISCONNECTED }
     }
 
     /**

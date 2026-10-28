@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- Add DVR Storage Manager in Recording settings and Recordings: destination availability,
+  tracked usage, supported capacity, measured remaining-hours estimates and configurable
+  conservative low-space warnings. Unsupported or stale capacity is shown as Unknown.
+- Add explicit date/size selection and deletion confirmation; preserve history until storage
+  success and retain a deletion audit trail. Storage failures no longer silently erase rows.
+- Add optional per-destination cleanup, off by default, with free-space/retention controls,
+  creation receipts, fresh eligibility/capacity checks, oldest-first bounded work and error/target
+  warnings. Active and protected recordings are excluded; Lock Padding remains independent.
+- Add storage and remote-navigation regression tests and document unverified physical TV,
+  USB and NAS acceptance checks in [DVR Storage Manager](docs/dvr-storage-manager.md).
+
 ## [1.0.0]
 
 ### Nuvix v1.0.0 — first stable release

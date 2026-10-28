@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -161,20 +162,18 @@ class RecordingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Deletes a recording and its associated stored output through the recording engine. */
-    fun delete(recording: Recording) {
+    fun delete(recording: Recording, done: (String?) -> Unit = {}) {
         viewModelScope.launch {
-            if (recording.status in setOf(RecordingStatus.PREPARING, RecordingStatus.RECORDING, RecordingStatus.FINALIZING)) {
-                graph.recordingEngine.stop(recording.id)
-                return@launch
-            }
             if (recording.status == RecordingStatus.SCHEDULED) {
                 graph.recordingEngine.cancelScheduled(recording.id)
-                return@launch
+                done(null)
+            } else {
+                val result = graph.recordingEngine.deleteStoredRecording(recording)
+                done(result.explanation.takeUnless { result == app.opentv.recording.StorageDeleteResult.DELETED })
             }
-            RecordingStorage.delete(getApplication(), graph.settings, recording.filePath)
-            graph.recordingRepository.delete(recording.id)
         }
     }
+
 }
 
 /** Displays recordings, series rules, reminders and explicit playback or management actions. */
@@ -194,6 +193,18 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
     var history by remember { mutableStateOf<Recording?>(null) }
     var stopping by remember { mutableStateOf<Recording?>(null) }
     var reviewConflicts by remember { mutableStateOf(false) }
+    var showStorage by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<Recording?>(null) }
+    var deleteMessage by remember { mutableStateOf<String?>(null) }
+    val storageShortcutFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var restoreStorageFocus by remember { mutableStateOf(false) }
+    if (showStorage) {
+        StorageManagerScreen(onBack = { showStorage = false; restoreStorageFocus = true })
+        return
+    }
+    androidx.compose.runtime.LaunchedEffect(restoreStorageFocus) {
+        if (restoreStorageFocus) { storageShortcutFocus.requestFocus(); restoreStorageFocus = false }
+    }
 
     val now = System.currentTimeMillis()
     val upcomingReminders = reminders.filter { !it.fired && it.endUtcMillis > now }
@@ -208,6 +219,8 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp)) {
         Text(stringResource(R.string.rec_screen_title), style = MaterialTheme.typography.headlineMedium)
+        OutlinedButton(onClick = { showStorage = true }, modifier = Modifier.focusRequester(storageShortcutFocus)) { Text("Storage Manager") }
+        deleteMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.rec_screen_desc),
@@ -259,7 +272,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                             onPlay = { onPlay(rec) },
                             onStop = { app.opentv.core.RecordingSignals.requestDuration(rec.id) },
                             onRetry = { viewModel.retry(rec) },
-                            onDelete = { viewModel.delete(rec) },
+                            onDelete = { if (rec.status == RecordingStatus.SCHEDULED) viewModel.delete(rec) else deleting = rec },
                             onSettings = { editing = rec },
                             onHistory = { history = rec },
                         )
@@ -278,7 +291,7 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                                 else app.opentv.core.RecordingSignals.requestDuration(rec.id)
                             },
                             onRetry = { viewModel.retry(rec) },
-                            onDelete = { viewModel.delete(rec) },
+                            onDelete = { if (rec.status == RecordingStatus.SCHEDULED) viewModel.delete(rec) else deleting = rec },
                             onSettings = { editing = rec },
                             onHistory = { history = rec },
                         )
@@ -286,6 +299,13 @@ fun RecordingsScreen(onPlay: (Recording) -> Unit) {
                 }
             }
         }
+    }
+    deleting?.let { recording ->
+        StorageDeletionConfirmation(listOf(recording), onDismiss = { deleting = null }, onConfirm = {
+            deleting = null
+            storageShortcutFocus.requestFocus()
+            viewModel.delete(recording) { deleteMessage = it }
+        })
     }
     stopping?.let { recording ->
         AlertDialog(
@@ -562,7 +582,7 @@ private fun RecordingRow(
         Spacer(Modifier.width(8.dp))
         ActionButton(Icons.Filled.History, stringResource(R.string.rec_history), onHistory)
         Spacer(Modifier.width(8.dp))
-        if (recording.status !in setOf(RecordingStatus.PREPARING, RecordingStatus.RECORDING, RecordingStatus.FINALIZING)) {
+        if (recording.status == RecordingStatus.SCHEDULED || app.opentv.recording.DvrStorageRules.deletable(recording)) {
             ActionButton(Icons.Filled.Delete, stringResource(R.string.common_delete), onDelete)
         }
     }
@@ -608,6 +628,7 @@ private fun statusLine(rec: Recording): String {
         RecordingStatus.PARTIAL -> stringResource(R.string.rec_status_partial, whenStr, formatSize(rec.sizeBytes), rec.error.orEmpty())
         RecordingStatus.MISSED -> stringResource(R.string.rec_status_missed, whenStr, rec.error.orEmpty())
         RecordingStatus.CANCELED -> stringResource(R.string.rec_status_canceled, whenStr)
+        RecordingStatus.DELETED -> "Recording file deleted · History retained"
     }
 }
 
@@ -617,7 +638,7 @@ private fun statusColor(status: RecordingStatus): Color = when (status) {
     RecordingStatus.RECORDING, RecordingStatus.PREPARING, RecordingStatus.FINALIZING -> Color(0xFFE53935)
     RecordingStatus.FAILED, RecordingStatus.MISSED, RecordingStatus.PARTIAL -> MaterialTheme.colorScheme.error
     RecordingStatus.SCHEDULED -> MaterialTheme.colorScheme.primary
-    RecordingStatus.COMPLETED, RecordingStatus.CANCELED -> MaterialTheme.colorScheme.onSurfaceVariant
+    RecordingStatus.COMPLETED, RecordingStatus.CANCELED, RecordingStatus.DELETED -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /** Formats a recorded-byte count for the recording list. */

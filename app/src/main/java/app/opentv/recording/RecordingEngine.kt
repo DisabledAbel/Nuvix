@@ -40,7 +40,53 @@ class RecordingEngine(
     private val durationChanged: suspend () -> Unit = { RecordingScheduler.rearmWarnings(appContext) },
     private val durationStop: (Long) -> Unit = { RecordingService.stop(appContext, it) },
     private val scheduleAlarm: (Long, Long) -> Unit = { id, at -> RecordingScheduler.set(appContext, id, at) },
+    private val storageDelete: (Recording) -> Boolean = { RecordingStorage.delete(appContext, settings, it.filePath) },
+    private val storageCapacity: (RecordingDestination) -> StorageCapacity = { RecordingDestinations.probe(appContext, settings, it) },
 ) {
+
+    /** Shares retry/protection locks. No capture, reservation, destination or padding policy changes. */
+    suspend fun deleteStoredRecording(expected: Recording, automaticDestination: RecordingDestination? = null): StorageDeleteResult =
+        storageMutation(expected.id) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
+            val store = DvrStorageStore(appContext)
+            if (automaticDestination != null && (!store.policy(automaticDestination.id).cleanupEnabled ||
+                !store.owned(expected.id, expected.filePath, automaticDestination.id)))
+                return@withContext StorageDeleteResult.CHANGED
+            val capacity = automaticDestination?.let(storageCapacity)
+            // Slow capacity work precedes the final state/opt-in check. Preference edits and retry
+            // share this recording's mutex; unrelated capture admission never waits for deletion.
+            val fresh = repo.byId(expected.id) ?: return@withContext StorageDeleteResult.CHANGED
+            if (fresh != expected || !DvrStorageRules.deletable(fresh) || RecordingLiveState.isActive(fresh.id) ||
+                repo.active().any { it.filePath == fresh.filePath }) return@withContext StorageDeleteResult.CHANGED
+            val cleanupPolicy = automaticDestination?.let { store.policy(it.id) }
+            if (automaticDestination != null) {
+                val currentPolicy = requireNotNull(cleanupPolicy)
+                if (capacity == null || !capacity.reliable(durationClock()) || capacity.availableBytes!! >= currentPolicy.targetBytes ||
+                    !DvrStorageRules.eligible(fresh, store.owned(fresh.id, fresh.filePath, automaticDestination.id), currentPolicy, durationClock()))
+                    return@withContext StorageDeleteResult.CHANGED
+            }
+            val removed = try { storageDelete(fresh) } catch (_: Exception) { false }
+            if (!removed) return@withContext StorageDeleteResult.STORAGE_ERROR
+            val detail = cleanupPolicy?.let { "Automatic storage cleanup: target ${it.targetBytes} bytes free; retention ${it.retentionDays} days. Deleted ${fresh.sizeBytes} bytes, oldest eligible recording first." }
+            if (!repo.storageDeleted(fresh, automaticDestination != null, durationClock(), detail))
+                return@withContext StorageDeleteResult.STORAGE_ERROR
+            store.forget(fresh.filePath)
+            StorageDeleteResult.DELETED
+        } }
+
+    suspend fun cleanupStorage() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val store = DvrStorageStore(appContext)
+        for (destination in RecordingDestinations.configured(appContext, settings)) {
+            if (!store.policy(destination.id).cleanupEnabled) continue
+            val result = DvrStorageCleanup(
+                policy = { store.policy(destination.id) },
+                capacity = { storageCapacity(destination) },
+                candidates = { repo.storageCandidates(destination.id) },
+                owned = { store.owned(it.id, it.filePath, destination.id) },
+                delete = { deleteStoredRecording(it, destination) }, now = durationClock,
+            ).run()
+            store.report(destination.id, result)
+        }
+    }
 
     /** Start recording [channel] now. [programme], when given, names and time-bounds the capture. */
     suspend fun startChannel(
@@ -189,7 +235,7 @@ class RecordingEngine(
      * left; one whose window is entirely in the past cannot be recovered — the broadcast is gone —
      * and stays failed. Returns true when a retry was actually kicked off.
      */
-    suspend fun retry(recording: Recording): Boolean = bookingLock.withLock {
+    suspend fun retry(recording: Recording): Boolean = storageMutation(recording.id) { bookingLock.withLock {
         val current = repo.byId(recording.id) ?: return@withLock false
         if (current.status !in setOf(RecordingStatus.FAILED, RecordingStatus.PARTIAL, RecordingStatus.MISSED, RecordingStatus.CANCELED)) return@withLock false
         RecordingService.awaitCaptureStopped(recording.id)
@@ -211,7 +257,7 @@ class RecordingEngine(
             }
             else -> false
         }
-    }
+    } }
 
     /**
      * Re-arm the exact alarm for every scheduled recording. Alarms are dropped on a force-stop or
@@ -354,7 +400,7 @@ class RecordingEngine(
     /** Updates recording protection and padding choices subject to the current lifecycle state. */
     suspend fun updatePreferences(recordingId: Long, padStartMinutes: Int, padEndMinutes: Int,
         protectedRecording: Boolean, lockPadding: Boolean, lateStart: LateStartOptions? = null,
-        lateRevision: Long? = null): Boolean = bookingLock.withLock { dueLock.withLock {
+        lateRevision: Long? = null): Boolean = storageMutation(recordingId) { bookingLock.withLock { dueLock.withLock {
         val recording = repo.byId(recordingId) ?: return@withLock false
         if (lateRevision != null && lateRevision != recording.lateStartRevision) return@withLock false
         if (lateStart != null && !repo.setLateStart(recording, lateStart)) return@withLock false
@@ -367,7 +413,7 @@ class RecordingEngine(
         repo.event(recordingId, "PREFERENCES", "User updated recording protection or padding preferences")
         if (recording.status == RecordingStatus.SCHEDULED) rearmScheduled()
         true
-    } }
+    } } }
 
     suspend fun lateStartDecision(row: Recording, at: Long = durationClock()): RecordingLateStart.Decision =
         RecordingLateStart.evaluate(row, at, RecordingLateStart.resolve(row,
@@ -625,6 +671,10 @@ class RecordingEngine(
     }
 
     private companion object {
+        // Independent of admission locks: slow USB/NAS deletion must not delay due captures.
+        val storageLocks = Array(64) { Mutex() }
+        suspend fun <T> storageMutation(id: Long, action: suspend () -> T): T =
+            storageLocks[(id and 63).toInt()].withLock { action() }
         val bookingLock = Mutex()
         val dueLock = Mutex()
         const val LEAD_MILLIS = 20_000L

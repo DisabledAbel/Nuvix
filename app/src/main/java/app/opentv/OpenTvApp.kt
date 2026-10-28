@@ -66,6 +66,7 @@ class OpenTvApp : Application(), ImageLoaderFactory {
         runCatching { app.opentv.update.UpdateScheduler.initialize(this) }
         val graph = ServiceLocator.get(this)
         SyncWorker.schedule(this)
+        app.opentv.recording.DvrStorageWorker.schedule(this)
 
         // When the normaliser has moved on since the catalogue was last processed, re-clean
         // the stored channels and re-run the guide matcher — locally, no re-download. This

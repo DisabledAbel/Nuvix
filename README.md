@@ -160,3 +160,13 @@ Settings → Recording → Late Start defaults to **Record Remaining**. Choose *
 and series rules support explicit overrides or live default inheritance. Late media is Partial;
 missing only start padding is not. Skips stay visible as Missed with reasons and no empty output.
 See [timing, inheritance, account/Multi-View behavior and Google TV checklist](docs/recording-late-start.md).
+
+### DVR storage management
+
+Open **Settings → Recording → Storage Manager**, or the shortcut in **Recordings**, to
+review destination availability, supported capacity, tracked usage and measured recording-hour
+estimates. Select completed recordings by date/size and explicitly confirm file deletion.
+Low-space warnings are configurable; automatic cleanup is separately opt-in for each destination
+and always excludes active/protected recordings. USB/SMB capacity remains Unknown, so cleanup
+on those destinations stops without deleting files. See [policies, limitations and physical-device
+checks](docs/dvr-storage-manager.md).

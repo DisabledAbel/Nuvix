@@ -927,6 +927,11 @@ interface RecordingDao {
     @Query("SELECT * FROM recordings")
     suspend fun all(): List<Recording>
 
+    @Query("""SELECT * FROM recordings WHERE status IN ('COMPLETED','PARTIAL','FAILED') AND protectedRecording = 0
+        AND EXISTS (SELECT 1 FROM recording_events WHERE recordingId = recordings.id AND kind = :creationKind)
+        ORDER BY endedAtMillis, id LIMIT :limit""")
+    suspend fun storageCandidates(creationKind: String, limit: Int): List<Recording>
+
     /** De-dup for NAS sync: a recording's smb:// locator is its stable cross-device identity. */
     @Query("SELECT * FROM recordings WHERE filePath = :filePath LIMIT 1")
     suspend fun byFilePath(filePath: String): Recording?
@@ -959,6 +964,18 @@ interface RecordingDao {
     /** Updates the stored recording row using its primary key. */
     @Update
     suspend fun update(recording: Recording)
+
+    /** Storage success precedes this atomic tombstone + audit event. Keep all prior history. */
+    @Transaction
+    suspend fun storageDeleted(expected: Recording, automatic: Boolean, at: Long, cleanupDetail: String?): Boolean {
+        if (byId(expected.id) != expected) return false
+        update(expected.copy(status = RecordingStatus.DELETED, sizeBytes = 0, error = null))
+        insertDurationEvent(app.opentv.data.model.RecordingEvent(recordingId = expected.id, atMillis = at,
+            kind = if (automatic) "STORAGE_CLEANUP" else "STORAGE_DELETED",
+            message = if (automatic) requireNotNull(cleanupDetail)
+                else "User confirmed deletion of ${expected.sizeBytes} bytes; recording history retained."))
+        return true
+    }
 
     /** Duplicate alarms and simultaneous starts can claim the same booking only once. */
     @Query("UPDATE recordings SET status = 'PREPARING', error = NULL WHERE id = :id AND status = 'SCHEDULED' AND :startedAt >= 0")
@@ -1135,6 +1152,8 @@ interface RecordingDao {
 /** Room queries and mutations for recording event records. */
 @Dao
 interface RecordingEventDao {
+    @Query("SELECT * FROM recording_events WHERE kind IN ('STORAGE_DELETED','STORAGE_CLEANUP') ORDER BY atMillis DESC, id DESC LIMIT 50")
+    fun observeStorageEvents(): Flow<List<app.opentv.data.model.RecordingEvent>>
     /** Observes a recording's activity history in timestamp and insertion order. */
     @Query("SELECT * FROM recording_events WHERE recordingId = :recordingId ORDER BY atMillis, id")
     fun observeForRecording(recordingId: Long): Flow<List<RecordingEvent>>

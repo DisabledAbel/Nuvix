@@ -182,15 +182,14 @@ object RecordingStorage {
         if (filename.endsWith(".ts", ignoreCase = true)) "video/mp2t" else "video/*"
 
     /** Deletes the recording output through its local, document-tree or SMB storage backend. */
-    fun delete(context: Context, settings: AppSettings, locator: String) {
+    fun delete(context: Context, settings: AppSettings, locator: String): Boolean = try {
         when {
-            SmbClient.isSmb(locator) -> runCatching { SmbClient.delete(smbConfig(settings), locator) }
-            isContent(locator) ->
-                runCatching { DocumentFile.fromSingleUri(context, Uri.parse(locator))?.delete() }
-            isUsbPlaceholder(locator) -> Unit // never created — nothing on disk to remove
-            else -> runCatching { File(locator).delete() }
+            SmbClient.isSmb(locator) -> { SmbClient.delete(smbConfig(settings), locator); true }
+            isContent(locator) -> DocumentFile.fromSingleUri(context, Uri.parse(locator))?.let { it.isFile && it.delete() } == true
+            isUsbPlaceholder(locator) -> false // Creation was never confirmed.
+            else -> File(locator).let { it.isAbsolute && it.isFile && it.delete() }
         }
-    }
+    } catch (_: Exception) { false }
 
     /**
      * Current on-disk size, or -1 when it can't be cheaply known (SMB / USB — the DB tracks it
