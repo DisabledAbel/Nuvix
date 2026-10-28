@@ -41,6 +41,23 @@ internal data class StorageSummary(
     val configurable: Boolean = true,
 )
 
+/** Read and transform the latest policy on the I/O dispatcher; callers handle the result on UI. */
+internal suspend fun updateStoredPolicy(store: DvrStorageStore, destination: String,
+    update: (DvrStoragePolicy) -> DvrStoragePolicy): Boolean = withContext(Dispatchers.IO) {
+    store.save(destination, update(store.policy(destination)))
+}
+
+/** A failed refresh retains the last successful snapshot and does not terminate periodic updates. */
+internal suspend fun refreshStorageSummaries(load: suspend () -> List<StorageSummary>,
+    onLoaded: (List<StorageSummary>) -> Unit, onFailure: () -> Unit) {
+    while (true) {
+        try { onLoaded(load()) }
+        catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (_: Exception) { onFailure() }
+        delay(30_000)
+    }
+}
+
 @Composable
 fun StorageManagerScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -55,8 +72,8 @@ fun StorageManagerScreen(onBack: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     // Refresh capacities independently of frequent active-capture byte updates.
     LaunchedEffect(refresh) {
-        while (true) {
-            summaries = withContext(Dispatchers.IO) {
+        refreshStorageSummaries(load = {
+            withContext(Dispatchers.IO) {
                 val snapshot = graph.recordingRepository.all()
                 val destinations = RecordingDestinations.configured(context, graph.settings)
                 val mapped = snapshot.groupBy { RecordingDestinations.forRecording(context, graph.settings, store, it) }
@@ -75,15 +92,18 @@ fun StorageManagerScreen(onBack: () -> Unit) {
                     DvrStorageRules.usage(other), null, DvrStoragePolicy(),
                     "Previous or unidentifiable destinations. Reconnect storage in Recording settings. Automatic cleanup is unavailable.", false)
             }
-            delay(30_000)
-        }
+        }, onLoaded = { summaries = it }, onFailure = {
+            message = "Storage refresh failed. Previously loaded information was retained. Try Refresh storage."
+        })
     }
     StorageManagerContent(summaries, rows, history, busy, message,
         onBack = onBack,
         onRefresh = { refresh++ },
-        onPolicy = { destination, policy ->
-            if (!store.save(destination.id, policy)) message = "Storage policy could not be saved. Review again."
+        onPolicy = { destination, update ->
+            val saved = updateStoredPolicy(store, destination.id, update)
+            if (!saved) message = "Storage policy could not be saved. Review again."
             else { DvrStorageWorker.schedule(context); refresh++ }
+            saved
         },
         onDelete = { review ->
             if (!busy) {
@@ -106,7 +126,7 @@ fun StorageManagerScreen(onBack: () -> Unit) {
 internal fun StorageManagerContent(
     summaries: List<StorageSummary>, rows: List<Recording>, history: List<RecordingEvent>, busy: Boolean,
     message: String?, onBack: () -> Unit, onRefresh: () -> Unit,
-    onPolicy: (RecordingDestination, DvrStoragePolicy) -> Unit, onDelete: (List<Recording>) -> Unit,
+    onPolicy: suspend (RecordingDestination, (DvrStoragePolicy) -> DvrStoragePolicy) -> Boolean, onDelete: (List<Recording>) -> Unit,
 ) {
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var sortBySize by remember { mutableStateOf(false) }
@@ -146,8 +166,9 @@ internal fun StorageManagerContent(
         }
         items(summaries, key = { "destination-${it.destination.id}" }) { summary ->
             StorageDestinationCard(summary, onEdit = { policyEditor = summary }, onToggleCleanup = {
-                if (summary.policy.cleanupEnabled) onPolicy(summary.destination, summary.policy.copy(cleanupEnabled = false))
-                else enabling = summary
+                if (summary.policy.cleanupEnabled) focusScope.launch {
+                    onPolicy(summary.destination) { it.copy(cleanupEnabled = false) }
+                } else enabling = summary
             })
         }
         item(key = "review-controls") {
@@ -198,7 +219,9 @@ internal fun StorageManagerContent(
         AlertDialog(onDismissRequest = { enabling = null }, title = { Text("Enable automatic cleanup for ${summary.destination.label}?") },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text("Nuvix will try to keep ${storageSize(summary.policy.targetBytes)} free by deleting its own tracked, completed recordings older than ${summary.policy.retentionDays} days, oldest first. Active and protected recordings are never eligible. Lock Padding does not protect files. Each run scans at most 200 candidates and deletes at most 10 files. Cleanup stops on storage errors or unknown/stale capacity; the target is not guaranteed. USB and NAS capacity may be unsupported, so cleanup may do nothing. Review deletion history in Storage Manager.") } },
             confirmButton = { TextButton(onClick = {
-                onPolicy(summary.destination, summary.policy.copy(cleanupEnabled = true)); enabling = null
+                focusScope.launch {
+                    if (onPolicy(summary.destination) { it.copy(cleanupEnabled = true) } && enabling == summary) enabling = null
+                }
             }) { Text("Enable cleanup for this destination") } },
             dismissButton = {
                 TextButton(modifier = Modifier.focusRequester(keepOffFocus), onClick = { enabling = null }) { Text("Keep cleanup off") }
@@ -206,8 +229,10 @@ internal fun StorageManagerContent(
             })
     }
     policyEditor?.let { summary ->
-        StoragePolicyDialog(summary, onDismiss = { policyEditor = null }, onSave = {
-            onPolicy(summary.destination, it); policyEditor = null
+        StoragePolicyDialog(summary, onDismiss = { policyEditor = null }, onSave = { draft ->
+            focusScope.launch {
+                if (onPolicy(summary.destination) { draft } && policyEditor == summary) policyEditor = null
+            }
         })
     }
 }

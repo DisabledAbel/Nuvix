@@ -36,8 +36,18 @@ object RecordingDestinations {
                     locator.substringBeforeLast('/') + "/" == SmbClient.locator(RecordingStorage.smbConfig(settings), "")
                 AppSettings.RecordingTarget.USB -> if (!RecordingStorage.isContent(locator)) false else runCatching {
                     val tree = Uri.parse(settings.usbTreeUri.value)
+                    val document = Uri.parse(locator)
+                    if (document.authority != tree.authority) return@runCatching false
                     val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-                    Build.VERSION.SDK_INT >= 29 && DocumentsContract.isChildDocument(context.contentResolver, parent, Uri.parse(locator))
+                    if (Build.VERSION.SDK_INT >= 29) DocumentsContract.isChildDocument(context.contentResolver, parent, document)
+                    else {
+                        // TreeDocumentFile.createFile preserves /tree/<grant>/document/<opaque ID>.
+                        // Compare the grant, never infer ancestry from a provider's document ID.
+                        val parts = document.pathSegments
+                        parts.size == 4 && parts[0] == "tree" && parts[2] == "document" &&
+                            DocumentsContract.getTreeDocumentId(document) == DocumentsContract.getTreeDocumentId(tree) &&
+                            DocumentsContract.getDocumentId(document) != DocumentsContract.getTreeDocumentId(tree)
+                    }
                 }.getOrDefault(false)
             }
         }

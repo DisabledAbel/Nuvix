@@ -40,7 +40,7 @@ class StorageManagerRemoteTest {
         val deleted = mutableListOf<Recording>()
         var busy by mutableStateOf(false)
         compose.setContent { MaterialTheme { StorageManagerContent(emptyList(), listOf(row()), emptyList(), busy, null,
-            {}, {}, { _, _ -> }, { deleted += it; busy = true }) } }
+            {}, {}, { _, _ -> true }, { deleted += it; busy = true }) } }
         select(1); review()
         compose.onNodeWithText("Cancel deletion").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.runOnIdle { assertTrue(deleted.isEmpty()) }
@@ -56,7 +56,7 @@ class StorageManagerRemoteTest {
     @Test fun stableKeysPreserveFocusedSelectionOnRefreshAndFallbackAfterRemoval() {
         var rows by mutableStateOf(listOf(row(1), row(2)))
         compose.setContent { MaterialTheme { StorageManagerContent(emptyList(), rows, emptyList(), false, null,
-            {}, {}, { _, _ -> }, {}) } }
+            {}, {}, { _, _ -> true }, {}) } }
         select(1)
         compose.runOnIdle { rows = rows.map { if (it.id == 2L) it.copy(sizeBytes = 2048) else it } }
         compose.onNodeWithText("Selected: Program 1", substring = true).assertIsFocused()
@@ -67,7 +67,7 @@ class StorageManagerRemoteTest {
     @Test fun deletingOrProtectingFocusedRecordingDeepInListRestoresAnAttachedFocusableControl() {
         var rows by mutableStateOf((1L..100).map(::row))
         compose.setContent { MaterialTheme { StorageManagerContent(emptyList(), rows, emptyList(), false, null,
-            {}, {}, { _, _ -> }, {}) } }
+            {}, {}, { _, _ -> true }, {}) } }
         compose.onNode(hasScrollToIndexAction()).performScrollToIndex(76)
         select(75)
         compose.runOnIdle { rows = rows.filter { it.id != 75L } }
@@ -84,10 +84,10 @@ class StorageManagerRemoteTest {
         val dest = RecordingDestination("opaque", "This device", AppSettings.RecordingTarget.INTERNAL)
         val summary = StorageSummary(dest, StorageCapacity(StorageAvailability.AVAILABLE, System.currentTimeMillis()),
             1024, null, DvrStoragePolicy())
-        val saved = mutableListOf<DvrStoragePolicy>()
+        val saved = mutableListOf<Pair<String, DvrStoragePolicy>>()
         compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f, 1.5f)) {
             MaterialTheme { StorageManagerContent(listOf(summary), listOf(row().copy(protectedRecording = true)), emptyList(), false, null,
-                {}, {}, { _, policy -> saved += policy }, {}) }
+                {}, {}, { destination, update -> saved += destination.id to update(summary.policy); true }, {}) }
         } }
         compose.onNodeWithText("Estimated remaining recording hours: Unknown").performScrollTo().assertExists()
         compose.onNodeWithText("Enable automatic cleanup for This device").performScrollTo()
@@ -100,14 +100,14 @@ class StorageManagerRemoteTest {
             .performSemanticsAction(SemanticsActions.RequestFocus).performKeyInput { pressKey(Key.DirectionCenter) }
         compose.onNodeWithText("Enable cleanup for this destination").performSemanticsAction(SemanticsActions.RequestFocus)
             .performKeyInput { pressKey(Key.DirectionCenter) }
-        compose.runOnIdle { assertEquals(1, saved.size); assertTrue(saved.single().cleanupEnabled) }
+        compose.runOnIdle { assertEquals(1, saved.size); assertEquals("opaque", saved.single().first); assertTrue(saved.single().second.cleanupEnabled) }
     }
     @Test fun dpadMovesBetweenBackAndRefreshAndBackDispatchLeavesWithoutDeleting() {
         var backs = 0; var deletes = 0
         var owner: OnBackPressedDispatcherOwner? = null
         compose.setContent { owner = LocalOnBackPressedDispatcherOwner.current
             MaterialTheme { StorageManagerContent(emptyList(), listOf(row()), emptyList(), false, null,
-                { backs++ }, {}, { _, _ -> }, { deletes++ }) } }
+                { backs++ }, {}, { _, _ -> true }, { deletes++ }) } }
         compose.onNodeWithText("Back to Recordings / Settings").performScrollTo()
             .performSemanticsAction(SemanticsActions.RequestFocus).performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithText("Refresh storage").assertIsFocused()
@@ -117,12 +117,34 @@ class StorageManagerRemoteTest {
         val history = (1L..2).map { app.opentv.data.model.RecordingEvent(id = it, recordingId = 7,
             atMillis = 1000, kind = "STORAGE_CLEANUP", message = "Automatic cleanup event $it") }
         compose.setContent { MaterialTheme { StorageManagerContent(emptyList(), emptyList(), history, false, null,
-            {}, {}, { _, _ -> }, {}) } }
+            {}, {}, { _, _ -> true }, {}) } }
         compose.onNodeWithText("Sort by size (largest first)").performScrollTo()
             .performSemanticsAction(SemanticsActions.RequestFocus).performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithText("Automatic cleanup event 1", substring = true).assertIsFocused()
             .performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithText("Automatic cleanup event 2", substring = true).assertIsFocused()
+    }
+
+    @Test fun failedPolicySaveKeepsDraftEditorOpenAndSuccessClosesIt() {
+        val summary = StorageSummary(RecordingDestination("opaque", "This device", AppSettings.RecordingTarget.INTERNAL),
+            StorageCapacity(StorageAvailability.AVAILABLE, System.currentTimeMillis()), 0, null, DvrStoragePolicy())
+        var allowSave = false
+        val attempts = mutableListOf<Pair<String, DvrStoragePolicy>>()
+        compose.setContent { MaterialTheme { StorageManagerContent(listOf(summary), emptyList(), emptyList(), false, null,
+            {}, {}, { destination, update -> attempts += destination.id to update(summary.policy); allowSave }, {}) } }
+        compose.onNodeWithText("Configure storage policy for This device").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus).performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Increase retention period").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus).performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Save storage policy").performSemanticsAction(SemanticsActions.RequestFocus)
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Storage policy: This device").assertExists()
+        compose.onNodeWithText("Keep recordings for at least 31 days").assertExists()
+        compose.runOnIdle { assertEquals("opaque", attempts.single().first); assertEquals(31, attempts.single().second.retentionDays); allowSave = true }
+        compose.onNodeWithText("Save storage policy").performSemanticsAction(SemanticsActions.RequestFocus)
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Storage policy: This device").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(31, attempts.last().second.retentionDays) }
     }
 
 }
