@@ -1,6 +1,6 @@
 // Nuvix Contributors. GPL-3.0-or-later.
 import { MAX_REQUEST, MAX_REPLY, PAIR_MS, SESSION_MS, CODE, TOKEN,
-  normalizeCode, hash, allowedCommand, json, readJson } from './protocol.js';
+  normalizeCode, hash, allowedCommand, validCommandBody, json, readJson } from './protocol.js';
 
 export default {
   async fetch(request, env) {
@@ -61,7 +61,7 @@ export class ManagerRoom {
       });
       // Additive metadata for native clients; no device wall-clock synchronization required.
       return json(created === null ? { ok: false } :
-        { ok: true, pairUntil: created, serverNow: Date.now() }, created === null ? 409 : 201);
+        { ok: true, pairUntil: created, serverNow: Date.now(), managerVersion: 2 }, created === null ? 409 : 201);
     }
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer /, '');
     // Hash before the authoritative storage read: revocation may run while crypto awaits.
@@ -84,7 +84,7 @@ export class ManagerRoom {
         return true;
       });
       if (paired) for (const socket of this.devices()) socket.send(JSON.stringify({ type: 'paired' }));
-      return json(paired ? { ok: true, expires: session.expires } : { error: 'Code unavailable' }, paired ? 200 : 404);
+      return json(paired ? { ok: true, expires: session.expires, managerVersion: 2 } : { error: 'Code unavailable' }, paired ? 200 : 404);
     }
     if (!digest) return json({ error: 'Unauthorized' }, 401);
     if (action === '/device') {
@@ -101,9 +101,16 @@ export class ManagerRoom {
       return json({ ok: true });
     }
     if (action !== '/request' || digest !== session.browserHash) return json({ error: 'Unauthorized' }, 401);
+    // An already-open old browser may still be paired to an old APK. Never relay legacy
+    // whole-category reads or positional reorders, even when that APK would accept them.
+    if ((payload.method === 'GET' && typeof payload.path === 'string' && payload.path.split('?')[0] === '/channels') ||
+        (payload.method === 'POST' && payload.path === '/reorder')) {
+      return json({ error: 'Update the TV APK and reload this browser. Paginated manager protocol 2 is required.' }, 426);
+    }
     if (!allowedCommand(payload.method, payload.path) ||
-        typeof payload.body !== 'string' || new TextEncoder().encode(payload.body).length > MAX_REQUEST) {
-      return json({ error: 'Unsupported command' }, 400);
+        typeof payload.body !== 'string' || new TextEncoder().encode(payload.body).length > MAX_REQUEST ||
+        !validCommandBody(payload.path, payload.body)) {
+      return json({ error: 'Unsupported or outdated command. Update the TV APK and reload the browser.' }, 400);
     }
     const socket = this.devices()[0];
     if (!socket) return json({ error: 'TV offline. Reopen the manager on the TV.' }, 503);

@@ -608,6 +608,21 @@ class CatalogRepository(
     suspend fun channelsInCategoryForManager(sourceId: Long?, categoryId: String): List<Channel> =
         channelDao.channelsInCategoryIncludingHidden(sourceId, categoryId)
 
+    /** Bounded, revision-checked management operations; transactions are owned by Room. */
+    suspend fun managerPage(source: Long, cat: String?, query: String, limit: Int, offset: Int, revision: String?) =
+        channelDao.managerPage(source, cat, query, limit, offset, revision)
+
+    suspend fun managerState(source: Long, revision: String, ids: List<Long>) = channelDao.managerState(source, revision, ids)
+
+    suspend fun managerBulk(source: Long, revision: String, ids: List<Long>, action: String) =
+        channelDao.managerBulk(source, revision, ids, action)
+
+    suspend fun managerPatch(source: Long, revision: String, id: Long, hidden: Boolean?, favourite: Boolean?, name: String?) =
+        channelDao.managerPatch(source, revision, id, hidden, favourite, name)
+
+    suspend fun managerMove(source: Long, revision: String, id: Long, direction: Int) =
+        channelDao.managerMove(source, revision, id, direction)
+
     /** Changes a movie's local favorite state. */
     suspend fun setMovieFavourite(id: Long, favourite: Boolean) =
         movieDao.setFavourite(id, favourite)

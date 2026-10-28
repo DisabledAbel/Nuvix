@@ -65,7 +65,7 @@ test('creation returns the stored deadline and response time without extending p
   r.storage.setAlarm = async time => { await setAlarm(time); t.mock.timers.tick(2500); };
   const response = await r.instance.fetch(request('/create', { tvToken: TV }));
   assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { ok: true, pairUntil: now + PAIR_MS, serverNow: now + 2500 });
+  assert.deepEqual(await response.json(), { ok: true, pairUntil: now + PAIR_MS, serverNow: now + 2500, managerVersion: 2 });
   assert.equal(r.data.get('session').pairUntil, now + PAIR_MS);
   assert.equal(r.data.get('session').expires, now + SESSION_MS);
   assert.equal(r.storage.alarm, now + PAIR_MS);
@@ -139,7 +139,7 @@ test('TV and browser tokens have separate roles and cannot cross sessions', asyn
 
 test('authenticated operation relays once and only its matching reply resolves', async () => {
   const r = await paired();
-  const response = r.instance.fetch(request('/request', { method: 'POST', path: '/channel', body: '{"id":1,"hidden":true}' }, BROWSER));
+  const response = r.instance.fetch(request('/request', { method: 'POST', path: '/channel', body: '{"source":1,"revision":"42","id":1,"hidden":true}' }, BROWSER));
   while (!r.sent.length) await new Promise(resolve => setImmediate(resolve));
   assert.equal(r.sent.length, 1); assert.equal(r.sent[0].path, '/channel');
   await r.instance.webSocketMessage(r.socket, JSON.stringify({ id: 'foreign', status: 200, body: '{}' }));
@@ -157,7 +157,7 @@ test('unsupported authenticated request never reaches the TV', async () => {
 
 test('offline TV has a visible error and no queued mutation', async () => {
   const r = await paired(); r.sockets.length = 0;
-  assert.equal((await r.instance.fetch(request('/request', { method: 'POST', path: '/channel', body: '{}' }, BROWSER))).status, 503);
+  assert.equal((await r.instance.fetch(request('/request', { method: 'POST', path: '/channel', body: '{"source":1,"revision":"42","id":1,"hidden":true}' }, BROWSER))).status, 503);
   assert.equal(r.instance.pending.size, 0);
 });
 
@@ -196,4 +196,33 @@ test('public Worker rejects foreign origins, wrong methods and rate-limited pair
   assert.equal((await worker.fetch(new Request('https://manager.test/api/pair'), env)).status, 404);
   const pair = new Request('https://manager.test/api/pair', { method: 'POST' });
   assert.equal((await worker.fetch(pair, env)).status, 429); assert.equal(allocations, 0);
+});
+
+test('oversized bulk bodies never reach the TV and relay deadline never replays a mutation', async t => {
+  const r = await paired();
+  const body = { source: 1, revision: '42', action: 'hide', ids: Array.from({ length: 101 }, (_, i) => i + 1) };
+  const oversized = await r.instance.fetch(request('/request', { method: 'POST', path: '/channels/bulk', body: JSON.stringify(body) }, BROWSER));
+  assert.equal(oversized.status, 400); assert.equal(r.sent.length, 0);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  body.ids = [1, 2];
+  const pending = r.instance.fetch(request('/request', { method: 'POST', path: '/channels/bulk', body: JSON.stringify(body) }, BROWSER));
+  while (!r.sent.length) await new Promise(resolve => setImmediate(resolve));
+  const id = r.sent[0].id;
+  t.mock.timers.tick(30_000);
+  assert.equal((await pending).status, 504); assert.equal(r.instance.pending.size, 0);
+  // A real TV may commit successfully before this late reply. It must not trigger another send.
+  await r.instance.webSocketMessage(r.socket, JSON.stringify({ id, status: 200, body: '{"results":[]}' }));
+  assert.equal(r.sent.length, 1); assert.equal(r.instance.pending.size, 0);
+});
+
+test('an old browser paired to an old APK cannot request whole categories or positional edits', async () => {
+  const r = await paired();
+  for (const command of [{ method: 'GET', path: '/channels?source=1&cat=large', body: '' },
+    { method: 'POST', path: '/reorder', body: '{"ids":[1,2]}' }]) {
+    const response = await r.instance.fetch(request('/request', command, BROWSER));
+    assert.equal(response.status, 426); assert.match((await response.json()).error, /Update the TV APK/);
+  }
+  const legacyEdit = await r.instance.fetch(request('/request', { method: 'POST', path: '/channel', body: '{"id":1,"hidden":true}' }, BROWSER));
+  assert.equal(legacyEdit.status, 400); assert.match((await legacyEdit.json()).error, /outdated/);
+  assert.equal(r.sent.length, 0);
 });

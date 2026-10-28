@@ -163,6 +163,117 @@ interface ChannelDao {
     )
     suspend fun channelsInCategoryIncludingHidden(sourceId: Long?, categoryId: String): List<Channel>
 
+    /** A revision read and its page/mutation share a Room transaction with imports and deletions. */
+    @Query("SELECT managerRevision FROM sources WHERE id = :sourceId AND enabled = 1")
+    suspend fun managerRevision(sourceId: Long): Long?
+
+    @Query("""SELECT * FROM channels WHERE sourceId = :sourceId
+        AND (:categoryId IS NULL OR categoryId = :categoryId)
+        AND (:query = '' OR instr(lower(name), lower(:query)) > 0
+            OR instr(lower(displayName), lower(:query)) > 0 OR instr(lower(customName), lower(:query)) > 0)
+        ORDER BY sortIndex, displayName, id LIMIT :limit OFFSET :offset""")
+    suspend fun managerRows(sourceId: Long, categoryId: String?, query: String, limit: Int, offset: Int): List<Channel>
+
+    @Query("""SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId
+        AND (:categoryId IS NULL OR categoryId = :categoryId)
+        AND (:query = '' OR instr(lower(name), lower(:query)) > 0
+            OR instr(lower(displayName), lower(:query)) > 0 OR instr(lower(customName), lower(:query)) > 0)""")
+    suspend fun managerCount(sourceId: Long, categoryId: String?, query: String): Int
+
+    /** Bounded ID-only order read used only for the existing move action, never sent to browsers. */
+    @Query("""SELECT id FROM channels WHERE sourceId = :sourceId
+        AND categoryId IS :categoryId ORDER BY sortIndex, displayName, id LIMIT 100001""")
+    suspend fun managerOrder(sourceId: Long, categoryId: String?): List<Long>
+
+    suspend fun requireManagerRevision(sourceId: Long, expected: String?): String {
+        val revision = managerRevision(sourceId)?.toString() ?: throw ManagerConflict("Provider removed or disabled. Refresh providers.")
+        if (expected != null && expected != revision) throw ManagerConflict("Catalog or provider changed. Refresh TV state and select again.")
+        return revision
+    }
+
+    @Transaction
+    suspend fun managerPage(sourceId: Long, categoryId: String?, query: String, limit: Int, offset: Int, expected: String?): ManagerChannelPage {
+        require(sourceId > 0 && limit in 1..100 && offset in 0..1000000 && query.length <= 120)
+        val revision = requireManagerRevision(sourceId, expected)
+        return ManagerChannelPage(revision, managerRows(sourceId, categoryId, query, limit, offset),
+            managerCount(sourceId, categoryId, query))
+    }
+
+    @Transaction
+    suspend fun managerState(sourceId: Long, revision: String, ids: List<Long>): List<Channel> {
+        require(ids.size in 1..100 && ids.all { it > 0 } && ids.distinct().size == ids.size)
+        requireManagerRevision(sourceId, revision)
+        return ids.mapNotNull { byId(it)?.takeIf { row -> row.sourceId == sourceId } }
+    }
+
+    suspend fun managerBulk(sourceId: Long, revision: String, ids: List<Long>, action: String): List<ManagerChange> {
+        require(ids.size in 1..100 && ids.all { it > 0 } && ids.distinct().size == ids.size)
+        require(action in setOf("favorite", "unfavorite", "hide", "unhide"))
+        return try { managerBulkTransaction(sourceId, revision, ids, action) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (changed: ManagerConflict) { throw changed }
+        catch (_: Exception) {
+            // Room rolls back the whole batch on a write failure. Classify only AFTER rollback;
+            // catching individual statements inside a transaction can falsely report commits.
+            val actual = managerState(sourceId, revision, ids).associateBy { it.id }
+            ids.map { id ->
+                val row = actual[id]
+                val target = action == "favorite" || action == "hide"
+                val favorite = action == "favorite" || action == "unfavorite"
+                val unchanged = row != null && (if (favorite) row.favourite else row.hidden) == target &&
+                    row.syncTouched and (if (favorite) 1 else 2) != 0
+                ManagerChange(id, if (row == null || unchanged) "skipped" else "failed")
+            }
+        }
+    }
+
+    @Transaction
+    suspend fun managerBulkTransaction(sourceId: Long, revision: String, ids: List<Long>, action: String): List<ManagerChange> {
+        require(ids.size in 1..100 && ids.all { it > 0 } && ids.distinct().size == ids.size)
+        require(action in setOf("favorite", "unfavorite", "hide", "unhide"))
+        requireManagerRevision(sourceId, revision)
+        return ids.map { id ->
+            val row = byId(id)
+            if (row == null || row.sourceId != sourceId) ManagerChange(id, "skipped")
+            else {
+                val target = action == "favorite" || action == "hide"
+                val favorite = action == "favorite" || action == "unfavorite"
+                if ((if (favorite) row.favourite else row.hidden) == target &&
+                    row.syncTouched and (if (favorite) 1 else 2) != 0) ManagerChange(id, "skipped")
+                else {
+                    // Same setters and syncTouched bits as on-TV and single-channel edits.
+                    if (favorite) setFavourite(id, target) else setHidden(id, target)
+                    ManagerChange(id, "success")
+                }
+            }
+        }
+    }
+
+    @Transaction
+    suspend fun managerPatch(sourceId: Long, revision: String, id: Long, hidden: Boolean?, favourite: Boolean?, name: String?) {
+        requireManagerRevision(sourceId, revision)
+        if (byId(id)?.sourceId != sourceId) throw ManagerConflict("Channel no longer exists. Refresh TV state.")
+        hidden?.let { setHidden(id, it) }
+        favourite?.let { setFavourite(id, it) }
+        name?.let { setCustomName(id, it.trim().takeIf(String::isNotBlank)) }
+    }
+
+    @Transaction
+    suspend fun managerMove(sourceId: Long, revision: String, id: Long, direction: Int) {
+        require(direction == -1 || direction == 1)
+        requireManagerRevision(sourceId, revision)
+        val row = byId(id)?.takeIf { it.sourceId == sourceId }
+            ?: throw ManagerConflict("Channel no longer exists. Refresh TV state.")
+        val ids = managerOrder(sourceId, row.categoryId).toMutableList()
+        require(ids.size <= 100000) { "Category too large to reorder." }
+        val from = ids.indexOf(id)
+        val to = from + direction
+        if (from < 0 || to !in ids.indices) return
+        java.util.Collections.swap(ids, from, to)
+        // Normalize rank in the category, preserving every other row's relative order.
+        ids.forEachIndexed { index, channelId -> setSortIndex(channelId, index) }
+    }
+
     /**
      * Channel count per (source, category), hidden rows included — the web manager's category list
      * shows how many channels each holds. Grouped by (sourceId, categoryId) because a category id
@@ -1282,3 +1393,9 @@ interface ReminderDao {
     @Query("DELETE FROM reminders WHERE endUtcMillis < :beforeMillis")
     suspend fun deleteEndedBefore(beforeMillis: Long)
 }
+
+/** Internal manager results; channel playback fields never cross the wire. */
+data class ManagerChannelPage(val revision: String, val rows: List<Channel>, val total: Int)
+@kotlinx.serialization.Serializable
+data class ManagerChange(val id: Long, val status: String)
+class ManagerConflict(message: String) : IllegalStateException(message)

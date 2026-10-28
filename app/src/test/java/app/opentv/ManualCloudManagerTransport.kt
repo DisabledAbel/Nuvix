@@ -36,7 +36,7 @@ internal class ManualCloudManagerTransport(
         override fun timeout() = Timeout.NONE
         override fun clone(): Call = ManualCall(request)
         fun respond(pairUntil: Long = SERVER + 300_000, serverNow: Long = SERVER,
-                    body: String = "{\"ok\":true,\"pairUntil\":$pairUntil,\"serverNow\":$serverNow}") {
+                    body: String = "{\"ok\":true,\"managerVersion\":2,\"pairUntil\":$pairUntil,\"serverNow\":$serverNow}") {
             callback.onResponse(this, response(request, 201).newBuilder().body(body.toResponseBody()).build())
         }
     }

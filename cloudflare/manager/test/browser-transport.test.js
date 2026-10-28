@@ -72,3 +72,22 @@ test('an old TV response cannot populate a newly paired session', async () => {
   finish({ ok: true, json: async () => ({ status: 200, body: '{"sources":["old"]}' }) });
   await assert.rejects(pending, /Session ended/);
 });
+
+test('late expired-session response cannot disconnect a newly paired browser', async () => {
+  const { context: c } = browser(); let finish;
+  c.activeCode = 'ABCDEFGH2345'; c.browserToken = 'old-token';
+  c.fetch = () => new Promise(resolve => { finish = resolve; });
+  const pending = c.remote('GET', '/meta', '');
+  c.disconnect(); c.activeCode = 'NEWCODE23456'; c.browserToken = 'new-token';
+  finish({ ok: false, status: 404, json: async () => ({ error: 'Session expired' }) });
+  await assert.rejects(pending, /Session expired/);
+  assert.equal(c.browserToken, 'new-token'); assert.equal(c.activeCode, 'NEWCODE23456');
+});
+
+test('expired session is labeled clearly and drops in-memory authentication', async () => {
+  const { context: c, node } = browser(); c.browserToken = 'active-token'; c.activeCode = 'ABCDEFGH2345';
+  c.fetch = async () => ({ ok: false, status: 404, json: async () => ({ error: 'Session expired' }) });
+  await assert.rejects(c.api('request', {}, 'active-token'), /Session expired/);
+  assert.equal(c.browserToken, ''); assert.equal(c.activeCode, '');
+  assert.match(node('pairMessage').textContent, /expired or revoked/);
+});

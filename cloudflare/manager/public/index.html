@@ -74,6 +74,10 @@
 
     <section id="catView">
       <div id="srcBar" class="chips" hidden></div>
+      <label class="field"><span>Provider for channel search</span><select id="channelSource"></select></label>
+      <button class="back" id="browseProvider" type="button">Browse or search provider channels</button>
+      <button class="back" id="refreshProviders" type="button">Refresh providers</button>
+      <label for="catSearch">Filter categories</label>
       <input id="catSearch" class="search" type="text" placeholder="Filter categories…"
              autocapitalize="off" autocorrect="off" spellcheck="false">
       <div id="catList" class="list"></div>
@@ -81,9 +85,35 @@
     </section>
 
     <section id="chanView" hidden>
-      <div id="back" class="back">&#8249;&nbsp;Categories</div>
+      <button type="button" id="back" class="back">&#8249;&nbsp;Categories</button>
       <h2 id="chanHead" class="chanhead"></h2>
-      <p class="hint" id="chanHint">Tap a name to rename. Star to favourite, eye to hide, arrows to reorder.</p>
+      <p class="hint" id="chanHint">Tap a name to rename. Moves apply within the channel’s original category. Selection includes only channels you check, up to 500 across pages and filters.</p>
+      <label for="channelSearch">Search original and custom channel names</label>
+      <input id="channelSearch" class="search" type="search" maxlength="120" autocomplete="off">
+      <label class="toolbar"><input id="categoryOnly" type="checkbox" class="selection">Only this category</label>
+      <div class="toolbar">
+        <button type="button" id="prevPage">Previous page</button><span id="pageInfo"></span>
+        <button type="button" id="nextPage">Next page</button>
+        <button type="button" id="refreshChannels">Refresh TV state</button>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="selectPage">Select All on This Page</button>
+        <button type="button" id="clearSelection">Clear Selection</button>
+      </div>
+      <p id="selectedCount" role="status" aria-live="polite"></p>
+      <details><summary>Review selected channels and last known state</summary><ul id="selectionReview"></ul></details>
+      <div class="toolbar">
+        <label for="bulkAction">Bulk action</label>
+        <select id="bulkAction"><option value="favorite">Favorite</option><option value="unfavorite">Unfavorite</option><option value="hide">Hide</option><option value="unhide">Unhide</option></select>
+        <button type="button" id="reviewBulk">Review action</button>
+      </div>
+      <div id="bulkReview" role="region" aria-label="Confirm bulk action" hidden>
+        <p id="bulkSummary"></p>
+        <button type="button" id="confirmBulk" aria-describedby="bulkSummary">Apply reviewed action</button>
+        <button type="button" id="cancelBulk">Cancel</button>
+      </div>
+      <button type="button" id="stopBulk" hidden>Stop after current batch</button>
+      <p id="channelStatus" role="status" aria-live="polite" aria-atomic="true"></p>
       <div id="chanList" class="list"></div>
       <div id="chanEmpty" class="empty" hidden></div>
     </section>

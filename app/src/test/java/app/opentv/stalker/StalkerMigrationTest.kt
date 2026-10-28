@@ -47,7 +47,7 @@ class StalkerMigrationTest {
             }).build())
         helper.writableDatabase; helper.close()
         val migrated = Room.databaseBuilder(context, OpenTvDatabase::class.java, name)
-            .addMigrations(OpenTvDatabase.MIGRATION_16_17).allowMainThreadQueries().build()
+            .addMigrations(OpenTvDatabase.MIGRATION_16_17, OpenTvDatabase.MIGRATION_17_18).allowMainThreadQueries().build()
         try {
             val source = migrated.sources().byId(7)!!
             assertEquals("00:1a:79:aa:bb:cc", source.macAddress)

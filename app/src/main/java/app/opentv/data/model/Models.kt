@@ -86,6 +86,8 @@ data class Source(
     /** Retains the original account's connection policy when the authorized identity changes. */
     val stalkerAccountKey: String? = null,
     @ColumnInfo(defaultValue = "0") val stalkerRevision: Long = 0,
+    /** Monotonic browse revision; maintained by database triggers, never a credential hash. */
+    @ColumnInfo(defaultValue = "0") val managerRevision: Long = 0,
 ) {
     override fun toString(): String = "Source(id=$id, kind=$kind, credentials=redacted)"
 

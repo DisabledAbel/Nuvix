@@ -43,12 +43,13 @@ async function api(action, payload, token) {
     if (!value || typeof value !== 'object') value = {};
   } finally { if (timeout !== null) clearTimeout(timeout); }
   if (!r.ok) {
-    if (r.status === 401 || r.status === 404) disconnect();
-    throw new Error(value.error || 'The TV could not complete this action.');
+    if ((r.status === 401 || r.status === 404) && token && token === browserToken) disconnect('Session expired or revoked. Start a new session on the TV.');
+    var error = new Error(value.error || 'The TV could not complete this action.'); error.status = r.status; throw error;
   }
   return value;
 }
-function disconnect() {
+function disconnect(reason) {
+  if (typeof resetChannelState === 'function') resetChannelState();
   activeCode = ''; browserToken = ''; pairAttemptCode = ''; pairAttemptToken = '';
   clearTimeout(sessionTimer);
   meta = { sources: [], categories: [] };
@@ -56,6 +57,7 @@ function disconnect() {
   document.getElementById('catList').replaceChildren();
   document.getElementById('chanList').replaceChildren();
   document.getElementById('srcBar').replaceChildren();
+  document.getElementById('channelSource').replaceChildren();
   document.getElementById('srcBar').hidden = true;
   document.getElementById('chanHead').textContent = '';
   document.getElementById('chanView').hidden = true;
@@ -70,7 +72,7 @@ function disconnect() {
   document.getElementById('status').className = '';
   document.getElementById('manager').hidden = true;
   document.getElementById('pairPanel').hidden = false;
-  document.getElementById('pairMessage').textContent = 'Session ended. Start a new session on the TV.';
+  document.getElementById('pairMessage').textContent = typeof reason === 'string' ? reason : 'Session ended. Start a new session on the TV.';
 }
 async function remote(method, path, body) {
   if (!activeCode || !browserToken) throw new Error('Connect to your TV first.');
@@ -79,8 +81,12 @@ async function remote(method, path, body) {
     code: activeCode, method: method, path: path, body: body || ''
   }, browserToken);
   if (requestToken !== browserToken) throw new Error('Session ended.');
-  if (reply.status < 200 || reply.status >= 300) throw new Error('TV action failed (' + reply.status + ').');
-  return JSON.parse(reply.body);
+  var value = JSON.parse(reply.body);
+  if (reply.status < 200 || reply.status >= 300) {
+    var error = new Error(value.error || (reply.status === 426 ? 'Update the TV APK, Worker and browser for paginated channels.' : 'TV action failed (' + reply.status + ').'));
+    error.status = reply.status; throw error;
+  }
+  return value;
 }
 async function getJson(path) { return remote('GET', path, ''); }
 async function post(path, bodyObj) { return remote('POST', path, JSON.stringify(bodyObj)); }
@@ -102,11 +108,12 @@ function setupPairing() {
     message.textContent = 'Connecting…';
     try {
       var result = await api('pair', { code: code, browserToken: pairAttemptToken });
+      if (result.managerVersion !== 2) throw new Error('Update the Worker before the TV APK, then reload this browser. Manager protocol 2 is required.');
       activeCode = code; browserToken = pairAttemptToken;
       document.getElementById('pairCode').value = '';
       document.getElementById('pairPanel').hidden = true;
       document.getElementById('manager').hidden = false;
-      sessionTimer = setTimeout(disconnect, Math.max(0, result.expires - Date.now()));
+      sessionTimer = setTimeout(function(){ disconnect('Session expired. Start a new session on the TV.'); }, Math.max(0, result.expires - Date.now()));
       await loadMeta(); await loadRecording();
     } catch (e) { message.textContent = e.message; }
     finally { button.disabled = false; }
@@ -122,23 +129,39 @@ var UNREACH = "Could not reach the TV. Keep its manager open. A change may have 
 
   // ---- Categories --------------------------------------------------------------------
   async function loadMeta(){
+    var epoch = channelEpoch;
     try {
-      meta = await getJson('/meta');
+      var loaded = await getJson('/meta');
+      if (epoch !== channelEpoch) return;
+      meta = loaded;
+      compatibility = meta.managerVersion !== 2;
+      if (compatibility) throw new Error('Update the TV APK and Worker, then reload this browser. Paginated channels require manager protocol 2.');
+      var providerSelect = el('channelSource'), previous = providerSelect.value;
+      providerSelect.replaceChildren();
+      meta.sources.forEach(function(source){
+        var option = document.createElement('option'); option.value = source.id; option.textContent = source.name;
+        providerSelect.appendChild(option);
+      });
+      if (meta.sources.some(function(source){ return String(source.id) === previous; })) providerSelect.value = previous;
+      if (selectionSource !== null && !meta.sources.some(function(source){ return source.id === selectionSource; })) resetChannelState();
+      el('browseProvider').disabled = !meta.sources.length;
       renderSources();
       renderCategories();
     } catch (e) {
+      if (epoch !== channelEpoch) return;
       el('catList').innerHTML = '';
-      var d = el('catEmpty'); d.hidden = false; d.textContent = UNREACH;
+      var d = el('catEmpty'); d.hidden = false; d.textContent = e.message || UNREACH;
     }
   }
 
+  el('refreshProviders').onclick = loadMeta;
   function renderSources(){
     var bar = el('srcBar');
     if (!meta.sources || meta.sources.length < 2) { bar.hidden = true; return; }
     bar.hidden = false;
     bar.innerHTML = '';
     var mk = function(label, id){
-      var c = document.createElement('div');
+      var c = document.createElement('button'); c.type = 'button';
       c.className = 'chip' + (currentSource === id ? ' on' : '');
       c.textContent = label;
       c.onclick = function(){ currentSource = id; renderSources(); renderCategories(); };
@@ -165,7 +188,7 @@ var UNREACH = "Could not reach the TV. Keep its manager open. A change may have 
     }
     empty.hidden = true;
     cats.forEach(function(c){
-      var row = document.createElement('div');
+      var row = document.createElement('button'); row.type = 'button';
       row.className = 'cat';
       var label = document.createElement('span'); label.className = 'label'; label.textContent = c.label;
       var count = document.createElement('span'); count.className = 'count'; count.textContent = c.count;
@@ -177,147 +200,262 @@ var UNREACH = "Could not reach the TV. Keep its manager open. A change may have 
   }
   el('catSearch').addEventListener('input', renderCategories);
 
-  // ---- Channels ----------------------------------------------------------------------
-  async function openCategory(cat){
+  // ---- Bounded channel browsing and explicit selection -------------------------------
+  var pageOffset = 0, pageSize = 50, pageTotal = 0, catalogRevision = null;
+  var browseGeneration = 0, readRunning = false, readWanted = false, searchTimer;
+  var selected = new Map(), selectionSource = null, selectionRevision = null;
+  var mutationBusy = false, needsReconcile = false, compatibility = false;
+  var pageReady = false, reviewAction = null, channelEpoch = 0, stopBulkRequested = false;
+  function announce(message){ el('channelStatus').textContent = message; }
+  function resetChannelState(){
+    channelEpoch++; browseGeneration++; readWanted = false; clearTimeout(searchTimer);
+    channels = []; selected.clear(); catalogRevision = null;
+    selectionSource = null; selectionRevision = null; pageReady = false; pageOffset = 0; pageTotal = 0;
+    el('pageInfo').textContent = ''; el('channelStatus').textContent = ''; el('bulkSummary').textContent = '';
+    needsReconcile = false; reviewAction = null; mutationBusy = false;
+    el('bulkReview').hidden = true; el('stopBulk').hidden = true; stopBulkRequested = true; updateSelection();
+  }
+  function browseSource(){ return currentCat ? currentCat.sourceId : Number(el('channelSource').value); }
+  function setBusy(busy){
+    mutationBusy = busy;
+    document.querySelectorAll('#chanView button, #chanView select, #chanView input').forEach(function(n){ n.disabled = busy; });
+    el('cancelBulk').disabled = false;
+    renderChannels(); updateSelection();
+  }
+  function updateSelection(){
+    document.querySelectorAll('#chanList button, #chanList input').forEach(function(n){ n.disabled = mutationBusy || !pageReady || needsReconcile; });
+    if (reviewAction) { reviewAction = null; el('bulkReview').hidden = true; }
+    var onPage = channels.filter(function(c){ return selected.has(c.id); }).length;
+    el('selectedCount').textContent = selected.size + ' selected (' + onPage + ' on this page, ' + (selected.size - onPage) + ' on other pages or filters). Maximum 500.';
+    el('clearSelection').disabled = mutationBusy || !selected.size;
+    el('selectPage').disabled = mutationBusy || !pageReady || needsReconcile;
+    el('reviewBulk').disabled = mutationBusy || !selected.size || needsReconcile || !pageReady;
+    el('prevPage').disabled = mutationBusy || !pageReady || pageOffset === 0;
+    el('nextPage').disabled = mutationBusy || !pageReady || pageOffset + pageSize >= pageTotal || pageOffset + pageSize > 1000000;
+    el('selectionReview').replaceChildren();
+    selected.forEach(function(c){
+      var line = document.createElement('li');
+      line.textContent = c.name + ' — ' + (c.favourite ? 'Favorite' : 'Not favorite') + ', ' + (c.hidden ? 'Hidden' : 'Visible');
+      el('selectionReview').appendChild(line);
+    });
+  }
+  function showChannelView(cat){
+    if (mutationBusy) return;
+    reviewAction = null; el('bulkReview').hidden = true;
+    var source = cat ? cat.sourceId : Number(el('channelSource').value);
+    if (selectionSource !== null && selectionSource !== source) resetChannelState();
     currentCat = cat;
-    el('catView').hidden = true;
-    el('chanView').hidden = false;
-    el('chanHead').textContent = cat.label;
-    window.scrollTo(0, 0);
-    var listEl = el('chanList'); listEl.innerHTML = '';
-    var empty = el('chanEmpty'); empty.hidden = true;
-    try {
-      channels = await getJson('/channels?cat=' + encodeURIComponent(cat.id) + '&source=' + cat.sourceId);
-      renderChannels();
-    } catch (e) {
-      empty.hidden = false; empty.textContent = UNREACH;
-    }
+    el('catView').hidden = true; el('chanView').hidden = false;
+    el('chanHead').textContent = cat ? cat.label : 'Search provider channels';
+    el('categoryOnly').disabled = !cat;
+    if (!cat) el('categoryOnly').checked = false;
+    pageOffset = 0; catalogRevision = selectionSource === source ? selectionRevision : null;
+    loadPage();
   }
-
+  function openCategory(cat){ el('channelSource').value = cat.sourceId; el('categoryOnly').checked = true; showChannelView(cat); }
+  el('browseProvider').onclick = function(){ showChannelView(null); };
   el('back').onclick = function(){
-    el('chanView').hidden = true;
-    el('catView').hidden = false;
-    channels = [];
+    if (mutationBusy) return;
+    browseGeneration++; readWanted = false; pageReady = false;
+    el('chanView').hidden = true; el('catView').hidden = false;
   };
-
-  function renderChannels(){
-    var listEl = el('chanList');
-    listEl.innerHTML = '';
-    var empty = el('chanEmpty');
-    if (!channels.length) { empty.hidden = false; empty.textContent = 'No channels in this category.'; return; }
-    empty.hidden = true;
-    channels.forEach(function(c, i){ listEl.appendChild(buildRow(c, i)); });
-  }
-
-  function buildRow(c, index){
-    var row = document.createElement('div');
-    row.className = 'row' + (c.hidden ? ' hidden' : '');
-
-    var logo = document.createElement('img');
-    logo.className = 'logo'; logo.alt = '';
-    if (c.logo) { logo.src = c.logo; } else { logo.style.visibility = 'hidden'; }
-    logo.onerror = function(){ logo.style.visibility = 'hidden'; };
-
-    var mid = document.createElement('div'); mid.className = 'rowmeta';
-    var name = document.createElement('span'); name.className = 'name'; name.textContent = c.name;
-    name.onclick = function(){ startRename(name, c); };
-    var sub = document.createElement('div'); sub.className = 'sub';
-    mid.appendChild(name); mid.appendChild(sub);
-    function refreshSub(){
-      sub.innerHTML = '';
-      if (c.number !== null && c.number !== undefined) {
-        sub.appendChild(document.createTextNode('No. ' + c.number));
-      }
-      if (c.hidden) {
-        if (sub.childNodes.length) sub.appendChild(document.createTextNode('  ·  '));
-        var b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Hidden';
-        sub.appendChild(b);
-      }
-      if (!sub.childNodes.length) sub.textContent = c.original !== c.name ? c.original : ' ';
+  async function loadPage(){
+    browseGeneration++; readWanted = true; pageReady = false;
+    reviewAction = null; el('bulkReview').hidden = true;
+    updateSelection();
+    if (readRunning || mutationBusy || compatibility) return;
+    readRunning = true;
+    // One read in flight. Rapid input cancels its result and coalesces to the latest query.
+    while (readWanted && !mutationBusy && !el('chanView').hidden) {
+      readWanted = false;
+      var generation = browseGeneration;
+      var source = browseSource();
+      var query = el('channelSearch').value.trim();
+      var category = currentCat && el('categoryOnly').checked ? currentCat.id : null;
+      var path = '/channels/page?source=' + source + '&limit=' + pageSize + '&offset=' + pageOffset + '&q=' + encodeURIComponent(query);
+      if (category !== null) path += '&cat=' + encodeURIComponent(category);
+      if (catalogRevision !== null) path += '&revision=' + catalogRevision;
+      announce('Loading channels…'); el('chanList').setAttribute('aria-busy', 'true');
+      try {
+        var page = await getJson(path);
+        if (generation !== browseGeneration) continue;
+        if (!page || !Array.isArray(page.rows) || page.rows.length > pageSize || typeof page.revision !== 'string') throw new Error('Update the TV APK, Worker and browser together for paginated channels.');
+        catalogRevision = page.revision; pageTotal = page.total;
+        if (selectionSource === source && selectionRevision !== catalogRevision) {
+          selected.clear(); needsReconcile = false;
+        }
+        selectionSource = source; selectionRevision = catalogRevision;
+        channels = page.rows; pageReady = true;
+        channels.forEach(function(c){ if (selected.has(c.id)) selected.set(c.id, c); });
+        renderChannels(); updateSelection();
+        el('pageInfo').textContent = pageTotal ? (pageOffset + 1) + '–' + (pageOffset + channels.length) + ' of ' + pageTotal : '0 results';
+        if (pageOffset + pageSize > 1000000 && pageOffset + pageSize < pageTotal) el('pageInfo').textContent += ' — narrow your search to continue';
+        announce(needsReconcile ? 'A reply was lost. Refresh TV state to reconcile all selected channels before another edit.' : 'Channels loaded.');
+      } catch (e) {
+        if (generation !== browseGeneration) continue;
+        channels = []; pageReady = false; renderChannels();
+        if (e.status === 409) {
+          selected.clear(); catalogRevision = null; selectionRevision = null;
+          needsReconcile = false; pageOffset = 0;
+        }
+        announce(e.message || UNREACH); updateSelection();
+      } finally { el('chanList').setAttribute('aria-busy', 'false'); }
     }
-    refreshSub();
-
-    var ctrls = document.createElement('div'); ctrls.className = 'ctrls';
-
-    var star = document.createElement('div');
-    star.className = 'btn star' + (c.favourite ? ' on' : '');
-    star.innerHTML = c.favourite ? '&#9733;' : '&#9734;';
-    star.title = 'Favourite';
-    star.onclick = function(){
-      var target = !c.favourite;
-      post('/channel', { id: c.id, favourite: target })
-        .then(function(){ c.favourite = target; star.className = 'btn star' + (target ? ' on' : ''); star.innerHTML = target ? '&#9733;' : '&#9734;'; setStatus(target ? 'Favourited' : 'Unfavourited', 'ok'); })
-        .catch(function(){ setStatus(UNREACH, 'err'); });
-    };
-
-    var eye = document.createElement('div');
-    eye.className = 'btn eye' + (c.hidden ? '' : ' on');
-    eye.innerHTML = c.hidden ? '&#128584;' : '&#128065;';
-    eye.title = c.hidden ? 'Hidden — tap to show' : 'Showing — tap to hide';
-    eye.onclick = function(){
-      var target = !c.hidden;
-      post('/channel', { id: c.id, hidden: target })
-        .then(function(){
-          c.hidden = target;
-          row.className = 'row' + (target ? ' hidden' : '');
-          eye.className = 'btn eye' + (target ? '' : ' on');
-          eye.innerHTML = target ? '&#128584;' : '&#128065;';
-          eye.title = target ? 'Hidden — tap to show' : 'Showing — tap to hide';
-          refreshSub();
-          setStatus(target ? 'Hidden from the guide' : 'Showing in the guide', 'ok');
-        })
-        .catch(function(){ setStatus(UNREACH, 'err'); });
-    };
-
-    var up = document.createElement('div');
-    up.className = 'btn mv'; up.innerHTML = '&#9650;'; up.title = 'Move up';
-    if (index === 0) up.setAttribute('disabled', '');
-    up.onclick = function(){ move(index, index - 1); };
-
-    var down = document.createElement('div');
-    down.className = 'btn mv'; down.innerHTML = '&#9660;'; down.title = 'Move down';
-    if (index === channels.length - 1) down.setAttribute('disabled', '');
-    down.onclick = function(){ move(index, index + 1); };
-
-    ctrls.appendChild(star); ctrls.appendChild(eye); ctrls.appendChild(up); ctrls.appendChild(down);
-    row.appendChild(logo); row.appendChild(mid); row.appendChild(ctrls);
-    return row;
+    readRunning = false;
   }
-
+  function changeSearch(){
+    browseGeneration++; pageReady = false; pageOffset = 0; updateSelection();
+    clearTimeout(searchTimer); searchTimer = setTimeout(loadPage, 300);
+  }
+  el('channelSearch').addEventListener('input', changeSearch);
+  el('categoryOnly').addEventListener('change', changeSearch);
+  el('prevPage').onclick = function(){ pageOffset = Math.max(0, pageOffset - pageSize); loadPage(); };
+  el('nextPage').onclick = function(){ pageOffset += pageSize; loadPage(); };
+  el('selectPage').onclick = function(){
+    var additional = channels.filter(function(c){ return !selected.has(c.id); }).length;
+    if (selected.size + additional > 500) { announce('Selecting this page would exceed 500 channels. Apply or clear the current selection first.'); return; }
+    channels.forEach(function(c){ selected.set(c.id, c); });
+    renderChannels(); updateSelection();
+  };
+  el('clearSelection').onclick = function(){ selected.clear(); renderChannels(); updateSelection(); };
+  el('refreshChannels').onclick = refreshState;
+  async function refreshState(){
+    if (mutationBusy) return;
+    setBusy(true); announce('Refreshing actual TV state…');
+    var ids = Array.from(selected.keys()), epoch = channelEpoch;
+    try {
+      for (var i = 0; i < ids.length; i += 100) {
+        var batch = ids.slice(i, i + 100);
+        var rows = await post('/channels/state', { source: selectionSource, revision: selectionRevision, ids: batch });
+        if (epoch !== channelEpoch) return;
+        var found = new Set(rows.map(function(c){ return c.id; }));
+        batch.forEach(function(id){ if (!found.has(id)) selected.delete(id); });
+        rows.forEach(function(c){ selected.set(c.id, c); });
+      }
+      needsReconcile = false;
+      catalogRevision = null;
+    } catch (e) {
+      if (epoch !== channelEpoch) return;
+      if (e.status === 409) { selected.clear(); catalogRevision = null; selectionRevision = null; needsReconcile = false; pageOffset = 0; }
+      else { announce(e.message || UNREACH); setBusy(false); return; }
+    }
+    setBusy(false); await loadPage();
+  }
+  el('reviewBulk').onclick = function(){
+    reviewAction = el('bulkAction').value;
+    el('bulkSummary').textContent = el('bulkAction').selectedOptions[0].textContent + ' for exactly ' + selected.size + ' selected channels, including selections on other pages or filters. No other channels will be selected.';
+    el('bulkReview').hidden = false; el('confirmBulk').focus();
+  };
+  el('cancelBulk').onclick = function(){ el('bulkReview').hidden = true; reviewAction = null; };
+  el('stopBulk').onclick = function(){ stopBulkRequested = true; announce('Stopping after the current batch. Already accepted TV changes may finish.'); };
+  el('confirmBulk').onclick = async function(){
+    if (!reviewAction || mutationBusy || needsReconcile) return;
+    var action = reviewAction, ids = Array.from(selected.keys()), source = selectionSource, revision = selectionRevision, epoch = channelEpoch;
+    el('bulkReview').hidden = true; reviewAction = null;
+    setBusy(true); browseGeneration++; stopBulkRequested = false;
+    el('stopBulk').hidden = false; el('stopBulk').disabled = false;
+    var success = 0, failed = 0, skipped = 0, unknown = 0, processed = 0;
+    try {
+      for (var i = 0; i < ids.length; i += 100) {
+        if (stopBulkRequested) break;
+        var batch = ids.slice(i, i + 100);
+        announce('Applying ' + action + ': ' + processed + ' of ' + ids.length + ' reviewed channels…');
+        var result;
+        try { result = await post('/channels/bulk', { source: source, revision: revision, ids: batch, action: action }); }
+        catch (e) {
+          if (epoch !== channelEpoch) return;
+          // Never replay: the TV may have committed the batch before its reply was lost.
+          if ([400, 409, 426].includes(e.status)) { failed += batch.length; processed += batch.length; }
+          else unknown = batch.length;
+          needsReconcile = true; break;
+        }
+        if (epoch !== channelEpoch) return;
+        if (!result || !Array.isArray(result.results) || result.results.length !== batch.length ||
+            new Set(result.results.map(function(r){ return r.id; })).size !== batch.length ||
+            result.results.some(function(r){ return !batch.includes(r.id) || !['success', 'failed', 'skipped'].includes(r.status); })) {
+          unknown = batch.length; needsReconcile = true; break;
+        }
+        result.results.forEach(function(r){
+          if (r.status === 'success') { success++; selected.delete(r.id); }
+          else if (r.status === 'skipped') { skipped++; selected.delete(r.id); }
+          else failed++;
+        });
+        processed += batch.length;
+      }
+    } finally {
+      if (epoch !== channelEpoch) return;
+      el('stopBulk').hidden = true; setBusy(false); updateSelection();
+      announce(success + ' successful, ' + failed + ' failed, ' + skipped + ' skipped, ' + unknown + ' unknown, ' + (ids.length - processed - unknown) + ' not attempted. ' +
+        (needsReconcile ? 'A batch reply was lost or rejected. Refresh TV state before another edit.' : 'Failed selections remain for review. Refresh TV state to view current values.'));
+      // Keep outcome visible until the user explicitly refreshes.
+      pageReady = false; updateSelection();
+    }
+  };
+  async function editChannel(c, fields, path){
+    if (mutationBusy || needsReconcile || !pageReady) return;
+    setBusy(true); browseGeneration++; var epoch = channelEpoch;
+    try {
+      await post(path || '/channel', Object.assign({ id: c.id, source: browseSource(), revision: catalogRevision }, fields));
+      if (epoch !== channelEpoch) return;
+      catalogRevision = null;
+      // Rename/reorder changes the revision, so old selections must be reviewed again.
+      if (fields.name !== undefined || path) { selected.clear(); selectionRevision = null; }
+      setBusy(false); await loadPage();
+    } catch (e) {
+      if (epoch !== channelEpoch) return;
+      selected.set(c.id, c);
+      needsReconcile = true; pageReady = false; setBusy(false);
+      announce((e.message || UNREACH) + ' Refresh TV state before another edit.');
+    }
+  }
+  function renderChannels(){
+    el('chanList').replaceChildren();
+    el('chanEmpty').hidden = channels.length !== 0;
+    el('chanEmpty').textContent = 'No channels match this provider, category and search.';
+    channels.forEach(function(c){ el('chanList').appendChild(buildRow(c)); });
+  }
+  function button(label, action){
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'back';
+    b.textContent = label; b.onclick = action; b.disabled = mutationBusy || needsReconcile || !pageReady; return b;
+  }
+  function buildRow(c){
+    var row = document.createElement('div'); row.className = 'row' + (c.hidden ? ' hidden' : '');
+    var check = document.createElement('input'); check.type = 'checkbox'; check.className = 'selection';
+    check.setAttribute('aria-label', 'Select ' + c.name); check.checked = selected.has(c.id);
+    check.disabled = mutationBusy || needsReconcile || !pageReady;
+    check.onchange = function(){
+      if (check.checked && selected.size >= 500) { check.checked = false; announce('Selection limit is 500 channels. Apply or clear this selection first.'); return; }
+      if (check.checked) selected.set(c.id, c); else selected.delete(c.id);
+      updateSelection();
+    };
+    var mid = document.createElement('div'); mid.className = 'rowmeta';
+    var name = button(c.name, function(){ startRename(name, c); }); name.className = 'name';
+    name.setAttribute('aria-label', 'Rename ' + c.name);
+    var sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = (c.number !== null && c.number !== undefined ? 'No. ' + c.number + ' · ' : '') + (c.hidden ? 'Hidden' : 'Visible') + (c.favourite ? ' · Favorite' : '') + ' · ' + c.original;
+    mid.appendChild(name); mid.appendChild(sub);
+    var controls = document.createElement('div'); controls.className = 'ctrls';
+    controls.appendChild(button(c.favourite ? 'Unfavorite' : 'Favorite', function(){ editChannel(c, { favourite: !c.favourite }); }));
+    controls.appendChild(button(c.hidden ? 'Unhide' : 'Hide', function(){ editChannel(c, { hidden: !c.hidden }); }));
+    // Move operates on the channel's original category, including across page boundaries.
+    controls.appendChild(button('Move up', function(){ editChannel(c, { direction: -1 }, '/channels/move'); }));
+    controls.appendChild(button('Move down', function(){ editChannel(c, { direction: 1 }, '/channels/move'); }));
+    row.appendChild(check); row.appendChild(mid); row.appendChild(controls); return row;
+  }
   function startRename(span, c){
-    var input = document.createElement('input');
-    input.type = 'text'; input.className = 'rename'; input.value = c.name;
-    span.replaceWith(input); input.focus(); input.select();
-    var closed = false;
+    var input = document.createElement('input'); input.type = 'text'; input.className = 'rename';
+    input.value = c.name; input.maxLength = 512; input.setAttribute('aria-label', 'New name for ' + c.name);
+    span.replaceWith(input); input.focus(); input.select(); var closed = false;
     function finish(save){
       if (closed) return; closed = true;
-      var val = input.value.trim();
-      if (save) {
-        c.name = val || c.original;
-        post('/channel', { id: c.id, name: val })
-          .then(function(){ setStatus('Renamed', 'ok'); })
-          .catch(function(){ setStatus("Couldn't save the name.", 'err'); });
-      }
-      var fresh = document.createElement('span');
-      fresh.className = 'name'; fresh.textContent = c.name;
-      fresh.onclick = function(){ startRename(fresh, c); };
-      input.replaceWith(fresh);
+      input.replaceWith(span);
+      if (save) editChannel(c, { name: input.value.trim() });
     }
     input.addEventListener('keydown', function(e){
       if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-      else if (e.key === 'Escape') { finish(false); }
+      if (e.key === 'Escape') finish(false);
     });
     input.addEventListener('blur', function(){ finish(true); });
-  }
-
-  function move(from, to){
-    if (to < 0 || to >= channels.length) return;
-    var item = channels.splice(from, 1)[0];
-    channels.splice(to, 0, item);
-    renderChannels();
-    post('/reorder', { ids: channels.map(function(c){ return c.id; }) })
-      .then(function(){ setStatus('Order saved', 'ok'); })
-      .catch(function(){ setStatus(UNREACH, 'err'); });
   }
 
   // ---- Recording / NAS settings ------------------------------------------------------
