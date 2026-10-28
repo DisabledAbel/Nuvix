@@ -219,6 +219,19 @@ class RecordingService : Service() {
                         actualPath = sink?.resolvedLocator ?: fresh.filePath
                         storageMonitor = RecordingStorage.storageMonitor(requireNotNull(actualPath))
                         if (actualPath != fresh.filePath) repo.setFilePath(id, requireNotNull(actualPath))
+                        val destinations = RecordingDestinations.configured(applicationContext, graph.settings)
+                        val ownedDestination = if (RecordingStorage.isContent(requireNotNull(actualPath)))
+                            destinations.firstOrNull { it.target == app.opentv.core.AppSettings.RecordingTarget.USB }
+                        else RecordingDestinations.forLocator(applicationContext, graph.settings, requireNotNull(actualPath))
+                        ownedDestination?.let {
+                            try {
+                                if (DvrStorageStore(applicationContext).created(id, requireNotNull(actualPath), it.id))
+                                    repo.event(id, "STORAGE_CREATED:${it.id}", "Nuvix created this recording output.")
+                            } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                            catch (_: Exception) {
+                                // Optional ownership metadata must never interrupt capture. Missing receipts/history exclude cleanup.
+                            }
+                        }
                         // SAF/NAS opening can itself be slow. Recheck with fresh bounds/defaults.
                         val ready = repo.byId(id)
                         mediaReadyAt = System.currentTimeMillis()

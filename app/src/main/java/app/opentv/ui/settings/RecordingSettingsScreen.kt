@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,6 +97,12 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
     val graph = remember { ServiceLocator.get(context) }
     val settings = graph.settings
     val scope = rememberCoroutineScope()
+    var showStorage by remember { mutableStateOf(false) }
+    var restoreStorageFocus by remember { mutableStateOf(false) }
+    val storageShortcutFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(restoreStorageFocus) {
+        if (restoreStorageFocus) { storageShortcutFocus.requestFocus(); restoreStorageFocus = false }
+    }
 
     var target by remember { mutableStateOf(settings.recordingTarget.value) }
     var host by remember { mutableStateOf(settings.smbHost.value) }
@@ -143,6 +150,11 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
         settings.setRecordingTarget(safeTarget)
     }
 
+    if (showStorage) {
+        app.opentv.ui.recordings.StorageManagerScreen(onBack = { showStorage = false; restoreStorageFocus = true })
+        return
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -163,6 +175,7 @@ fun RecordingSettingsScreen(onBack: () -> Unit) {
         )
 
         Spacer(Modifier.height(20.dp))
+        OutlinedButton(onClick = { showStorage = true }, modifier = Modifier.focusRequester(storageShortcutFocus)) { Text("Storage Manager") }
         SectionCard(stringResource(R.string.recset_background_title)) {
             BackgroundStatus()
         }

@@ -36,6 +36,9 @@ class RecordingRepository(
     suspend fun byId(id: Long): Recording? = dao.byId(id)
     /** Returns all stored recordings. */
     suspend fun all(): List<Recording> = dao.all()
+
+    suspend fun storageCandidates(destination: String): List<Recording> =
+        dao.storageCandidates("STORAGE_CREATED:$destination", app.opentv.recording.DvrStorageCleanup.MAX_CANDIDATES)
     /** Returns the recording associated with a stored output path. */
     suspend fun byFilePath(filePath: String): Recording? = dao.byFilePath(filePath)
     /** Returns recordings preparing, capturing or finalizing. */
@@ -62,6 +65,9 @@ class RecordingRepository(
     suspend fun insert(recording: Recording): Long = dao.insert(recording)
     /** Persists changes to an existing recording row. */
     suspend fun update(recording: Recording) = dao.update(recording)
+
+    suspend fun storageDeleted(expected: Recording, automatic: Boolean, at: Long, cleanupDetail: String? = null): Boolean =
+        dao.storageDeleted(expected, automatic, at, cleanupDetail)
 
     /** Atomically claims a scheduled recording for preparation to prevent duplicate capture starts. */
     suspend fun claimScheduled(id: Long, atMillis: Long): Boolean {
@@ -129,6 +135,8 @@ class RecordingRepository(
 
     /** Observes the recording's chronological activity history. */
     fun observeEvents(id: Long): Flow<List<RecordingEvent>>? = events?.observeForRecording(id)
+
+    fun observeStorageEvents(): Flow<List<RecordingEvent>> = events?.observeStorageEvents() ?: kotlinx.coroutines.flow.flowOf(emptyList())
 
     /** Records capture start after preparation has been claimed. */
     suspend fun markStarted(id: Long, atMillis: Long) =

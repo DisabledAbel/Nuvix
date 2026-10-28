@@ -407,6 +407,8 @@ data class Profile(
 
 /** Where a recording is in its lifecycle. */
 enum class RecordingStatus {
+    /** Output successfully removed; the row and activity history remain as an audit trail. */
+    DELETED,
     /** Booked from the guide, waiting for its start time. */
     SCHEDULED,
 
