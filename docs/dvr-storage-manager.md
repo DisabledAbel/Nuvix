@@ -76,6 +76,12 @@ after Nuvix creates an output, including its resolved USB document URI. Policies
 are device-local and are not exported by NAS/cloud sync. Changing a destination root requires
 separate consent; a retry/new locator does not inherit ownership from a different file.
 
+On Android API 23–28, USB matching accepts Nuvix's SAF tree-document URI format only
+when its provider authority and embedded tree ID match the configured grant. Document IDs
+remain opaque; bare document URIs cannot establish membership on these versions and stay
+unmapped without an existing receipt. API 29 and newer also use the provider's child-document
+check. A receipt is never assigned simply because a USB destination is configured.
+
 Eligibility, opt-in, retention, protection and active state are checked again immediately before
 each deletion. Slow storage operations do not hold the global capture-admission locks. Actual
 capacity is reread after every deletion; row sizes are never added to a guessed free-space

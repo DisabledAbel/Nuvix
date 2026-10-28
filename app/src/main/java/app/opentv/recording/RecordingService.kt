@@ -219,10 +219,7 @@ class RecordingService : Service() {
                         actualPath = sink?.resolvedLocator ?: fresh.filePath
                         storageMonitor = RecordingStorage.storageMonitor(requireNotNull(actualPath))
                         if (actualPath != fresh.filePath) repo.setFilePath(id, requireNotNull(actualPath))
-                        val destinations = RecordingDestinations.configured(applicationContext, graph.settings)
-                        val ownedDestination = if (RecordingStorage.isContent(requireNotNull(actualPath)))
-                            destinations.firstOrNull { it.target == app.opentv.core.AppSettings.RecordingTarget.USB }
-                        else RecordingDestinations.forLocator(applicationContext, graph.settings, requireNotNull(actualPath))
+                        val ownedDestination = RecordingDestinations.forLocator(applicationContext, graph.settings, requireNotNull(actualPath))
                         ownedDestination?.let {
                             try {
                                 if (DvrStorageStore(applicationContext).created(id, requireNotNull(actualPath), it.id))
@@ -296,7 +293,7 @@ class RecordingService : Service() {
                 token?.let { connections.release(it) }
                 // Only remove a destination created by this job, and only if it contains no media.
                 if (!writeAttempted && sink != null) actualPath?.let {
-                    RecordingStorage.delete(applicationContext, graph.settings, it)
+                    discardEmptyRecordingSink(applicationContext, graph.settings, it)
                 }
                 if (claimed) {
                     // A destination can throw after accepting some bytes. Never delete that file.
@@ -500,4 +497,10 @@ class RecordingService : Service() {
             runningService?.captures?.get(recordingId)?.job?.join()
         }
     }
+}
+
+/** Only for a sink created by this capture before any write; failed deletion retains ownership. */
+internal fun discardEmptyRecordingSink(context: Context, settings: app.opentv.core.AppSettings, locator: String) {
+    if (RecordingStorage.delete(context, settings, locator))
+        runCatching { DvrStorageStore(context).forget(locator) }
 }

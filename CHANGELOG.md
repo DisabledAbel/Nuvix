@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Harden storage review paths: match USB receipts to their tree on older Android versions,
+  isolate recording mutation locks, remove receipts for discarded empty outputs, retry failed
+  refreshes, and retain unsaved policy drafts when asynchronous persistence fails.
+
 - Add DVR Storage Manager in Recording settings and Recordings: destination availability,
   tracked usage, supported capacity, measured remaining-hours estimates and configurable
   conservative low-space warnings. Unsupported or stale capacity is shown as Unknown.

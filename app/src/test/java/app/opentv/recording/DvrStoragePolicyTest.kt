@@ -51,6 +51,8 @@ class DvrStoragePolicyTest {
         val old = row().copy(endedAtMillis = now - 30 * 86_400_000L, lockPadding = true)
         val policy = DvrStoragePolicy(cleanupEnabled = true)
         assertTrue(DvrStorageRules.eligible(old, true, policy, now))
+        assertTrue(DvrStorageRules.eligible(old.copy(status = RecordingStatus.PARTIAL), true, policy, now))
+        assertTrue(DvrStorageRules.eligible(old.copy(status = RecordingStatus.FAILED), true, policy, now))
         assertFalse(DvrStorageRules.eligible(old, true, DvrStoragePolicy(), now))
         assertFalse(DvrStorageRules.eligible(old, false, policy, now))
         assertFalse(DvrStorageRules.eligible(old.copy(protectedRecording = true), true, policy, now))

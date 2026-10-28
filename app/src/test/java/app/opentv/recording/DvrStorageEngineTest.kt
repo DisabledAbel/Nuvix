@@ -124,11 +124,30 @@ class DvrStorageEngineTest {
         remove = { entered.countDown(); release.await(5, TimeUnit.SECONDS); false }
         val deletion = async(Dispatchers.IO) { engine.deleteStoredRecording(row()) }
         assertTrue(entered.await(5, TimeUnit.SECONDS))
-        repo.insert(row(2))
+        repo.insert(row(65))
         try {
-            assertTrue(withTimeout(3000) { engine.updatePreferences(2, 2, 5, true, false) })
+            assertTrue(withTimeout(3000) { engine.updatePreferences(65, 2, 5, true, false) })
         } finally { release.countDown() }
         assertEquals(StorageDeleteResult.STORAGE_ERROR, deletion.await())
+    }
+    @Test fun concurrentMutationsOfTheSameRecordingRemainSerialized() = runBlocking {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        remove = {
+            if (calls.incrementAndGet() == 1) { entered.countDown(); release.await(5, TimeUnit.SECONDS) }
+            false
+        }
+        val first = async(Dispatchers.IO) { engine.deleteStoredRecording(row()) }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        try {
+            val second = async(start = CoroutineStart.UNDISPATCHED) { engine.deleteStoredRecording(row()) }
+            assertEquals(1, calls.get())
+            assertFalse(second.isCompleted)
+            release.countDown()
+            assertEquals(StorageDeleteResult.STORAGE_ERROR, withTimeout(3000) { second.await() })
+            assertEquals(StorageDeleteResult.STORAGE_ERROR, first.await())
+            assertEquals(2, calls.get())
+        } finally { release.countDown() }
     }
     @Test fun candidateLimitIsAppliedWithinDestinationCreationHistoryAndOldestFirst() = runBlocking {
         for (id in 2L..205) repo.insert(row(id).copy(endedAtMillis = id))
@@ -136,5 +155,16 @@ class DvrStorageEngineTest {
         repo.event(204, "STORAGE_CREATED:${destination.id}", "Created")
         repo.event(203, "STORAGE_CREATED:${destination.id}", "Created")
         assertEquals(listOf(203L, 204L), repo.storageCandidates(destination.id).map { it.id })
+    }
+    @Test fun discardingAnEmptySinkForgetsReceiptOnlyAfterConfirmedDeletion() = runBlocking {
+        val file = File(RecordingStorage.internalDir(context), "empty.ts").apply { writeBytes(byteArrayOf()) }
+        assertTrue(store.created(7, file.absolutePath, destination.id))
+        discardEmptyRecordingSink(context, settings, file.absolutePath)
+        assertFalse(file.exists())
+        assertFalse(store.owned(7, file.absolutePath, destination.id))
+        assertTrue(store.created(8, file.absolutePath, destination.id))
+        discardEmptyRecordingSink(context, settings, file.absolutePath) // Absent file: deletion is unconfirmed.
+        assertTrue(store.owned(8, file.absolutePath, destination.id))
+        assertEquals(listOf("COMPLETED"), db.recordingEvents().forRecording(1).map { it.kind })
     }
 }

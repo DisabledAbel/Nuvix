@@ -672,9 +672,9 @@ class RecordingEngine(
 
     private companion object {
         // Independent of admission locks: slow USB/NAS deletion must not delay due captures.
-        val storageLocks = Array(64) { Mutex() }
+        val storageLocks = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
         suspend fun <T> storageMutation(id: Long, action: suspend () -> T): T =
-            storageLocks[(id and 63).toInt()].withLock { action() }
+            storageLocks.getOrPut(id) { Mutex() }.withLock { action() }
         val bookingLock = Mutex()
         val dueLock = Mutex()
         const val LEAD_MILLIS = 20_000L
