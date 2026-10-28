@@ -52,16 +52,22 @@ If the repository is also connected through **Workers & Pages → nuvix-manager 
 set **Root directory** to `cloudflare/manager` and the build variable `NODE_VERSION` to `24`.
 Set the **Build command** to
 `npm ci && python3 generate-page.py --check && npm test && npm run check` and the
-**Non-production branch deploy command** to `npm run preview`. These dashboard settings are
+**Non-production branch deploy command** to
+`npx --no-install wrangler preview --config wrangler.toml`. These dashboard settings are
 separate from the GitHub Actions workflow; changing this repository does not update them.
 Use `npm run deploy` as the production deploy command only if you intend Workers Builds to deploy
 production instead of the manual GitHub workflow above.
 
 Run commands from that root so npm installs the locked Wrangler version and Wrangler reads
 `wrangler.toml`. Running `npx wrangler preview` from the repository root can download an unpinned
-Wrangler and miss this configuration. `npm run preview` uses the Wrangler installed by `npm ci`
-and explicitly loads `wrangler.toml`; it does not ask npx to download a different version.
-The `previews` configuration explicitly supplies `ROOMS` and both rate limiters; an empty block would leave required runtime bindings unavailable.
+Wrangler and miss this configuration. `--no-install` uses the Wrangler installed by `npm ci`
+and the explicit config path loads `wrangler.toml`, without downloading a different version.
+The current branch also provides `npm run preview` as a local alias, but older commits do not.
+Retrying a failed build checks out its original commit; use the direct command above so a retry
+also works before that alias is merged. `Missing script: "preview"` means the checked-out
+`package.json` lacks the alias, not that the Wrangler `previews` configuration is missing.
+The `previews` configuration explicitly supplies `ROOMS` and both rate limiters; an empty block
+would leave required runtime bindings unavailable.
 Each Preview gets its own Durable Object namespace and storage, and its rate-limit namespace IDs
 differ from production. Assets, compatibility settings and migrations remain at the top level.
 See [Preview configuration](https://developers.cloudflare.com/workers/previews/configuration/)
@@ -72,7 +78,7 @@ then downloads a Wrangler version absent from this lockfile and reports a missin
 block, check the dashboard root and build command first. This repository already has that block
 in `cloudflare/manager/wrangler.toml`; adding an empty block at the repository root would omit the
 required isolated session and rate-limit bindings. The expected log runs `npm ci`, tests and
-packaging checks before `npm run preview`, using the locked Wrangler version.
+packaging checks before the preview command, using the locked Wrangler version.
 
 Retry the failed Cloudflare build after saving the dashboard settings and making the updated
 configuration available on the branch. Local tests and packaging checks do not verify a hosted
