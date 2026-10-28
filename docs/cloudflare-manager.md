@@ -177,7 +177,7 @@ A batch accepted before expiry/disconnect may finish; no later batch is sent aut
 Single-channel rename, favorite/visibility and move actions remain available and use the same
 revision check. Move operates within the original category, including across page boundaries,
 preserving other rows' relative order. It normalizes category ranks transactionally, using a
-bounded ID-only read of at most 100,001 entries; categories above 100,000 cannot be reordered.
+bounded ID/rank read of at most 100,001 entries; categories above 100,000 cannot be reordered.
 A very large category move can exceed the relay deadline: refresh and reconcile rather than
 repeating it. Bulk edits record explicit intent through the existing flag setters even when the visible flag
 already matches but has no local sync-intent bit. They preserve names, order, guide

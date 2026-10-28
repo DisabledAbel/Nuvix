@@ -12,7 +12,7 @@ function browser() {
       focus() {}, select() {}, replaceWith() {} });
     return nodes.get(id);
   }
-  const c = { document: { getElementById: node, createElement: () => node(Symbol()), querySelectorAll: () => [] },
+  const c = { document: { getElementById: node, createElement: () => node(Symbol()), querySelectorAll: selector => selector === '#chanView button, #chanView select, #chanView input' ? [node('categoryOnly')] : [] },
     setTimeout() { return 1; }, clearTimeout() {}, Map, Set, URLSearchParams, AbortController,
     window: { scrollTo() {} }, location: { search: '' }, crypto: globalThis.crypto };
   vm.createContext(c);
@@ -122,4 +122,81 @@ test('pagination stops at the API offset bound and search can restart at the fir
   const { c, node } = await loaded(); c.pageOffset = 1000000; c.pageTotal = 2000000; c.updateSelection();
   assert.equal(node('nextPage').disabled, true);
   c.changeSearch(); assert.equal(c.pageOffset, 0); assert.equal(c.pageReady, false);
+});
+
+test('Clear Selection retains uncertain IDs and the reconciliation lock until refresh', async () => {
+  const { c, node } = await loaded(); node('selectPage').onclick();
+  c.post = async () => { throw new Error('Lost reply'); };
+  node('reviewBulk').onclick(); await node('confirmBulk').onclick();
+  node('clearSelection').onclick();
+  assert.equal(node('clearSelection').disabled, true);
+  assert.equal(c.needsReconcile, true);
+  assert.deepEqual([...c.selected.keys()], [1, 2]);
+  assert.deepEqual([...c.pendingReconcile], [1, 2]);
+  c.post = async (path, body) => body.ids.map(channel);
+  await c.refreshState();
+  assert.equal(c.needsReconcile, false); assert.equal(c.pendingReconcile.size, 0);
+  node('clearSelection').onclick(); assert.equal(c.selected.size, 0);
+});
+
+test('failed unselected edit at the cap stays pending without becoming a 501st selection', async () => {
+  const { c, node } = await loaded([501]);
+  for (let id = 1; id <= 500; id++) c.selected.set(id, channel(id));
+  c.post = async () => { throw new Error('Lost edit reply'); };
+  await c.editChannel(channel(501), { hidden: true });
+  assert.equal(c.selected.size, 500); assert.equal(c.selected.has(501), false);
+  assert.equal(c.pendingReconcile.has(501), true); assert.equal(c.needsReconcile, true);
+  node('clearSelection').onclick(); assert.equal(c.selected.size, 500);
+  let reads = 0;
+  c.post = async (path, body) => {
+    assert.equal(path, '/channels/state'); reads++;
+    if (reads === 2) throw new Error('Refresh interrupted');
+    return body.ids.map(channel);
+  };
+  await c.refreshState();
+  assert.equal(c.pendingReconcile.has(501), true); assert.equal(c.needsReconcile, true);
+  const reconciled = [];
+  c.post = async (path, body) => {
+    assert.equal(path, '/channels/state'); assert.ok(body.ids.length <= 100);
+    reconciled.push(...body.ids); return body.ids.map(channel);
+  };
+  c.getJson = async () => page([]);
+  await c.refreshState();
+  assert.equal(reconciled.filter(id => id === 501).length, 1);
+  assert.equal(c.pendingReconcile.size, 0); assert.equal(c.needsReconcile, false);
+  assert.equal(c.selected.size, 500); assert.equal(c.selected.has(501), false);
+});
+
+test('failed edits preserve already-selected rows at the cap and admit a row below the cap', async () => {
+  for (const [count, id, expectedCount] of [[500, 1, 500], [499, 501, 500]]) {
+    const { c } = await loaded([id]);
+    for (let selectedId = 1; selectedId <= count; selectedId++) c.selected.set(selectedId, channel(selectedId));
+    const row = channel(id);
+    c.post = async () => { throw new Error('Lost edit reply'); };
+    await c.editChannel(row, { favourite: true });
+    assert.equal(c.selected.size, expectedCount); assert.equal(c.selected.get(id), row);
+    assert.equal(c.pendingReconcile.has(id), true); assert.equal(c.needsReconcile, true);
+  }
+});
+
+test('confirmed catalog revision change clears pending edits and invalid selections', async () => {
+  const { c } = await loaded([1]);
+  c.post = async () => { throw new Error('Lost reply'); };
+  await c.editChannel(channel(1), { name: 'Changed' });
+  assert.equal(c.pendingReconcile.size, 1);
+  c.post = async () => { const error = new Error('Catalog changed'); error.status = 409; throw error; };
+  c.getJson = async () => page([], '2');
+  await c.refreshState();
+  assert.equal(c.pendingReconcile.size, 0); assert.equal(c.selected.size, 0);
+  assert.equal(c.needsReconcile, false); assert.equal(c.catalogRevision, '2');
+});
+
+test('busy controls restore category filtering only when a category is open', async () => {
+  const { c, node } = await loaded();
+  c.currentCat = null; c.setBusy(true); assert.equal(node('categoryOnly').disabled, true);
+  c.setBusy(false); assert.equal(node('categoryOnly').disabled, true);
+  c.currentCat = { id: 'category', sourceId: 1 };
+  c.setBusy(false); assert.equal(node('categoryOnly').disabled, false);
+  c.setBusy(true); assert.equal(node('categoryOnly').disabled, true);
+  c.setBusy(false); assert.equal(node('categoryOnly').disabled, false);
 });

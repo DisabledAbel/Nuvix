@@ -115,6 +115,34 @@ class ManagerCatalogTest {
         assertEquals(listOf(1L), dao.managerState(1, revision, listOf(1, 5, 99)).map { it.id })
     }
 
+    @Test fun moveMarksOnlyChangedRanksAndLeavesUnchangedSyncIntentAlone() = runBlocking {
+        seed()
+        val original = (1L..4L).map { channel(it).copy(sortIndex = it.toInt() - 1, syncTouched = if (it == 4L) 4 else 0) }
+        dao.upsertAll(original)
+        val revision = dao.managerRevision(1)!!
+        dao.managerMove(1, revision.toString(), 3, -1)
+        assertEquals(listOf(1L, 3L, 2L, 4L), dao.managerOrder(1, "category").map { it.id })
+        for (row in original) {
+            val expected = when (row.id) {
+                2L -> row.copy(sortIndex = 2, syncTouched = row.syncTouched or 8)
+                3L -> row.copy(sortIndex = 1, syncTouched = row.syncTouched or 8)
+                else -> row
+            }
+            assertEquals(expected, dao.byId(row.id))
+        }
+        assertEquals(revision + 2, dao.managerRevision(1))
+    }
+
+    @Test fun moveFromTiedRanksMarksBothMovedRowsEvenWhenOneNumericRankStaysTheSame() = runBlocking {
+        seed()
+        val revision = dao.managerRevision(1)!!.toString()
+        dao.managerMove(1, revision, 1, 1)
+        assertEquals(listOf(2L, 1L, 3L, 4L), dao.managerOrder(1, "category").map { it.id })
+        assertEquals(0, dao.byId(2)!!.sortIndex)
+        assertTrue(dao.byId(2)!!.syncTouched and 8 != 0)
+        assertTrue(dao.byId(1)!!.syncTouched and 8 != 0)
+    }
+
     @Test fun partialFailureReportsOnlyCommittedRowsAndReconcileDoesNotReplay() = runBlocking {
         seed()
         db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_test BEFORE UPDATE OF hidden ON channels WHEN NEW.id = 2 BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END")

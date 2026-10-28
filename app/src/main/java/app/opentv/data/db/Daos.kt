@@ -180,10 +180,10 @@ interface ChannelDao {
             OR instr(lower(displayName), lower(:query)) > 0 OR instr(lower(customName), lower(:query)) > 0)""")
     suspend fun managerCount(sourceId: Long, categoryId: String?, query: String): Int
 
-    /** Bounded ID-only order read used only for the existing move action, never sent to browsers. */
-    @Query("""SELECT id FROM channels WHERE sourceId = :sourceId
+    /** Bounded ID/rank order read used only for the existing move action, never sent to browsers. */
+    @Query("""SELECT id, sortIndex FROM channels WHERE sourceId = :sourceId
         AND categoryId IS :categoryId ORDER BY sortIndex, displayName, id LIMIT 100001""")
-    suspend fun managerOrder(sourceId: Long, categoryId: String?): List<Long>
+    suspend fun managerOrder(sourceId: Long, categoryId: String?): List<ManagerOrderRow>
 
     suspend fun requireManagerRevision(sourceId: Long, expected: String?): String {
         val revision = managerRevision(sourceId)?.toString() ?: throw ManagerConflict("Provider removed or disabled. Refresh providers.")
@@ -266,12 +266,15 @@ interface ChannelDao {
             ?: throw ManagerConflict("Channel no longer exists. Refresh TV state.")
         val ids = managerOrder(sourceId, row.categoryId).toMutableList()
         require(ids.size <= 100000) { "Category too large to reorder." }
-        val from = ids.indexOf(id)
+        val from = ids.indexOfFirst { it.id == id }
         val to = from + direction
         if (from < 0 || to !in ids.indices) return
         java.util.Collections.swap(ids, from, to)
         // Normalize rank in the category, preserving every other row's relative order.
-        ids.forEachIndexed { index, channelId -> setSortIndex(channelId, index) }
+        ids.forEachIndexed { index, channel ->
+            if (channel.sortIndex != index) setSortIndex(channel.id, index)
+            else if (index == from || index == to) markOrderTouched(channel.id)
+        }
     }
 
     /**
@@ -353,6 +356,10 @@ interface ChannelDao {
     /** Updates user ordering and marks that field as locally edited. */
     @Query("UPDATE channels SET sortIndex = :sortIndex, syncTouched = syncTouched | 8 WHERE id = :id")
     suspend fun setSortIndex(id: Long, sortIndex: Int)
+
+    /** A moved row can retain its numeric rank when old ranks tie; still save its order intent. */
+    @Query("UPDATE channels SET syncTouched = syncTouched | 8 WHERE id = :id")
+    suspend fun markOrderTouched(id: Long)
 
     /** Every channel for a source. The channels table is live-only, so these are its live channels. */
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId")
@@ -1395,6 +1402,7 @@ interface ReminderDao {
 }
 
 /** Internal manager results; channel playback fields never cross the wire. */
+data class ManagerOrderRow(val id: Long, val sortIndex: Int)
 data class ManagerChannelPage(val revision: String, val rows: List<Channel>, val total: Int)
 @kotlinx.serialization.Serializable
 data class ManagerChange(val id: Long, val status: String)

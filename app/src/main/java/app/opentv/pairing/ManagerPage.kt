@@ -342,13 +342,14 @@ object ManagerPage {
           // ---- Bounded channel browsing and explicit selection -------------------------------
           var pageOffset = 0, pageSize = 50, pageTotal = 0, catalogRevision = null;
           var browseGeneration = 0, readRunning = false, readWanted = false, searchTimer;
+          var pendingReconcile = new Set();
           var selected = new Map(), selectionSource = null, selectionRevision = null;
           var mutationBusy = false, needsReconcile = false, compatibility = false;
           var pageReady = false, reviewAction = null, channelEpoch = 0, stopBulkRequested = false;
           function announce(message){ el('channelStatus').textContent = message; }
           function resetChannelState(){
             channelEpoch++; browseGeneration++; readWanted = false; clearTimeout(searchTimer);
-            channels = []; selected.clear(); catalogRevision = null;
+            channels = []; selected.clear(); pendingReconcile.clear(); catalogRevision = null;
             selectionSource = null; selectionRevision = null; pageReady = false; pageOffset = 0; pageTotal = 0;
             el('pageInfo').textContent = ''; el('channelStatus').textContent = ''; el('bulkSummary').textContent = '';
             needsReconcile = false; reviewAction = null; mutationBusy = false;
@@ -358,6 +359,7 @@ object ManagerPage {
           function setBusy(busy){
             mutationBusy = busy;
             document.querySelectorAll('#chanView button, #chanView select, #chanView input').forEach(function(n){ n.disabled = busy; });
+            el('categoryOnly').disabled = busy || !currentCat;
             el('cancelBulk').disabled = false;
             renderChannels(); updateSelection();
           }
@@ -366,7 +368,7 @@ object ManagerPage {
             if (reviewAction) { reviewAction = null; el('bulkReview').hidden = true; }
             var onPage = channels.filter(function(c){ return selected.has(c.id); }).length;
             el('selectedCount').textContent = selected.size + ' selected (' + onPage + ' on this page, ' + (selected.size - onPage) + ' on other pages or filters). Maximum 500.';
-            el('clearSelection').disabled = mutationBusy || !selected.size;
+            el('clearSelection').disabled = mutationBusy || needsReconcile || !selected.size;
             el('selectPage').disabled = mutationBusy || !pageReady || needsReconcile;
             el('reviewBulk').disabled = mutationBusy || !selected.size || needsReconcile || !pageReady;
             el('prevPage').disabled = mutationBusy || !pageReady || pageOffset === 0;
@@ -421,7 +423,7 @@ object ManagerPage {
                 if (!page || !Array.isArray(page.rows) || page.rows.length > pageSize || typeof page.revision !== 'string') throw new Error('Update the TV APK, Worker and browser together for paginated channels.');
                 catalogRevision = page.revision; pageTotal = page.total;
                 if (selectionSource === source && selectionRevision !== catalogRevision) {
-                  selected.clear(); needsReconcile = false;
+                  selected.clear(); pendingReconcile.clear(); needsReconcile = false;
                 }
                 selectionSource = source; selectionRevision = catalogRevision;
                 channels = page.rows; pageReady = true;
@@ -434,7 +436,7 @@ object ManagerPage {
                 if (generation !== browseGeneration) continue;
                 channels = []; pageReady = false; renderChannels();
                 if (e.status === 409) {
-                  selected.clear(); catalogRevision = null; selectionRevision = null;
+                  selected.clear(); pendingReconcile.clear(); catalogRevision = null; selectionRevision = null;
                   needsReconcile = false; pageOffset = 0;
                 }
                 announce(e.message || UNREACH); updateSelection();
@@ -456,12 +458,15 @@ object ManagerPage {
             channels.forEach(function(c){ selected.set(c.id, c); });
             renderChannels(); updateSelection();
           };
-          el('clearSelection').onclick = function(){ selected.clear(); renderChannels(); updateSelection(); };
+          el('clearSelection').onclick = function(){
+            if (mutationBusy || needsReconcile) return;
+            selected.clear(); renderChannels(); updateSelection();
+          };
           el('refreshChannels').onclick = refreshState;
           async function refreshState(){
             if (mutationBusy) return;
             setBusy(true); announce('Refreshing actual TV state…');
-            var ids = Array.from(selected.keys()), epoch = channelEpoch;
+            var ids = Array.from(new Set(Array.from(selected.keys()).concat(Array.from(pendingReconcile)))), epoch = channelEpoch;
             try {
               for (var i = 0; i < ids.length; i += 100) {
                 var batch = ids.slice(i, i + 100);
@@ -469,13 +474,14 @@ object ManagerPage {
                 if (epoch !== channelEpoch) return;
                 var found = new Set(rows.map(function(c){ return c.id; }));
                 batch.forEach(function(id){ if (!found.has(id)) selected.delete(id); });
-                rows.forEach(function(c){ selected.set(c.id, c); });
+                rows.forEach(function(c){ if (selected.has(c.id)) selected.set(c.id, c); });
+                batch.forEach(function(id){ pendingReconcile.delete(id); });
               }
-              needsReconcile = false;
+              needsReconcile = pendingReconcile.size !== 0;
               catalogRevision = null;
             } catch (e) {
               if (epoch !== channelEpoch) return;
-              if (e.status === 409) { selected.clear(); catalogRevision = null; selectionRevision = null; needsReconcile = false; pageOffset = 0; }
+              if (e.status === 409) { selected.clear(); pendingReconcile.clear(); catalogRevision = null; selectionRevision = null; needsReconcile = false; pageOffset = 0; }
               else { announce(e.message || UNREACH); setBusy(false); return; }
             }
             setBusy(false); await loadPage();
@@ -506,13 +512,16 @@ object ManagerPage {
                   // Never replay: the TV may have committed the batch before its reply was lost.
                   if ([400, 409, 426].includes(e.status)) { failed += batch.length; processed += batch.length; }
                   else unknown = batch.length;
+                  batch.forEach(function(id){ pendingReconcile.add(id); });
                   needsReconcile = true; break;
                 }
                 if (epoch !== channelEpoch) return;
                 if (!result || !Array.isArray(result.results) || result.results.length !== batch.length ||
                     new Set(result.results.map(function(r){ return r.id; })).size !== batch.length ||
                     result.results.some(function(r){ return !batch.includes(r.id) || !['success', 'failed', 'skipped'].includes(r.status); })) {
-                  unknown = batch.length; needsReconcile = true; break;
+                  unknown = batch.length;
+                  batch.forEach(function(id){ pendingReconcile.add(id); });
+                  needsReconcile = true; break;
                 }
                 result.results.forEach(function(r){
                   if (r.status === 'success') { success++; selected.delete(r.id); }
@@ -542,7 +551,8 @@ object ManagerPage {
               setBusy(false); await loadPage();
             } catch (e) {
               if (epoch !== channelEpoch) return;
-              selected.set(c.id, c);
+              pendingReconcile.add(c.id);
+              if (selected.has(c.id) || selected.size < 500) selected.set(c.id, c);
               needsReconcile = true; pageReady = false; setBusy(false);
               announce((e.message || UNREACH) + ' Refresh TV state before another edit.');
             }
