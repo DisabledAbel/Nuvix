@@ -44,6 +44,30 @@ its URL, builds explain that no public service is configured and accept a truste
    an update. Existing installed APKs need the Android update to use the new connection protocol.
 
 No Cloudflare API/admin token belongs in the APK, web assets, Gradle properties, logs or repository.
+
+### Cloudflare Workers Builds (optional)
+
+If the repository is also connected through **Workers & Pages → nuvix-manager → Settings → Build**,
+set **Root directory** to `cloudflare/manager` and use Node.js 24. Set the **Build command** to
+`npm ci && python3 generate-page.py --check && npm test && npm run check` and the
+**Non-production branch deploy command** to `npx wrangler preview`. These dashboard settings are
+separate from the GitHub Actions workflow; changing this repository does not update them.
+Use `npm run deploy` as the production deploy command only if you intend Workers Builds to deploy
+production instead of the manual GitHub workflow above.
+
+Run commands from that root so npm installs the locked Wrangler version and Wrangler reads
+`wrangler.toml`. Running `npx wrangler preview` from the repository root can download an unpinned
+Wrangler and miss this configuration. The `previews` configuration explicitly supplies `ROOMS`
+and both rate limiters; an empty block would leave required runtime bindings unavailable.
+Each Preview gets its own Durable Object namespace and storage, and its rate-limit namespace IDs
+differ from production. Assets, compatibility settings and migrations remain at the top level.
+See [Preview configuration](https://developers.cloudflare.com/workers/previews/configuration/)
+and [resource isolation](https://developers.cloudflare.com/workers/previews/resources/).
+
+Retry the failed Cloudflare build after saving the dashboard settings and making the updated
+configuration available on the branch. Local tests and packaging checks do not verify a hosted
+Preview deployment, account permissions or actual device pairing.
+
 For other build systems, set `NUVIX_MANAGER_URL` in the build environment or pass Gradle property
 `nuvixManagerUrl`. The address must be an HTTPS origin without userinfo, path, query or fragment.
 
