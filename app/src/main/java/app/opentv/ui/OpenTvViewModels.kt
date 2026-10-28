@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -1400,10 +1401,17 @@ class SyncViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 /** Owns the explicitly opened Cloudflare management session and closes it on exit. */
-class WebManagerViewModel(app: Application) : AndroidViewModel(app) {
-    private val graph = ServiceLocator.get(app)
-    private val manager = ManagerServer(viewModelScope, graph.catalogRepository, graph.settings, graph.sourceRepository)
-    private val remote = CloudManagerClient(viewModelScope, manager)
+class WebManagerViewModel internal constructor(
+    app: Application,
+    createRemote: (CoroutineScope) -> CloudManagerClient,
+) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, { scope ->
+        val graph = ServiceLocator.get(app)
+        val manager = ManagerServer(scope, graph.catalogRepository, graph.settings, graph.sourceRepository)
+        CloudManagerClient(scope, manager)
+    })
+
+    private val remote = createRemote(viewModelScope)
 
     val state = remote.state
 

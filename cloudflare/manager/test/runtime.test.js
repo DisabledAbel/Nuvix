@@ -29,7 +29,13 @@ test('Cloudflare runtime: isolated TV WebSocket, browser command, reply and revo
     assert.match(page.headers.get('Content-Security-Policy'), /script-src 'self'/);
     assert.match(await page.text(), /Code from your TV/);
     const created = await api('create', { tvToken });
-    assert.equal(created.status, 201, await created.text());
+    assert.equal(created.status, 201);
+    const timing = await created.json();
+    assert.equal(timing.ok, true);
+    assert.ok(Number.isSafeInteger(timing.pairUntil));
+    assert.ok(Number.isSafeInteger(timing.serverNow));
+    assert.ok(timing.pairUntil > timing.serverNow);
+    assert.ok(timing.pairUntil - timing.serverNow <= 300_000);
     const badSocket = await mf.dispatchFetch('https://manager.test/api/device/' + code, {
       headers: { Upgrade: 'websocket', Authorization: 'Bearer ' + browserToken },
     });

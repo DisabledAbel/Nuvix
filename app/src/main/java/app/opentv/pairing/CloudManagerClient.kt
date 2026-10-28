@@ -1,6 +1,7 @@
 /* Nuvix Contributors. GPL-3.0-or-later. */
 package app.opentv.pairing
 
+import android.os.SystemClock
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -28,27 +30,36 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
 /** Outbound-only, explicitly opened session. No tokens, codes or commands are persisted. */
-class CloudManagerClient(
+class CloudManagerClient internal constructor(
     private val scope: CoroutineScope,
-    private val manager: ManagerServer,
+    private val execute: (CloudManagerCommand) -> CloudManagerReply,
+    private val calls: Call.Factory,
+    private val sockets: WebSocket.Factory,
+    private val elapsedRealtime: () -> Long,
 ) {
+    constructor(scope: CoroutineScope, manager: ManagerServer) :
+        this(scope, manager::executeRemote, CLIENT, CLIENT, SystemClock::elapsedRealtime)
+
     sealed interface State {
         data object Idle : State
         data object Connecting : State
-        data class Ready(val url: String, val code: String, val paired: Boolean = false) : State
+        data class Ready(
+            val url: String,
+            val code: String,
+            val paired: Boolean = false,
+            val remainingSeconds: Long? = null,
+        ) : State
+        data object Expired : State
         data class Failed(val reason: String) : State
     }
     private val mutableState = MutableStateFlow<State>(State.Idle)
     val state = mutableState.asStateFlow()
     private val json = Json { ignoreUnknownKeys = true }
-    private val client = OkHttpClient.Builder()
-        .followRedirects(false).followSslRedirects(false)
-        .connectTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS)
-        .pingInterval(30, TimeUnit.SECONDS).build()
     private var generation = 0L
     private var call: Call? = null
     private var socket: WebSocket? = null
     private var timer: Job? = null
+    private var pairingDeadline: CloudPairingDeadline? = null
     private var activeOrigin = ""
     private var activeCode = ""
     private var activeToken = ""
@@ -70,16 +81,31 @@ class CloudManagerClient(
         completedIds.clear()
         mutableState.value = State.Connecting
         val payload = buildJsonObject { put("code", code); put("tvToken", token) }
-        call = client.newCall(Request.Builder().url("$origin/api/create")
+        val requestStarted = elapsedRealtime()
+        call = calls.newCall(Request.Builder().url("$origin/api/create")
             .post(json.encodeToString(payload).toRequestBody(JSON)).build()).also { request ->
             request.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: java.io.IOException) = failed(current)
                 override fun onResponse(call: Call, response: Response) {
-                    val success = response.use { it.code == 201 }
+                    val deadline = response.use {
+                        if (it.code != 201) null else runCatching {
+                            val created = json.decodeFromString<Created>(it.body!!.string())
+                            CloudPairingDeadline.fromServer(created.pairUntil, created.serverNow, requestStarted)
+                        }.getOrNull()
+                    }
                     synchronized(this@CloudManagerClient) {
                         if (current != generation) return
-                        if (!success) { failed(current); return }
+                        if (deadline == null) { failed(current); return }
+                        pairingDeadline = deadline
+                        if (refreshPairing(current) == null) return
                         connect(current, origin, code, token)
+                        timer = scope.launch {
+                            while (true) {
+                                val wait = synchronized(this@CloudManagerClient) { refreshPairing(current) }
+                                    ?: return@launch
+                                delay(wait)
+                            }
+                        }
                     }
                 }
             })
@@ -87,22 +113,17 @@ class CloudManagerClient(
     }
 
     private fun connect(current: Long, origin: String, code: String, token: String) {
-        socket = client.newWebSocket(Request.Builder()
+        socket = sockets.newWebSocket(Request.Builder()
             .url("${origin.replaceFirst("https://", "wss://")}/api/device/$code")
             .header("Authorization", "Bearer $token").build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 synchronized(this@CloudManagerClient) {
                     if (generation != current) { webSocket.close(1000, "Closed"); return }
-                    mutableState.value = State.Ready(origin, code)
-                    timer = scope.launch {
-                        delay(TimeUnit.MINUTES.toMillis(5))
-                        synchronized(this@CloudManagerClient) {
-                            val state = mutableState.value as? State.Ready
-                            if (generation == current && state?.paired == false) {
-                                stop(); mutableState.value = State.Failed("Code expired. Start a new session.")
-                            }
-                        }
-                    }
+                    if (refreshPairing(current) == null) return
+                    val remaining = pairingDeadline!!.remainingMillis(elapsedRealtime())
+                    if (remaining == 0L) { refreshPairing(current); return }
+                    mutableState.value = State.Ready(origin, code,
+                        remainingSeconds = CloudPairingDeadline.secondsRemaining(remaining))
                 }
             }
 
@@ -113,9 +134,15 @@ class CloudManagerClient(
                 synchronized(this@CloudManagerClient) {
                     if (generation != current) return
                     if (runCatching { json.parseToJsonElement(text).jsonObject["type"]?.jsonPrimitive?.content == "paired" }.getOrDefault(false)) {
-                        val state = mutableState.value as? State.Ready ?: return
+                        val state = when (val state = mutableState.value) {
+                            is State.Ready -> state
+                            State.Expired -> State.Ready(origin, code)
+                            else -> return
+                        }
                         if (!state.paired) {
-                            mutableState.value = state.copy(paired = true)
+                            timer?.cancel(); timer = null
+                            pairingDeadline = null
+                            mutableState.value = state.copy(paired = true, remainingSeconds = null)
                             // The server owns the hard 30-minute deadline, including pre-pair time.
                         }
                         return
@@ -134,7 +161,7 @@ class CloudManagerClient(
                                 oldest.remove()
                             }
                         }
-                        val reply = try { manager.executeRemote(command) }
+                        val reply = try { execute(command) }
                         catch (_: Exception) { CloudManagerReply(command.id, 500, "{\"error\":\"Management action failed\"}") }
                         synchronized(this@CloudManagerClient) {
                             if (generation == current) webSocket.send(json.encodeToString(reply))
@@ -151,11 +178,35 @@ class CloudManagerClient(
         })
     }
 
+    /** Called under the client lock; collectors and recomposition never own or reset this timer. */
+    private fun refreshPairing(current: Long): Long? {
+        if (generation != current) return null
+        val deadline = pairingDeadline ?: return null
+        val remaining = deadline.remainingMillis(elapsedRealtime())
+        if (remaining == 0L) {
+            // Hide the code locally, but let the Worker decide whether pairing succeeded.
+            // Its accepted pairing notification may still be in flight at this deadline.
+            timer?.cancel(); timer = null
+            pairingDeadline = null
+            mutableState.value = State.Expired
+            return null
+        }
+        val ready = mutableState.value as? State.Ready
+        if (ready != null && !ready.paired) {
+            mutableState.value = ready.copy(remainingSeconds = CloudPairingDeadline.secondsRemaining(remaining))
+        }
+        // Align updates to second boundaries, but always re-read elapsedRealtime after a delay.
+        return (remaining - 1) % 1000 + 1
+    }
+
     @Synchronized
     private fun failed(current: Long) {
         if (generation != current) return
+        val expired = mutableState.value == State.Expired ||
+            pairingDeadline?.remainingMillis(elapsedRealtime()) == 0L
         stop()
-        mutableState.value = State.Failed("Manager disconnected or unavailable. Check the internet connection and start a new session.")
+        mutableState.value = if (expired) State.Expired else
+            State.Failed("Manager disconnected or unavailable. Check the internet connection and start a new session.")
     }
 
     @Synchronized
@@ -163,10 +214,11 @@ class CloudManagerClient(
         generation++
         call?.cancel(); call = null
         timer?.cancel(); timer = null
+        pairingDeadline = null
         socket?.close(1000, "Session ended"); socket = null
         if (activeOrigin.isNotEmpty() && activeToken.isNotEmpty()) {
             val body = buildJsonObject { put("code", activeCode) }
-            client.newCall(Request.Builder().url("$activeOrigin/api/end")
+            calls.newCall(Request.Builder().url("$activeOrigin/api/end")
                 .header("Authorization", "Bearer $activeToken")
                 .post(json.encodeToString(body).toRequestBody(JSON)).build()).enqueue(object : Callback {
                 override fun onFailure(call: Call, e: java.io.IOException) = Unit
@@ -177,5 +229,14 @@ class CloudManagerClient(
         mutableState.value = State.Idle
     }
 
-    private companion object { val JSON = "application/json; charset=utf-8".toMediaType() }
+    @Serializable
+    private data class Created(val pairUntil: Long, val serverNow: Long)
+
+    private companion object {
+        val JSON = "application/json; charset=utf-8".toMediaType()
+        val CLIENT = OkHttpClient.Builder()
+            .followRedirects(false).followSslRedirects(false)
+            .connectTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS)
+            .pingInterval(30, TimeUnit.SECONDS).build()
+    }
 }
