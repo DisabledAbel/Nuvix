@@ -82,35 +82,6 @@ Nuvix Home on an Android TV emulator, with no provider configured.
 - **Cloud sync:** Apply the supplied migrations to your own project, sign in under **Settings → Supabase cloud sync**, then enable sync and choose categories on each TV. Use only a publishable/anon client key. See [cloud setup](docs/cloud-sync.md) and [privacy](docs/PRIVACY.md).
 - **Updates:** Open **Settings → Nuvix updates**. Stable updates require valid release metadata and a matching signing certificate; Android requires installation approval. See [update troubleshooting](docs/update-troubleshooting.md).
 
-## Project status
-
-RC2 (`1.0.0-rc.2`, code `23`) is prepared for review and **has not been published**.
-[RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1) is the existing prerelease.
-See [RC2 changes and prepared release notes](CHANGELOG.md#100-rc2) for the channel-switch repairs,
-optional Sports recovery/delay and automated Media3 playback coverage. Stable users are not
-automatically offered candidates; obtain RC2 only after its separate publication.
-Physical-TV channel switching, production RC2 signing continuity and RC1-to-RC2 installation/data
-retention remain unverified. Follow the [beta guide](docs/BETA-TESTING.md) and
-[readiness tracker](docs/V1-RELEASE-CHECKLIST.md) before testing.
-
-Smart Multi-View extends the merged account-management and background DVR foundation.
-Additional streams depend on configured provider allowances, recording reservations and
-available hardware decoders; four-channel support is not guaranteed on every device.
-Unknown allowances require approval for each extra stream. Android TV, Google TV and Fire TV
-playback, audio, remote, PiP and decoder acceptance still require physical-device verification.
-See [implemented scope and limits](docs/smart-multiview-dvr.md).
-
-See the [changelog](CHANGELOG.md), [release readiness tracker](docs/V1-RELEASE-CHECKLIST.md), [implementation report](docs/implementation-report.md), [roadmap](docs/ROADMAP.md), [architecture](docs/nuvix-architecture.md), and [contributing guide](CONTRIBUTING.md).
-
-## Community
-
-Join the [Nuvix Discord server](https://discord.gg/9tyVjwyNbq) to ask questions, share feedback, and discuss the project.
-
-## License
-
-**GPL-3.0.** Copyright (C) 2026 The OpenTV Contributors; Nuvix modifications Copyright (C) 2026 Nuvix Contributors.
-
-Original license and source notices are preserved. See [LICENSE](LICENSE), [COPYING.md](COPYING.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [upstream audit](docs/upstream-audit.md). Release APKs include the corresponding tagged source, build scripts, and migrations.
 
 ### Customize home
 
@@ -170,3 +141,33 @@ Low-space warnings are configurable; automatic cleanup is separately opt-in for 
 and always excludes active/protected recordings. USB/SMB capacity remains Unknown, so cleanup
 on those destinations stops without deleting files. See [policies, limitations and physical-device
 checks](docs/dvr-storage-manager.md).
+
+## Project status
+
+RC2 (`1.0.0-rc.2`, code `23`) is prepared for review and **has not been published**.
+[RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1) is the existing prerelease.
+See [RC2 changes and prepared release notes](CHANGELOG.md#100-rc2) for the channel-switch repairs,
+optional Sports recovery/delay and automated Media3 playback coverage. Stable users are not
+automatically offered candidates; obtain RC2 only after its separate publication.
+Physical-TV channel switching, production RC2 signing continuity and RC1-to-RC2 installation/data
+retention remain unverified. Follow the [beta guide](docs/BETA-TESTING.md) and
+[readiness tracker](docs/V1-RELEASE-CHECKLIST.md) before testing.
+
+Smart Multi-View extends the merged account-management and background DVR foundation.
+Additional streams depend on configured provider allowances, recording reservations and
+available hardware decoders; four-channel support is not guaranteed on every device.
+Unknown allowances require approval for each extra stream. Android TV, Google TV and Fire TV
+playback, audio, remote, PiP and decoder acceptance still require physical-device verification.
+See [implemented scope and limits](docs/smart-multiview-dvr.md).
+
+See the [changelog](CHANGELOG.md), [release readiness tracker](docs/V1-RELEASE-CHECKLIST.md), [implementation report](docs/implementation-report.md), [roadmap](docs/ROADMAP.md), [architecture](docs/nuvix-architecture.md), and [contributing guide](CONTRIBUTING.md).
+
+## Community
+
+Join the [Nuvix Discord server](https://discord.gg/9tyVjwyNbq) to ask questions, share feedback, and discuss the project.
+
+## License
+
+**GPL-3.0.** Copyright (C) 2026 The OpenTV Contributors; Nuvix modifications Copyright (C) 2026 Nuvix Contributors.
+
+Original license and source notices are preserved. See [LICENSE](LICENSE), [COPYING.md](COPYING.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [upstream audit](docs/upstream-audit.md). Release APKs include the corresponding tagged source, build scripts, and migrations.
