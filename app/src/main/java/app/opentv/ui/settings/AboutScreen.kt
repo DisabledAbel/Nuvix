@@ -109,12 +109,17 @@ fun AboutScreen(onBack: () -> Unit) {
         Section("Updates") { app.opentv.update.UpdateSettingsControls() }
         Spacer(Modifier.height(16.dp))
         var lastCrash by remember { mutableStateOf(CrashDiagnostics.latest(context)) }
+        var lastSystemExit by remember { mutableStateOf(CrashDiagnostics.latestSystemExit(context)) }
         Section("Crash diagnostics") {
             Text("One app-private uncaught Java/Kotlin crash report. No automatic uploads or provider data. Native crashes and Android memory kills may not create a report.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(lastCrash ?: "No stored crash report. A crash may have been a system kill, native failure, or happened before diagnostics started.")
+            Text(lastSystemExit ?: "Android system-exit details are unavailable on this device.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { lastCrash = CrashDiagnostics.latest(context) }) { Text("Refresh") }
+                OutlinedButton(onClick = {
+                    lastCrash = CrashDiagnostics.latest(context)
+                    lastSystemExit = CrashDiagnostics.latestSystemExit(context)
+                }) { Text("Refresh") }
                 OutlinedButton(enabled = lastCrash != null, onClick = {
                     val report = lastCrash ?: return@OutlinedButton
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
