@@ -214,3 +214,51 @@ cleanup precedes player release. Selecting a new media URL resets the diagnostic
 existing retries and surface transfers retain its counters. Settings clear the existing
 observer without allocating a player. The same panel serves VOD/episode/recording controllers.
 See [measurements and health rules](playback-diagnostics.md) for limitations and privacy.
+
+## Automatic live playback recovery
+
+One shared policy drives a monitor on the existing single-channel controller and each existing
+Multi-View player. It never drives VOD, catch-up, growing-file playback or DVR capture workers.
+Media3 events supply failures/discontinuities and first frames; a cancellable 1 Hz watchdog checks
+position and renderer counters on the player thread. All deadlines use monotonic time. Video
+progress uses rendered frames when available; audio-only playback falls back to media position.
+READY alone does not verify recovery.
+
+Short buffering is left to Media3. Startup allows at least 45 seconds, or the configured startup
+reservoir plus 30 seconds. After successful playback, buffering allows at least 30 seconds, or the
+rebuffer reservoir plus 15 seconds. Thirty seconds without progress and three meaningful rebuffers
+totaling at least the rebuffer threshold within two minutes also qualify. Sliding live-window
+rollbacks rebase progress. Seeks/discontinuities receive grace; rewind far behind the live edge is
+excluded. Pause, audio-focus suppression, lifecycle suspension, Sports ownership, pending provider
+approval and obsolete requested-channel identities block actions.
+
+Automatic actions have a shared three-attempt budget with 2/5/10-second backoff. The first action
+stops/reprepares the same Media3 player and retains its reservation. Subsequent actions close the
+failed player before releasing its viewing reservation, then re-resolve the same selected channel
+and obtain a fresh reservation through the existing provider/admission path. Even spare-capacity
+recovery uses break-before-make. Unknown allowances require the existing fresh request-specific
+approval when another connection exists; a retry never grants consent. Expired Stalker links use
+the existing authorized resolver. No source/provider is substituted automatically.
+
+At least two seconds of media progress verify recovery. Only 60 seconds of sustained healthy
+progress refill the automatic allowance; brief READY/playing periods do not. HTTP 401/403/451,
+missing streams, unsupported media, DRM, decoder/device-resource failures and unknown errors stop
+automatic attempts. Network/DNS/timeouts, temporary source reads, live-window loss, unexpected end
+and HTTP 429/5xx can retry. Supported Retry-After seconds/dates delay the next action. An offline
+stream eventually stops loading and offers explicit Retry. Provider configuration/allowance edits,
+channel changes, stop, destruction and background policy invalidate relevant pending work.
+
+Fullscreen, preview and panels display an unobtrusive attempt indicator. Existing remote-focusable
+Retry controls remain available after exhaustion; fullscreen also offers the existing source/quality
+picker, Stream Information and Back. Alternatives always require an explicit user choice. Sports
+Auto switchover, when explicitly enabled, remains the sole recovery owner for its selected game;
+its optional cushion and authorization rules are preserved.
+
+Multi-View budgets live with panel identities across replacement, preserving layout and selected
+audio. Recovery closes that panel before resolving its link and cannot allocate a fifth player.
+Admission and decoder checks still apply. Viewing recovery never releases a recording token,
+changes a recording schedule/priority/padding, or invokes DVR capture recovery. Recording admission
+may still reclaim optional viewing under its existing policy.
+
+Recovery cannot guarantee provider availability or device codec support. Physical Android TV,
+Google TV and Fire TV acceptance remains required; see [the recovery checklist](TESTING.md#automatic-playback-recovery).

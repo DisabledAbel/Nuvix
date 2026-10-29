@@ -550,4 +550,7 @@
     <string name="tv_metadata_only" tools:ignore="MissingTranslation">Not available from your provider</string>
     <string name="tv_no_episodes" tools:ignore="MissingTranslation">No episodes available.</string>
     <string name="tvmaze_automatic" tools:ignore="MissingTranslation">TV show metadata is automatic via TVmaze, with IMDbAPI.dev secondary. No key or account is required. TMDb below is an optional fallback.</string>
+    <string name="playback_reconnecting">Reconnecting… Attempt %1$d of %2$d</string>
+    <string name="playback_choose_source">Choose Another Authorized Source</string>
+    <string name="playback_view_information">View Stream Information</string>
 </resources>

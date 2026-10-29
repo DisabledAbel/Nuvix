@@ -60,6 +60,8 @@ internal class LivePlaybackCoordinator(
     private val afterEngineRelease: () -> Unit = {},
     private val beforeResolve: suspend (Channel, releaseCurrent: () -> Unit) -> Unit = { _, _ -> },
     private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
+    private val recoveryBudget: RecoveryBudget? = null,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
     /** Synchronous selection cursor: repeated remote events must advance even during lookup. */
     private val _requestedChannelId = MutableStateFlow<Long?>(null)
@@ -91,6 +93,7 @@ internal class LivePlaybackCoordinator(
     val guidePreviewSuppressed = _guidePreviewSuppressed.asStateFlow()
     private val _playbackAllowed = MutableStateFlow(true)
     val playbackAllowed = _playbackAllowed.asStateFlow()
+    private var recoveringResolution = false
     private var resolving = false
     private var resolutionFailed = false
     private var engine: LivePlaybackEngine? = null
@@ -159,7 +162,7 @@ internal class LivePlaybackCoordinator(
     }
 
     /** Starts a resolved request only if it still belongs to the current tune generation. */
-    private fun request(id: Long, rememberPrevious: Boolean, channel: suspend () -> Channel?) {
+    private fun request(id: Long, rememberPrevious: Boolean, recovery: Boolean = false, channel: suspend () -> Channel?) {
         if (destroyed || requestedId == id) return
         _requestedChannelId.value = id
         setPolicyPreviewSuppressed(false)
@@ -176,6 +179,7 @@ internal class LivePlaybackCoordinator(
             }
             return
         }
+        recoveringResolution = recovery
         requestedId = id
         _requestedChannel.value = null
         _preparingChannel.value = null
@@ -195,6 +199,7 @@ internal class LivePlaybackCoordinator(
                         transitionDiagnostics?.record(token, ChannelTransitionPhase.FAILED)
                         resolutionFailed = true
                         _state.value = PlayerController.State.Error("", "Channel is no longer available", false)
+                        if (recovery) recoveryBudget?.publish(RecoveryState.FAILED, clock(), RecoveryFailure.MISSING_STREAM)
                     }
                     return@launch
                 }
@@ -228,6 +233,7 @@ internal class LivePlaybackCoordinator(
                 failedChannel = null
                 resolving = false
                 playback.play(resolved.request)
+                recoveringResolution = false
                 lastTunedChannelId = resolved.channel.id
                 playback.setPaused(false)
                 _state.value = playback.state.value.let {
@@ -252,6 +258,27 @@ internal class LivePlaybackCoordinator(
                     } else if (failure is LiveConnectionException) failure.safeMessage
                     else "Unable to open this channel. Please retry."
                     _state.value = PlayerController.State.Error(selected?.shownName.orEmpty(), message, true)
+                    if (recovery) {
+                        val budget = recoveryBudget
+                        val transient = generateSequence<Throwable>(failure) { it.cause }.take(8).any {
+                            it is java.net.SocketTimeoutException || it is java.net.UnknownHostException || it is java.net.ConnectException
+                        }
+                        if (budget != null && transient && budget.attempts < budget.policy.backoffMs.size) {
+                            budget.publish(RecoveryState.WAITING, clock(), RecoveryFailure.NETWORK)
+                            _state.value = PlayerController.State.Buffering(selected?.shownName.orEmpty())
+                            requestJob = scope.launch {
+                                kotlinx.coroutines.delay(budget.policy.backoffMs[budget.attempts])
+                                if (token != generation || _requestedChannelId.value != id || !_playbackAllowed.value || _paused.value) return@launch
+                                budget.attempts++
+                                budget.publish(RecoveryState.RECOVERING, clock(), RecoveryFailure.NETWORK)
+                                request(id, rememberPrevious = false, recovery = true) { findChannel(id) }
+                            }
+                        } else {
+                            budget?.record(RecoveryEvent.FAILED, clock())
+                            budget?.publish(RecoveryState.FAILED, clock(), if (transient) RecoveryFailure.NETWORK else if (failure is LiveConnectionException) RecoveryFailure.CONNECTION_LIMIT else RecoveryFailure.UNKNOWN)
+                            recoveringResolution = false
+                        }
+                    }
                 }
             } finally {
                 if (token == generation) { requestedId = null; resolving = false }
@@ -265,12 +292,37 @@ internal class LivePlaybackCoordinator(
         requestedId = null
         // Retry is deliberately a fresh request; same-channel navigation remains a no-op.
         _active.value = false
-        tune(channel)
+        request(channel.id, rememberPrevious = false) { findChannel(channel.id) }
+    }
+
+    /** Provider edits invalidate pending work without discarding the selected channel or touching DVR. */
+    fun interrupt(message: String) {
+        generation++; requestJob?.cancel(); requestJob = null; requestedId = null
+        resolving = false; resolutionFailed = true
+        releaseEngine()
+        _preparingChannel.value = null
+        _state.value = PlayerController.State.Error(_currentChannel.value?.shownName.orEmpty(), message, true)
+    }
+
+    /** Recovery is break-before-make even when spare capacity exists. Retains the selected channel. */
+    fun reconnect() {
+        if (destroyed || resolving || !_active.value || _paused.value || !_playbackAllowed.value) return
+        val channel = _currentChannel.value ?: return
+        if (_requestedChannelId.value != channel.id) return
+        releaseEngine() // onRelease → synchronous player.release → afterEngineRelease frees only live's slot.
+        requestedId = null
+        _active.value = false
+        request(channel.id, rememberPrevious = false, recovery = true) { findChannel(channel.id) }
     }
 
     /** Updates the explicit pause choice and reapplies retained playback policy. */
     fun setPaused(paused: Boolean) {
         _paused.value = paused
+        if (paused && recoveringResolution) {
+            cancelPendingTune()
+            requestJob?.cancel()
+            recoveringResolution = false
+        }
         engine?.setPaused(paused)
     }
 
@@ -298,6 +350,12 @@ internal class LivePlaybackCoordinator(
     private fun applyPolicy() {
         val pip = inPip || presentation == LivePresentation.PIP
         _playbackAllowed.value = (foreground && presentation != LivePresentation.HIDDEN) || pip
+        if (!_playbackAllowed.value && recoveringResolution) {
+            requestJob?.cancel()
+            cancelPendingTune()
+            recoveringResolution = false
+            recoveryBudget?.publish(RecoveryState.CANCELED, clock(), RecoveryFailure.CANCELED)
+        }
         engine?.setBrowsingMuted(!continueAudio && presentation == LivePresentation.BROWSING && !pip)
         engine?.setSuspended((!foreground || presentation == LivePresentation.HIDDEN) && !pip)
     }

@@ -68,6 +68,13 @@ class MultiViewSessionManagerTest {
         private val onRelease: () -> Unit,
         private val onVolumeChange: () -> Unit = {},
     ) : MultiViewPlayer {
+        var recoveryReconnect: (() -> Unit)? = null
+        var recoveryAllowed: (() -> Boolean)? = null
+        var recoveryBudget: app.opentv.player.RecoveryBudget? = null
+        override fun configureRecovery(scope: kotlinx.coroutines.CoroutineScope, budget: app.opentv.player.RecoveryBudget,
+            allowed: () -> Boolean, reconnect: () -> Unit) {
+            recoveryBudget = budget; recoveryAllowed = allowed; recoveryReconnect = reconnect
+        }
         val starts = mutableListOf<ResolvedMultiViewChannel>()
         val volumes = mutableListOf<Float>()
         var releases = 0
@@ -190,6 +197,93 @@ class MultiViewSessionManagerTest {
         runCurrent()
         assertTrue(f.players.all { it.releases == 1 })
         assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+    }
+
+    @Test fun recoveryOfOneOfFourPanelsPreservesAudioLayoutAndOtherReservations() = runTest {
+        val f = Fixture(this)
+        val ids = (1L..4L).map { f.addReady(it) }
+        f.manager.selectAudio(ids[2])
+        val layout = f.state.layout
+        val old = f.player(2)
+        val others = listOf(1L, 3L, 4L).map(f::player)
+        old.recoveryReconnect!!.invoke(); runCurrent()
+        assertEquals(1, old.releases)
+        assertTrue(others.all { it.releases == 0 })
+        assertEquals(4, f.maximumAllocatedPlayers)
+        assertEquals(ids[2], f.state.audioPanelId); assertEquals(layout, f.state.layout)
+        val replacement = f.player(2)
+        assertNotSame(old, replacement); assertSame(old.recoveryBudget, replacement.recoveryBudget)
+        replacement.ready(); runCurrent()
+        assertEquals(4, f.connections.snapshot(1)!!.locallyReserved)
+        assertEquals(ids[2], f.state.audioPanelId)
+        f.manager.release()
+    }
+
+    @Test fun recoveryClosesBeforeResolutionForSingleConnectionAndNeverReleasesDvr() = runTest {
+        lateinit var f: Fixture
+        var recovering = false
+        f = Fixture(this, maximum = 2, resolver = { id ->
+            if (recovering) {
+                assertEquals(1, f.player(1).releases)
+                assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+            }
+            Fixture.resolved(id)
+        })
+        f.addReady(1)
+        val recording = (f.connections.reserve(ConnectionRequest("dvr", 1, 1, ConnectionPurpose.RECORDING)) as ReservationResult.Reserved).token
+        recovering = true
+        f.player(1).recoveryReconnect!!.invoke(); runCurrent()
+        f.player(1).ready(); runCurrent()
+        assertEquals(2, f.connections.snapshot(1)!!.locallyReserved)
+        assertNotNull(f.connections.allocator.reservationState(recording))
+        f.manager.release()
+        assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+        f.connections.release(recording)
+    }
+
+    @Test fun removedPanelAndNewChannelRejectStaleRecoveryCallback() = runTest {
+        val f = Fixture(this)
+        val id = f.addReady(1)
+        val old = f.player(1)
+        f.manager.replace(id, 2); runCurrent(); f.player(2).ready(); runCurrent()
+        val count = f.players.size
+        old.recoveryReconnect!!.invoke(); runCurrent()
+        assertEquals(count, f.players.size); assertEquals(2L, f.state.panels.single().channelId)
+        val callback = f.player(2).recoveryReconnect!!
+        f.manager.remove(id); callback(); runCurrent()
+        assertTrue(f.state.panels.isEmpty()); assertEquals(count, f.players.size)
+        f.manager.release()
+    }
+
+    @Test fun unknownAllowanceRecoveryNeverReusesAnotherConnectionsConsent() = runTest {
+        val f = Fixture(this, maximum = null)
+        f.addReady(1)
+        val id = f.panel(1).id
+        // Another owner now occupies this account; recovery of the viewer requires new consent.
+        val challenge = (f.connections.reserve(ConnectionRequest("dvr", 1, 1, ConnectionPurpose.RECORDING)) as ReservationResult.ApprovalRequired).challenge
+        val recording = (f.connections.reserve(challenge.request, f.connections.approve(challenge)) as ReservationResult.Reserved).token
+        f.player(1).recoveryReconnect!!.invoke(); runCurrent()
+        assertNotNull(f.state.approval); assertEquals(1, f.players.size)
+        f.manager.answerApproval(false); runCurrent()
+        assertEquals(MultiViewPanelStatus.FAILED, f.state.panels.single { it.id == id }.status)
+        assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+        f.manager.release(); f.connections.release(recording)
+    }
+
+    @Test fun explicitRetryIsAvailableAfterAutomaticFailureAndProviderEditCancelsOnlyAffectedPanel() = runTest {
+        val f = Fixture(this, sourceForChannel = { it })
+        f.connections.register(2)
+        val one = f.addReady(1); f.addReady(2)
+        val old = f.player(1)
+        f.manager.invalidateSources(setOf(1))
+        assertEquals(1, old.releases); assertEquals(0, f.player(2).releases)
+        old.recoveryReconnect!!.invoke(); runCurrent(); assertEquals(2, f.players.size)
+        repeat(5) {
+            f.manager.retry(one); runCurrent(); f.player(1).ready(); runCurrent()
+        }
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(1).status)
+        assertEquals(0, f.player(2).releases)
+        f.manager.release()
     }
 
     @Test fun recordingStartingDuringUnknownApprovalRevalidatesBeforeAnySecondPlayer() = runTest {
@@ -775,7 +869,7 @@ class MultiViewSessionManagerTest {
         assertEquals(2, f.connections.snapshot(1)!!.locallyReserved)
     }
 
-    @Test fun startupTimeoutReleasesOnlyTimedOutAttemptAndRetryIsBounded() = runTest {
+    @Test fun startupTimeoutReleasesOnlyTimedOutAttemptAndManualRetryRemainsAvailable() = runTest {
         val f = Fixture(this)
         f.addReady(1)
         f.manager.add(2)
@@ -795,8 +889,11 @@ class MultiViewSessionManagerTest {
         val allocations = f.players.size
         f.manager.retry(panel)
         runCurrent()
-        assertEquals(allocations, f.players.size)
-        assertEquals(1, f.connections.snapshot(1)!!.locallyReserved)
+        assertEquals(allocations + 1, f.players.size)
+        f.player(2).ready(); runCurrent()
+        assertEquals(2, f.connections.snapshot(1)!!.locallyReserved)
+        assertEquals(0, f.player(1).releases)
+        f.manager.release()
     }
 
     @Test fun onlyExplicitProviderLimitFailuresIncrementAccountLimitDiagnostics() = runTest {

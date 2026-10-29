@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Add bounded live stream stall/error recovery to the existing single-channel and Multi-View
+  players: buffer-aware watchdogs, 2/5/10-second progressive recovery, verified progress and
+  sustained-health budget reset. Controlled reconnect closes viewing before fresh admission;
+  recordings, panel/audio ownership and enabled Sports recovery retain their existing policies.
+- Add recovery status/explicit retry actions, sanitized memory-only Stream Information history,
+  fake-clock/player regressions and generated Media3 stall/disconnect/offline/rate-limit scenarios.
+  Physical Android TV/Google TV/Fire TV acceptance remains required; no release metadata changes.
+
 - Add bounded web-manager channel pages and provider/category search over original, display and
   custom names; stable ID tie-breaking and revision checks reject stale catalog/provider edits.
 - Add explicit selection across pages, page-only Select All, reviewed Favorite/Unfavorite/Hide/Unhide

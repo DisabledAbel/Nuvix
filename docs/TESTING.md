@@ -832,3 +832,42 @@ No production key is used in unit tests and no release is dispatched for validat
 builds require Gradle/Android downloads; if unavailable, report the blocker and rely on required
 GitHub Actions before review readiness. Physical startup, native SQLCipher and OEM installation
 acceptance remain device checks even after CI passes.
+
+## Automatic playback recovery
+
+Run `./gradlew :app:testDebugUnitTest`, `./gradlew :app:lintDebug`,
+`./gradlew :app:assembleDebug`, and `python3 -m unittest discover -s scripts/tests -v`.
+The pure monitor uses a fake monotonic clock. Media3 adapter tests use a fake ExoPlayer and virtual
+coroutine time to check mutations, retry-after, stale errors, listener removal and cancellation.
+Owner regressions check close-before-resolution, generation changes, unknown approval, four-panel
+isolation/audio ownership and preservation of a recording's allocator token. Existing Sports,
+buffering, channel-switch, surface, DVR, release identity and security tests remain enabled.
+
+The IPTV Playback Tests workflow still decodes generated local HLS/MPEG-TS through the production
+session and verifies first-frame events and screenshot pixels. Additional real Media3 scenarios
+exercise a stream that stalls after valid media, a truncated/disconnected stream, two HTTP 503
+responses requiring controlled reconnection, permanent HTTP 503 exhaustion, HTTP 429 with
+Retry-After, and delayed startup that must not reconnect. Successful automatic recovery requires
+progress verification and rendered frames; an HTTP response alone cannot pass. Reports require all
+new scenarios and accept only fixed scenario names/numeric metrics. Fixture/probe checks describe
+transport behavior separately. `bash scripts/run-iptv-android.sh` needs an already running emulator.
+
+Physical acceptance remains pending on Android TV, Google TV and Fire TV:
+
+- Verify HLS, MPEG-TS, DASH/RTSP where supported, audio-only sources and slow/low-memory decoders.
+- Compare short buffering, sustained stalls, repeated buffering, Wi-Fi loss/switch/restoration,
+  expired authorized links and permanent provider outages; confirm bounded traffic and real video.
+- Rapidly change channels, exit, pause, seek/rewind, lose/regain audio focus, sleep/background,
+  enter/exit PiP and recreate the Activity/process during each recovery stage.
+- Edit/remove provider credentials/configuration and change account allowances during backoff or
+  approval; confirm no stale channel restarts and no reuse of consent for an extra connection.
+- Test one/multiple/unknown allowances, four Multi-View panels with another audio panel selected,
+  decoder exhaustion and recording admission. Verify recording bytes continue, reservations and
+  locked padding/schedules remain intact, and unrelated panels do not restart.
+- Exercise D-pad/OK/Back for Retry, explicit source/quality selection and Stream Information.
+  Verify enabling Sports Auto switchover leaves only its loop active and preserves optional delay.
+- Check privacy with diagnostics off/Clear and credential-bearing private stream addresses.
+
+Fake players and emulator pixels do not certify hardware, provider limits on other devices, or
+guaranteed recovery. Record actual commands/results and GitHub Actions status in the PR; keep it
+in draft when substantial validation is missing. No release/tag is part of this work.

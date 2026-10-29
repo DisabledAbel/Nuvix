@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Reconectare… Încercarea %1$d din %2$d</string>
+    <string name="playback_choose_source">Alege altă sursă autorizată</string>
+    <string name="playback_view_information">Vezi informațiile fluxului</string>
+</resources>

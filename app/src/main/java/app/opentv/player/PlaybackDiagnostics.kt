@@ -118,6 +118,7 @@ data class DiagnosticSnapshot(
     val rebuffers: Int = 0, val bufferingMs: Long = 0, val rebuffersPerMinute: Double? = null,
     val decoderErrors: Int = 0, val interruptions: Int = 0, val error: String? = null,
     val history: List<DiagnosticEvent> = emptyList(),
+    val recovery: RecoverySnapshot? = null,
     val transition: List<ChannelTransitionTiming> = emptyList(),
 )
 
@@ -233,6 +234,7 @@ class PlaybackDiagnostics internal constructor(
     private val clock: () -> Long = SystemClock::elapsedRealtime,
     private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
 ) : AutoCloseable {
+    var recoveryBudget: RecoveryBudget? = null
     private val timeline = DiagnosticTimeline(clock)
     private val _snapshot = MutableStateFlow(DiagnosticSnapshot())
     val snapshot = _snapshot.asStateFlow()
@@ -339,6 +341,7 @@ class PlaybackDiagnostics internal constructor(
         if (closed) return
         timeline.reset(); renderedTotal = 0
         transitionDiagnostics?.clear()
+        recoveryBudget?.clearHistory()
         currentCounters?.let { it.ensureUpdated(); counterBaseline = it.renderedOutputBufferCount }
         estimate = null; estimateAt = null
         sample()
@@ -367,6 +370,7 @@ class PlaybackDiagnostics internal constructor(
             rebuffers = timeline.rebuffers, bufferingMs = timeline.bufferingMs(), rebuffersPerMinute = timeline.frequency(),
             decoderErrors = timeline.decoderErrors, interruptions = timeline.interruptions, error = timeline.error,
             history = timeline.history(),
+            recovery = recoveryBudget?.snapshot?.value,
             transition = transitionDiagnostics?.snapshot().orEmpty(),
         )
     }

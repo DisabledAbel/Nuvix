@@ -63,6 +63,7 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
     val channel by session.currentChannel.collectAsState()
     val requestedChannel by session.requestedChannel.collectAsState()
     val state by session.state.collectAsState()
+    val recovery by session.recoveryStatus.collectAsState()
     val controller by session.controllerOrNull.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -127,6 +128,11 @@ fun LivePlaybackVideo(session: LivePlaybackSession, onFullscreen: () -> Unit) {
                 modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.labelSmall,
             )
             if (state is PlayerController.State.Buffering) CircularProgressIndicator(Modifier.size(26.dp))
+            if (recovery.state == app.opentv.player.RecoveryState.WAITING || recovery.state == app.opentv.player.RecoveryState.RECOVERING) {
+                Text(stringResource(R.string.playback_reconnecting, (recovery.attempts +
+                    if (recovery.state == app.opentv.player.RecoveryState.WAITING) 1 else 0).coerceAtMost(recovery.maximum), recovery.maximum),
+                    color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.BottomCenter))
+            }
             Text(
                 stringResource(R.string.live_preview_live), color = Color.White,
                 style = MaterialTheme.typography.labelSmall,

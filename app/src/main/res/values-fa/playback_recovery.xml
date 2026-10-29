@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">در حال اتصال مجدد… تلاش %1$d از %2$d</string>
+    <string name="playback_choose_source">انتخاب منبع مجاز دیگر</string>
+    <string name="playback_view_information">نمایش اطلاعات پخش</string>
+</resources>

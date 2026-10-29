@@ -110,3 +110,19 @@ and bounded while hidden so opening the panel can report preceding interruptions
 the panel and stops its sampling; scheduled recording ownership is untouched.
 
 See [testing](TESTING.md#playback-diagnostics) for automated coverage and required hardware checks.
+
+## Recovery measurements
+
+Stream Information includes the viewing owner's recovery state, attempt count/maximum, fixed last
+failure category, total recovery duration, time since successful media progress and recent recovery
+events. Player replacement retains the live/panel budget and history. Events include stall/buffering,
+recovery/lightweight start, connection close, reservation acquisition, prepare, first frame,
+verified success, failure and cancellation. First frame and READY remain separate from verification.
+
+History is memory-only, fixed-enum data: at most 64 entries from five minutes per viewing owner.
+No exception messages, provider labels/IDs, URLs, credentials, headers, MAC addresses or Stalker
+identity fields are stored in recovery state. Disable diagnostics or Clear to remove this history
+without refilling the retry budget. Session/panel destruction discards it. A one-second watchdog
+reads the existing player and never makes diagnostic network requests. Recovery acts only in live
+viewing, independently of the recording engine. Diagnostics remain available after automatic
+exhaustion through fullscreen Stream Information.

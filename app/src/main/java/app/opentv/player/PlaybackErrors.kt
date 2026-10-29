@@ -23,6 +23,64 @@ import java.net.UnknownHostException
 @OptIn(UnstableApi::class)
 object PlaybackErrors {
 
+    /** Bounded cause inspection; all stored results are fixed categories. */
+    fun recoveryFailure(error: PlaybackException): RecoveryFailure {
+        val causes = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
+        causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.let {
+            return when (it.responseCode) {
+                401 -> RecoveryFailure.AUTHENTICATION
+                403, 451 -> RecoveryFailure.AUTHORIZATION
+                404, 410 -> RecoveryFailure.MISSING_STREAM
+                429 -> RecoveryFailure.RATE_LIMIT
+                408, 504 -> RecoveryFailure.TIMEOUT
+                in 500..599 -> RecoveryFailure.NETWORK
+                else -> RecoveryFailure.UNKNOWN
+            }
+        }
+        if (causes.any { it is UnknownHostException }) return RecoveryFailure.DNS
+        if (causes.any { it is SocketTimeoutException }) return RecoveryFailure.TIMEOUT
+        return when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> RecoveryFailure.NETWORK
+            PlaybackException.ERROR_CODE_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> RecoveryFailure.TIMEOUT
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> RecoveryFailure.LIVE_WINDOW
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> RecoveryFailure.SOURCE_READ
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> RecoveryFailure.MISSING_STREAM
+            in 3000..3999 -> RecoveryFailure.UNSUPPORTED
+            in 4000..4999 -> RecoveryFailure.DECODER
+            in 5000..5999 -> RecoveryFailure.DEVICE_RESOURCE
+            in 6000..6999 -> RecoveryFailure.DRM
+            else -> RecoveryFailure.UNKNOWN
+        }
+    }
+
+    /** Retry-After delta seconds and HTTP dates; never retry earlier than a provider asks. */
+    fun retryAfterMs(error: Throwable, wallTimeMs: Long = System.currentTimeMillis()): Long {
+        val response = generateSequence(error) { it.cause }.take(8)
+            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull() ?: return 0
+        val value = response.headerFields.entries.firstOrNull { it.key.equals("Retry-After", true) }
+            ?.value?.firstOrNull()?.trim() ?: return 0
+        value.toLongOrNull()?.let { return it.coerceIn(0, Long.MAX_VALUE / 1000) * 1000 }
+        return runCatching {
+            (java.time.ZonedDateTime.parse(value, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                .toInstant().toEpochMilli() - wallTimeMs).coerceAtLeast(0)
+        }.getOrDefault(0)
+    }
+
+    /** Recovery UI uses the same fixed actionable messages even after Media3 clears its error. */
+    fun describeRecovery(category: RecoveryFailure): String = when (category) {
+        RecoveryFailure.AUTHENTICATION -> describeHttpStatus(401)
+        RecoveryFailure.AUTHORIZATION -> describeHttpStatus(403)
+        RecoveryFailure.RATE_LIMIT -> describeHttpStatus(429)
+        RecoveryFailure.MISSING_STREAM -> describeHttpStatus(404)
+        RecoveryFailure.CONNECTION_LIMIT -> "This account's configured connections are in use. Retry when capacity is available."
+        RecoveryFailure.UNSUPPORTED, RecoveryFailure.DECODER -> "This device cannot play this format. Choose another supported quality or authorized source."
+        RecoveryFailure.DRM -> "This protected stream requires provider-supported access. Choose another authorized source."
+        RecoveryFailure.DEVICE_RESOURCE -> "Playback stopped because device resources are unavailable. Retry or use fewer playback panels."
+        RecoveryFailure.DNS, RecoveryFailure.NETWORK, RecoveryFailure.TIMEOUT -> "Unable to reconnect. Check the device network and provider availability, then Retry."
+        else -> "Playback interrupted. Unable to reconnect to this channel. Retry or choose another authorized source."
+    }
+
     /** Maps player failures to actionable messages without exposing private stream credentials. */
     fun describe(error: PlaybackException): String {
         val causes = generateSequence<Throwable>(error) { it.cause }.take(8).toList()

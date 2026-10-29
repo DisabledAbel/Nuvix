@@ -15,6 +15,8 @@ from iptv.fixtures import generate, serve
 from iptv.probe import Client, ProbeFailure, playlist, probe_hls, validate_url
 
 ROOT = Path(__file__).resolve().parents[1]
+ANDROID_SCENARIOS = {"hls-one", "hls-spare", "ts-unknown", "stalker-one", "rapid", "recovery", "providers", "dvr",
+                     "auto-disconnect", "auto-stall", "auto-reconnect", "auto-offline", "auto-rate", "auto-slow"}
 PHASES = {"SELECTED", "SUBMITTED", "CLOSE_STARTED", "CLOSE_COMPLETED", "RESERVATION_ACQUIRED",
           "MEDIA_SET", "PREPARE_STARTED", "FIRST_FRAME", "READY", "FAILED"}
 
@@ -25,7 +27,10 @@ def junit_failures(directory):
                "transportStreamUnknownAllowanceSwitch": "ts-unknown", "stalkerOneConnectionSwitch": "stalker-one",
                "rapidUpDownLatestRequestRenders": "rapid", "failedMediaThenExplicitRecoveryRendersNewChannel": "recovery",
                "syntheticProvidersPassProductionImportersAndAuthentication": "providers",
-               "dvrCapturesSyntheticTransportAndStopsAtDeadline": "dvr"}
+               "dvrCapturesSyntheticTransportAndStopsAtDeadline": "dvr",
+               "automaticDisconnectRecoveryRenders": "auto-disconnect", "automaticStallRecoveryRenders": "auto-stall",
+               "automaticControlledReconnectRenders": "auto-reconnect", "automaticOfflineRecoveryExhausts": "auto-offline",
+               "automaticRateLimitRecoveryRenders": "auto-rate", "delayedResponseDoesNotReconnect": "auto-slow"}
     codes = {"Media3 must release the previous player": "previous_media3_not_released",
              "Stopping must release the replacement Media3 player": "stopped_media3_not_released",
              "Replacement must render synthetic blue video": "replacement_pixels_mismatch",
@@ -106,12 +111,12 @@ def android_results(directory):
             raise ProbeFailure("android_report_invalid")
         for row in data["results"]:
             scenario = row["scenario"]
-            if scenario not in ("hls-one", "hls-spare", "ts-unknown", "stalker-one", "rapid", "recovery", "providers", "dvr"):
+            if scenario not in ANDROID_SCENARIOS:
                 raise ProbeFailure("android_report_invalid")
             metrics = {}
             for key, value in row.get("metrics", {}).items():
                 if key not in PHASES | {"import_ms", "provider_ms", "release_ms", "prepare_ms", "request_ms",
-                                       "reservations", "failures", "media3_state", "rendered_frames", "error_code", "surface_bound"}:
+                                       "reservations", "failures", "media3_state", "rendered_frames", "error_code", "surface_bound", "attempts", "recovery_ms"}:
                     raise ProbeFailure("android_report_invalid")
                 if type(value) not in (int, float) or not 0 <= value <= 900000:
                     raise ProbeFailure("android_report_invalid")
@@ -120,10 +125,15 @@ def android_results(directory):
                             "metrics": metrics})
     if not results:
         raise ProbeFailure("android_report_missing")
-    required = {"hls-one", "hls-spare", "ts-unknown", "stalker-one", "rapid", "recovery", "providers", "dvr"}
+    required = ANDROID_SCENARIOS
     if {row["id"] for row in results} != required or len(results) != len(required):
         raise ProbeFailure("android_report_incomplete")
     for row in results:
+        if row["status"] == "passed" and row["id"].startswith("auto-"):
+            if not {"attempts", "rendered_frames", "recovery_ms", "reservations"} <= row["metrics"].keys():
+                raise ProbeFailure("android_report_incomplete")
+            if row["id"] != "auto-offline" and row["metrics"]["rendered_frames"] <= 0:
+                raise ProbeFailure("android_report_incomplete")
         if row["status"] == "passed" and row["id"] in {"hls-one", "hls-spare", "ts-unknown", "stalker-one"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
             raise ProbeFailure("android_report_incomplete")
     return results

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Επανασύνδεση… Προσπάθεια %1$d από %2$d</string>
+    <string name="playback_choose_source">Επιλογή άλλης εξουσιοδοτημένης πηγής</string>
+    <string name="playback_view_information">Προβολή πληροφοριών ροής</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Obnovovanie pripojenia… Pokus %1$d z %2$d</string>
+    <string name="playback_choose_source">Vybrať iný povolený zdroj</string>
+    <string name="playback_view_information">Zobraziť informácie o streame</string>
+</resources>

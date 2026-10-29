@@ -305,6 +305,8 @@ private fun MultiViewPanelVideo(
     showLabels: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val recoveryFlow = manager.recoveryStatus(panel.id)
+    val recovery = recoveryFlow?.collectAsState()?.value
     val shape = RoundedCornerShape(8.dp)
     val owner = manager.surfaceOwner(panel.id)
     var surfaceAvailable by remember(owner) { mutableStateOf(true) }
@@ -329,6 +331,11 @@ private fun MultiViewPanelVideo(
                 onRelease = { owner.detach(it) }, update = {},
             )
         }
+        if (recovery != null && (recovery.state == app.opentv.player.RecoveryState.WAITING ||
+                recovery.state == app.opentv.player.RecoveryState.RECOVERING)) Text(
+            androidx.compose.ui.res.stringResource(com.disabledabel.nuvix.R.string.playback_reconnecting,
+                (recovery.attempts + if (recovery.state == app.opentv.player.RecoveryState.WAITING) 1 else 0).coerceAtMost(recovery.maximum), recovery.maximum),
+            Modifier.align(Alignment.TopCenter).background(Color.Black.copy(alpha = 0.8f)).padding(8.dp), color = Color.White)
         if (!surfaceAvailable) Text("This device cannot move this video surface. Return to the previous view or retry the panel.", Modifier.padding(16.dp), color = Color.White)
         if (panel.status == MultiViewPanelStatus.STARTING || panel.status == MultiViewPanelStatus.BUFFERING) CircularProgressIndicator(Modifier.size(30.dp))
         if (panel.status == MultiViewPanelStatus.FAILED || panel.status == MultiViewPanelStatus.PAUSED) {

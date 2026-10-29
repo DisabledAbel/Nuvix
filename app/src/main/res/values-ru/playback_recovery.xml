@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Переподключение… Попытка %1$d из %2$d</string>
+    <string name="playback_choose_source">Выбрать другой разрешённый источник</string>
+    <string name="playback_view_information">Информация о потоке</string>
+</resources>
