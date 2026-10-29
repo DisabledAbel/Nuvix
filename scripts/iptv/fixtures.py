@@ -138,12 +138,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply((self.server.root / "a.ts").read_bytes(), "video/mp2t")
             elif mode in {"disconnect.ts", "stall.ts"} and count == 1:
                 data = (self.server.root / "a.ts").read_bytes()
+                self.protocol_version = "HTTP/1.1"
                 self.send_response(200)
                 self.send_header("Content-Type", "video/mp2t")
-                self.send_header("Content-Length", str(len(data) * 10))
+                # Live TS has no finite length. A fabricated length makes Media3's TS
+                # duration reader seek past the actual bytes before it can decode video.
+                # An unfinished chunked response preserves the intended transport fault
+                # without advertising a seekable file or an unreachable byte position.
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Connection", "close")
                 self.end_headers()
                 try:
+                    self.wfile.write(f"{len(data):x}\r\n".encode("ascii"))
                     self.wfile.write(data)
+                    self.wfile.write(b"\r\n")
                     self.wfile.flush()
                     if mode == "stall.ts":
                         # A genuine media load stalls after valid decoded video, until the viewer
@@ -153,6 +161,8 @@ class Handler(BaseHTTPRequestHandler):
                             readable, _, _ = select.select([self.connection], [], [], .25)
                             if readable and not self.connection.recv(1, socket.MSG_PEEK):
                                 break
+                    # Deliberately omit the terminating zero-length chunk: disconnect
+                    # is an interrupted load, while stall stays open for the watchdog.
                     self.connection.shutdown(socket.SHUT_RDWR)
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     pass

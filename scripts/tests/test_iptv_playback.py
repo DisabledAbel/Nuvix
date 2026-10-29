@@ -304,15 +304,20 @@ class RecoveryProviderTest(unittest.TestCase):
     def test_disconnect_delivers_media_before_truncated_body_then_recovers(self):
         import http.client
         with self.opener.open(self.server.base + "/recovery/disconnect.ts") as response:
+            self.assertIsNone(response.headers.get("Content-Length"))
+            self.assertEqual("chunked", response.headers["Transfer-Encoding"])
             with self.assertRaises(http.client.IncompleteRead) as error:
                 response.read()
-            self.assertEqual(0x47, error.exception.partial[0])
+            self.assertEqual((Path(self.directory.name) / "a.ts").read_bytes(), error.exception.partial)
         with self.opener.open(self.server.base + "/recovery/disconnect.ts") as response:
             self.assertEqual(0x47, response.read()[0])
 
     def test_stall_yields_valid_media_and_next_connection_recovers(self):
         with self.opener.open(self.server.base + "/recovery/stall.ts", timeout=.2) as response:
-            self.assertEqual(0x47, response.read(1)[0])
+            self.assertIsNone(response.headers.get("Content-Length"))
+            self.assertEqual("chunked", response.headers["Transfer-Encoding"])
+            media = (Path(self.directory.name) / "a.ts").read_bytes()
+            self.assertEqual(media, response.read(len(media)))
             with self.assertRaises(TimeoutError):
                 response.read()
         with self.opener.open(self.server.base + "/recovery/stall.ts") as response:
