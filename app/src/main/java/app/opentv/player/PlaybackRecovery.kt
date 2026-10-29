@@ -122,6 +122,7 @@ class PlaybackRecoveryMonitor(private val budget: RecoveryBudget, private val cl
     fun failure(category: RecoveryFailure, retryAfterMs: Long = 0) {
         if (canceled || epoch != budget.epoch || terminal || waitingUntil != null) return
         failure = category; healthySince = null; verifiedSince = null; budget.recoveredAt = null
+        budget.deferFor(retryAfterMs, clock())
         if (!category.retryable || budget.attempts >= policy.backoffMs.size) {
             terminal = true
             budget.record(RecoveryEvent.FAILED, clock()); budget.publish(RecoveryState.FAILED, clock(), category)
