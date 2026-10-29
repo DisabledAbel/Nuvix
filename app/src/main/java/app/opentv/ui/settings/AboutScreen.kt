@@ -6,6 +6,10 @@
 package app.opentv.ui.settings
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import app.opentv.diagnostics.CrashDiagnostics
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -34,9 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -103,6 +107,31 @@ fun AboutScreen(onBack: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Section("Updates") { app.opentv.update.UpdateSettingsControls() }
+        Spacer(Modifier.height(16.dp))
+        var lastCrash by remember { mutableStateOf(CrashDiagnostics.latest(context)) }
+        var lastSystemExit by remember { mutableStateOf(CrashDiagnostics.latestSystemExit(context)) }
+        Section("Crash diagnostics") {
+            Text("One app-private uncaught Java/Kotlin crash report. No automatic uploads or provider data. Native crashes and Android memory kills may not create a report.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(lastCrash ?: "No stored crash report. A crash may have been a system kill, native failure, or happened before diagnostics started.")
+            Text(lastSystemExit ?: "Android system-exit details are unavailable on this device.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    lastCrash = CrashDiagnostics.latest(context)
+                    lastSystemExit = CrashDiagnostics.latestSystemExit(context)
+                }) { Text("Refresh") }
+                OutlinedButton(enabled = lastCrash != null, onClick = {
+                    val report = lastCrash ?: return@OutlinedButton
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("Nuvix crash report", report))
+                    Toast.makeText(context, "Crash report copied. Review before sharing.", Toast.LENGTH_SHORT).show()
+                }) { Text("Copy report") }
+                OutlinedButton(enabled = lastCrash != null, onClick = {
+                    CrashDiagnostics.clear(context)
+                    lastCrash = null
+                }) { Text("Clear report") }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Section(stringResource(R.string.about_licence_links_title)) {
             LinkLine(
