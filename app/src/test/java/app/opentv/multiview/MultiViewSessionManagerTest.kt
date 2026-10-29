@@ -261,8 +261,11 @@ class MultiViewSessionManagerTest {
         val retained = f.player(1)
         f.manager.replace(id, 2); runCurrent()
         assertFalse(retained.recoveryAllowed!!.invoke())
-        f.player(2).fail(); runCurrent()
+        f.player(2).recoveryBudget!!.publish(app.opentv.player.RecoveryState.FAILED,
+            testScheduler.currentTime, app.opentv.player.RecoveryFailure.UNSUPPORTED)
+        f.player(2).fail(MultiViewFailureKind.UNSUPPORTED); runCurrent()
         assertEquals(1L, f.panel(1).channelId)
+        assertNotEquals(app.opentv.player.RecoveryState.FAILED, retained.recoveryBudget!!.snapshot.value.state)
         assertTrue(retained.recoveryAllowed!!.invoke())
         retained.recoveryReconnect!!.invoke(); runCurrent()
         assertEquals(1, retained.releases)
