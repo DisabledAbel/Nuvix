@@ -80,6 +80,7 @@ class AndroidMultiViewPlayer(
 ) : MultiViewPlayer {
     private var released = false
     private var recovery: Media3PlaybackRecovery? = null
+    private var recoveryBudget: RecoveryBudget? = null
     private var beginRecovery: (() -> Unit)? = null
     private var prepareJob: Job? = null
     private val http = OkHttpDataSource.Factory(httpClient)
@@ -98,7 +99,10 @@ class AndroidMultiViewPlayer(
     private val player = ExoPlayer.Builder(context, renderers)
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
             .setLoadErrorHandlingPolicy(object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy() {
-                override fun getRetryDelayMsFor(info: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo) = C.TIME_UNSET
+                override fun getRetryDelayMsFor(info: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                    recoveryBudget?.deferFor(PlaybackErrors.retryAfterMs(info.exception), android.os.SystemClock.elapsedRealtime())
+                    return C.TIME_UNSET
+                }
             }))
         .setTrackSelector(selector)
         .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(5_000, 15_000, 1_000, 2_000)
@@ -143,6 +147,7 @@ class AndroidMultiViewPlayer(
 
     override val managesRecovery = true
     override fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {
+        recoveryBudget = budget
         diagnostics.recoveryBudget = budget
         beginRecovery = {
             prepareJob = scope.launch {
@@ -185,7 +190,7 @@ class AndroidMultiViewPlayer(
         if (released) return
         released = true
         prepareJob?.cancel(); prepareJob = null
-        recovery?.close(); recovery = null; beginRecovery = null
+        recovery?.close(); recovery = null; beginRecovery = null; recoveryBudget = null
         surfaceOwner.clear()
         diagnostics.close()
         player.volume = 0f

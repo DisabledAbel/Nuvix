@@ -174,6 +174,14 @@ class PlaybackRecoveryTest {
         assertEquals(0L, f.budget.notBeforeMs)
     }
 
+    @Test fun `exhaustion retains the final provider cooldown for an explicit retry`() {
+        val f = Fixture(); f.budget.attempts = 3
+        f.failure(RecoveryFailure.RATE_LIMIT, 120_000)
+        assertEquals(RecoveryAction.FAIL, f.tick())
+        f.budget.reset()
+        assertEquals(120_000L, f.budget.notBeforeMs)
+    }
+
     @Test fun `unexpected ended stream gets bounded recovery`() {
         val f = Fixture(); f.tick(sample = RecoverySample(true, ended = true))
         assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(2_000, RecoverySample(true, ended = true)))
