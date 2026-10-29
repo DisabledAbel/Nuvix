@@ -46,6 +46,8 @@ object PlaybackErrors {
             PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> RecoveryFailure.LIVE_WINDOW
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> RecoveryFailure.SOURCE_READ
             PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> RecoveryFailure.MISSING_STREAM
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
             in 3000..3999 -> RecoveryFailure.UNSUPPORTED
             in 4000..4999 -> RecoveryFailure.DECODER
             in 5000..5999 -> RecoveryFailure.DEVICE_RESOURCE

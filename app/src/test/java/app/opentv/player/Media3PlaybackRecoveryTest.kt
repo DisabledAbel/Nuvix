@@ -133,6 +133,8 @@ class Media3PlaybackRecoveryTest {
         assertEquals(RecoveryFailure.DRM, PlaybackErrors.recoveryFailure(PlaybackException("private", null, 6001)))
         assertEquals(RecoveryFailure.DECODER, PlaybackErrors.recoveryFailure(PlaybackException("private", null, 4001)))
         assertEquals(RecoveryFailure.UNSUPPORTED, PlaybackErrors.recoveryFailure(PlaybackException("private", null, 3004)))
+        assertEquals(RecoveryFailure.UNSUPPORTED, PlaybackErrors.recoveryFailure(
+            PlaybackException("private", null, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)))
         assertEquals(0L, PlaybackErrors.retryAfterMs(http(429, "private")))
         assertEquals(5_000L, PlaybackErrors.retryAfterMs(http(429, "Thu, 01 Jan 1970 00:00:05 GMT"), 0))
     }
