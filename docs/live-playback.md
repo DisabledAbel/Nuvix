@@ -227,7 +227,7 @@ READY alone does not verify recovery.
 Short buffering is left to Media3. Startup allows at least 45 seconds, or the configured startup
 reservoir plus 30 seconds. After successful playback, buffering allows at least 30 seconds, or the
 rebuffer reservoir plus 15 seconds. Thirty seconds without progress and three meaningful rebuffers
-totaling at least the rebuffer threshold within two minutes also qualify. Sliding live-window
+totaling at least the post-playback buffering allowance within two minutes also qualify. Sliding live-window
 rollbacks rebase progress. Seeks/discontinuities receive grace; rewind far behind the live edge is
 excluded. Pause, audio-focus suppression, lifecycle suspension, Sports ownership, pending provider
 approval and obsolete requested-channel identities block actions.

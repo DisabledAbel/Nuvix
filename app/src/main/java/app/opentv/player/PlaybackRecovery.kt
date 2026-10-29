@@ -43,13 +43,27 @@ data class RecoveryPolicy(
 /** Kept by the viewing owner across controlled player replacement, never persisted. Main thread only. */
 class RecoveryBudget(val policy: RecoveryPolicy = RecoveryPolicy(), private val diagnosticsEnabled: () -> Boolean = { true }) {
     private var account: String? = null
-    internal var notBeforeMs = 0L
+    private val _notBefore = MutableStateFlow(0L)
+    internal val cooldown = _notBefore.asStateFlow()
+    internal var notBeforeMs: Long
+        get() = _notBefore.value
+        private set(value) { _notBefore.value = value }
+    private val _readinessDeadline = MutableStateFlow(0L)
+    internal val readinessDeadline = _readinessDeadline.asStateFlow()
+    internal fun beginReadinessWindow(now: Long) {
+        _readinessDeadline.value = maxOf(now, notBeforeMs).let { it + MANAGED_READINESS_MS.coerceAtMost(Long.MAX_VALUE - it) }
+    }
+    private companion object { const val MANAGED_READINESS_MS = 240_000L }
     internal fun attachAccount(accountKey: String) {
         if (account != null && account != accountKey) notBeforeMs = 0
         account = accountKey
     }
     internal fun deferFor(delayMs: Long, now: Long) {
         notBeforeMs = maxOf(notBeforeMs, now + delayMs.coerceIn(0, Long.MAX_VALUE - now))
+        if (_readinessDeadline.value > 0 && delayMs > 0) {
+            _readinessDeadline.value = maxOf(_readinessDeadline.value,
+                notBeforeMs + MANAGED_READINESS_MS.coerceAtMost(Long.MAX_VALUE - notBeforeMs))
+        }
     }
     internal var epoch = 0L
     internal var attempts = 0
@@ -61,6 +75,7 @@ class RecoveryBudget(val policy: RecoveryPolicy = RecoveryPolicy(), private val 
     val snapshot = _snapshot.asStateFlow()
     fun reset() {
         epoch++
+        _readinessDeadline.value = 0
         attempts = 0; recoveringSince = null; lastSuccess = null; recoveredAt = null; entries.clear()
         _snapshot.value = RecoverySnapshot(maximum = policy.backoffMs.size)
     }
@@ -120,11 +135,11 @@ class PlaybackRecoveryMonitor(private val budget: RecoveryBudget, private val cl
         recentBuffers.clear()
     }
     fun failure(category: RecoveryFailure, retryAfterMs: Long = 0) {
-        if (canceled || epoch != budget.epoch || terminal || waitingUntil != null) return
+        if (canceled || epoch != budget.epoch || terminal || (waitingUntil != null && category.retryable)) return
         failure = category; healthySince = null; verifiedSince = null; budget.recoveredAt = null
         budget.deferFor(retryAfterMs, clock())
         if (!category.retryable || budget.attempts >= policy.backoffMs.size) {
-            terminal = true
+            terminal = true; waitingUntil = null
             budget.record(RecoveryEvent.FAILED, clock()); budget.publish(RecoveryState.FAILED, clock(), category)
         } else {
             if (budget.recoveringSince == null) budget.recoveringSince = clock()
@@ -145,7 +160,7 @@ class PlaybackRecoveryMonitor(private val budget: RecoveryBudget, private val cl
              else sample.positionMs - old.positionMs in 100..10_000 || sample.renderedFrames > old.renderedFrames)
         previous = sample
         // Position can jump backwards on a sliding live playlist: rebase without calling it a stall.
-        if (sample.ready && old != null && sample.positionMs < old.positionMs) lastProgress = now
+        if (sample.ready && !sample.videoExpected && old != null && sample.positionMs < old.positionMs) lastProgress = now
         if (progress) {
             lastProgress = now; played = true
             if (verifiedSince == null) verifiedSince = now
@@ -167,7 +182,7 @@ class PlaybackRecoveryMonitor(private val budget: RecoveryBudget, private val cl
             healthySince = null; verifiedSince = null
         }
         waitingUntil?.let { due ->
-            if (now < due) return null
+            if (now < maxOf(due, budget.notBeforeMs)) return null
             waitingUntil = null; budget.attempts++
             started = now; lastProgress = now; bufferingSince = null; verifiedSince = null; healthySince = null
             budget.record(RecoveryEvent.STARTED, now)

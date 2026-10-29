@@ -63,7 +63,7 @@ class MultiViewSessionManagerTest {
         }
     }
 
-    private class FakePlayer(
+    private open class FakePlayer(
         val listener: MultiViewPlayer.Listener,
         private val onRelease: () -> Unit,
         private val onVolumeChange: () -> Unit = {},
@@ -87,6 +87,27 @@ class MultiViewSessionManagerTest {
         fun ready() = listener.ready()
         fun fail(kind: MultiViewFailureKind = MultiViewFailureKind.NETWORK) =
             listener.failed(MultiViewFailure(kind, "Test playback failure"))
+    }
+
+    /** Only managed-path tests use this fake; legacy startup timeout coverage stays unchanged. */
+    private class ManagedPlayer(listener: MultiViewPlayer.Listener, onRelease: () -> Unit,
+        onVolumeChange: () -> Unit, private val clock: () -> Long, private val initialDelayMs: Long = 0
+    ) : FakePlayer(listener, onRelease, onVolumeChange) {
+        override val managesRecovery = true
+        var preparedAt: Long? = null
+        private var preparation: DeferredPanelPreparation? = null
+        override fun configureRecovery(scope: kotlinx.coroutines.CoroutineScope, budget: app.opentv.player.RecoveryBudget,
+            allowed: () -> Boolean, reconnect: () -> Unit) {
+            super.configureRecovery(scope, budget, allowed, reconnect)
+            preparation = DeferredPanelPreparation(scope, budget, clock, allowed) { preparedAt = clock() }
+        }
+        override fun start(channel: ResolvedMultiViewChannel) {
+            super.start(channel)
+            if (initialDelayMs > 0) recoveryBudget!!.deferFor(initialDelayMs, clock())
+            preparation!!.resume()
+        }
+        override fun onRecoveryAllowedChanged() { preparation?.resume() }
+        override fun release() { preparation?.close(); super.release() }
     }
 
     private class FakeHardware(maximum: Int = 4) : MultiViewHardware {
@@ -116,6 +137,8 @@ class MultiViewSessionManagerTest {
         val scope: TestScope,
         maximum: Int? = 4,
         hardwareMaximum: Int = 4,
+        managed: Boolean = false,
+        initialManagedDelayMs: Long = 0,
         val sourceForChannel: (Long) -> Long = { 1 },
         resolver: (suspend (Long) -> ResolvedMultiViewChannel)? = null,
         validateAdmission: suspend (ResolvedMultiViewChannel, ReservationToken?) -> Unit = { _, _ -> },
@@ -143,11 +166,15 @@ class MultiViewSessionManagerTest {
                     failNextAllocation = false
                     error("Test allocation failed")
                 }
-                FakePlayer(listener, onRelease = {
+                val onRelease = {
                     reservationsAtPlayerRelease += connections.allocator.snapshots.value.sumOf { it.locallyReserved }
-                }, onVolumeChange = {
+                    Unit
+                }
+                val onVolumeChange = {
                     maximumAudiblePlayers = maxOf(maximumAudiblePlayers, players.count { it.currentVolume > 0f })
-                }).also {
+                }
+                (if (managed) ManagedPlayer(listener, onRelease, onVolumeChange, { scope.testScheduler.currentTime },
+                    if (players.isEmpty()) initialManagedDelayMs else 0) else FakePlayer(listener, onRelease, onVolumeChange)).also {
                     players += it
                     maximumAllocatedPlayers = maxOf(maximumAllocatedPlayers, players.count { player -> player.releases == 0 })
                 }
@@ -198,6 +225,102 @@ class MultiViewSessionManagerTest {
         runCurrent()
         assertTrue(f.players.all { it.releases == 1 })
         assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+    }
+
+    @Test fun focusRestorationResumesManagedPreparationAfterTheAllowedCheckWasInterrupted() = runTest {
+        val f = Fixture(this, managed = true)
+        f.addReady(1)
+        f.audio.callback!!.invoke(false)
+        f.manager.add(2); runCurrent()
+        val waiting = f.player(2) as ManagedPlayer
+        assertNull(waiting.preparedAt)
+        f.audio.callback!!.invoke(true); runCurrent()
+        assertEquals(0L, waiting.preparedAt)
+        waiting.ready(); runCurrent()
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(2).status)
+        f.manager.release()
+    }
+
+    @Test fun managedStartupRetainsTheFull240SecondReadinessWindow() = runTest {
+        val f = Fixture(this, managed = true)
+        f.manager.add(1); runCurrent()
+        val player = f.player(1) as ManagedPlayer
+        assertEquals(0L, player.preparedAt)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(0, player.releases)
+        advanceTimeBy(238_999); runCurrent()
+        assertEquals(0, player.releases)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(MultiViewPanelStatus.FAILED, f.panel(1).status)
+        assertEquals(1, player.releases)
+        assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+        f.manager.release()
+    }
+
+    @Test fun managedDeferredPreparationOutlasts240SecondsWithoutBlockingAnotherPanel() = runTest {
+        val f = Fixture(this, managed = true, initialManagedDelayMs = 300_000, sourceForChannel = { it })
+        f.connections.register(2)
+        f.manager.add(1); runCurrent()
+        val delayed = f.player(1) as ManagedPlayer
+        assertNull(delayed.preparedAt)
+        f.addReady(2)
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(2).status)
+        advanceTimeBy(240_001); runCurrent()
+        assertEquals(0, delayed.releases); assertNull(delayed.preparedAt)
+        advanceTimeBy(59_999); runCurrent()
+        assertEquals(300_000L, delayed.preparedAt)
+        delayed.ready(); runCurrent()
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(1).status)
+        assertEquals(0, f.player(2).releases)
+        f.manager.release()
+    }
+
+    @Test fun lateRetryAfterExtendsTheReadinessDeadlineAndReleasesAdmission() = runTest {
+        val f = Fixture(this, managed = true, sourceForChannel = { it })
+        f.connections.register(2)
+        f.manager.add(1); runCurrent()
+        advanceTimeBy(239_000); runCurrent()
+        val first = f.player(1)
+        first.recoveryBudget!!.deferFor(600_000, testScheduler.currentTime); runCurrent()
+        f.addReady(2)
+        advanceTimeBy(2_000); runCurrent()
+        assertEquals(0, first.releases)
+        advanceTimeBy(598_000); runCurrent()
+        first.ready(); runCurrent()
+        assertEquals(MultiViewPanelStatus.PLAYING, f.panel(1).status)
+        assertEquals(0, f.player(2).releases)
+        f.manager.release()
+    }
+
+    @Test fun cooldownBeforeAdmissionRechecksCapacityAndKeepsRecordingsReserved() = runTest {
+        val f = Fixture(this, maximum = 2, managed = true, sourceForChannel = { it })
+        f.connections.register(2)
+        val id = f.addReady(1)
+        f.player(1).recoveryBudget!!.deferFor(300_000, testScheduler.currentTime)
+        f.manager.retry(id); runCurrent()
+        f.addReady(2) // Admission cannot remain held by the first panel's cooldown.
+        val recording = (f.connections.reserve(ConnectionRequest("dvr", 1, 1, ConnectionPurpose.RECORDING)) as ReservationResult.Reserved).token
+        f.connections.register(1, maximum = 1)
+        advanceTimeBy(300_000); runCurrent()
+        assertEquals(2, f.players.size)
+        assertNotNull(f.connections.allocator.reservationState(recording))
+        assertEquals(MultiViewFailureKind.PROVIDER_LIMIT, f.panel(1).failureKind)
+        assertEquals(0, f.player(2).releases)
+        f.manager.release(); f.connections.release(recording)
+    }
+
+    @Test fun aNewGenerationCancelsAnUnadmittedCooldownBeforeItCanRestartTheOldChannel() = runTest {
+        val f = Fixture(this, managed = true, sourceForChannel = { it })
+        f.connections.register(3)
+        val id = f.addReady(1)
+        f.player(1).recoveryBudget!!.deferFor(300_000, testScheduler.currentTime)
+        f.manager.retry(id); runCurrent()
+        f.manager.replace(id, 3); runCurrent()
+        f.player(3).ready(); runCurrent()
+        advanceTimeBy(300_000); runCurrent()
+        assertEquals(3L, f.state.panels.single().channelId)
+        assertEquals(2, f.players.size)
+        f.manager.release()
     }
 
     @Test fun failedCloseRetainsAccountAndDecoderCapacityWithoutRestartingOtherPanels() = runTest {

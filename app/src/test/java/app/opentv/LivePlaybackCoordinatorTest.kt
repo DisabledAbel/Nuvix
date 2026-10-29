@@ -15,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -145,22 +146,66 @@ class LivePlaybackCoordinatorTest {
         assertThat(releases.last()).isEqualTo(2)
     }
 
-    @Test fun `recovery closes the engine and reservation before fresh URL resolution`() = runTest {
+    @Test fun `recovery runs the engine release hook before fresh URL resolution`() = runTest {
         val engines = mutableListOf<FakeEngine>()
-        var releasedReservation = false
+        var engineReleaseHookRan = false
         var resolvingRecovery = false
         val session = LivePlaybackCoordinator(backgroundScope, { channel(it) }, {
             if (resolvingRecovery) {
                 assertThat(engines.first().releases).isEqualTo(1)
-                assertThat(releasedReservation).isTrue()
+                assertThat(engineReleaseHookRan).isTrue()
             }
             resolved(it)
-        }, { FakeEngine().also(engines::add) }, afterEngineRelease = { releasedReservation = true })
+        }, { FakeEngine().also(engines::add) }, afterEngineRelease = { engineReleaseHookRan = true })
         session.openChannel(1); runCurrent(); resolvingRecovery = true
         session.reconnect(); runCurrent()
         assertThat(engines).hasSize(2)
         assertThat(session.currentChannel.value?.id).isEqualTo(1)
         assertThat(engines.last().requests.single().title).isEqualTo("Channel 1")
+        session.destroy()
+    }
+
+    @Test fun `pausing pending recovery without a requested id cancels backoff and offers Retry`() = runTest {
+        val engines = mutableListOf<FakeEngine>()
+        val budget = app.opentv.player.RecoveryBudget()
+        var failResolution = false
+        var resolutions = 0
+        val session = LivePlaybackCoordinator(backgroundScope, { channel(it) }, {
+            resolutions++
+            if (failResolution) throw java.net.SocketTimeoutException("Synthetic timeout")
+            resolved(it)
+        }, { FakeEngine().also(engines::add) }, recoveryBudget = budget, clock = { testScheduler.currentTime })
+        session.openChannel(1); runCurrent()
+        budget.attempts = 2; failResolution = true
+        session.reconnect(); runCurrent()
+        assertThat(budget.snapshot.value.state).isEqualTo(app.opentv.player.RecoveryState.WAITING)
+        assertThat(session.state.value).isInstanceOf(PlayerController.State.Buffering::class.java)
+        session.setPaused(true)
+        assertThat((session.state.value as PlayerController.State.Error).canRetry).isTrue()
+        assertThat(budget.snapshot.value.state).isEqualTo(app.opentv.player.RecoveryState.CANCELED)
+        advanceTimeBy(20_000); runCurrent()
+        assertThat(resolutions).isEqualTo(2)
+        failResolution = false
+        session.retry(); runCurrent()
+        assertThat(session.state.value).isInstanceOf(PlayerController.State.Playing::class.java)
+        session.destroy()
+    }
+
+    @Test fun `provider interruption replaces pending recovery status with canceled`() = runTest {
+        val budget = app.opentv.player.RecoveryBudget()
+        var failResolution = false
+        val session = LivePlaybackCoordinator(backgroundScope, { channel(it) }, {
+            if (failResolution) throw java.net.SocketTimeoutException("Synthetic timeout")
+            resolved(it)
+        }, { FakeEngine() }, recoveryBudget = budget, clock = { testScheduler.currentTime })
+        session.openChannel(1); runCurrent()
+        failResolution = true; session.reconnect(); runCurrent()
+        session.interrupt("Provider settings changed. Retry.")
+        assertThat(budget.snapshot.value.state).isEqualTo(app.opentv.player.RecoveryState.CANCELED)
+        assertThat(budget.snapshot.value.history.last().event).isEqualTo(app.opentv.player.RecoveryEvent.CANCELED)
+        assertThat(session.state.value).isInstanceOf(PlayerController.State.Error::class.java)
+        advanceTimeBy(60_000); runCurrent()
+        assertThat(budget.snapshot.value.state).isEqualTo(app.opentv.player.RecoveryState.CANCELED)
         session.destroy()
     }
 

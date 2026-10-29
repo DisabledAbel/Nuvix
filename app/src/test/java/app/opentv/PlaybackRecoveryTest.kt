@@ -75,6 +75,28 @@ class PlaybackRecoveryTest {
         assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(2_000, RecoverySample(true, buffering = true)))
     }
 
+    @Test fun `backward video positions cannot hide a frozen renderer`() {
+        val f = Fixture()
+        f.tick(0, RecoverySample(true, ready = true, positionMs = 100_000, renderedFrames = 5, videoExpected = true))
+        repeat(30) { index ->
+            assertNull(f.tick(1_000, RecoverySample(true, ready = true, positionMs = 99_000L - index * 1_000,
+                renderedFrames = 5, videoExpected = true)))
+        }
+        assertEquals(RecoveryState.WAITING, f.budget.snapshot.value.state)
+        assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(2_000, RecoverySample(true, ready = true,
+            positionMs = 50_000, renderedFrames = 5, videoExpected = true)))
+    }
+
+    @Test fun `permanent failure overrides an already scheduled stall retry`() {
+        val f = Fixture(); f.failure(RecoveryFailure.STALL)
+        f.failure(RecoveryFailure.AUTHENTICATION)
+        assertEquals(RecoveryState.FAILED, f.budget.snapshot.value.state)
+        assertEquals(RecoveryFailure.AUTHENTICATION, f.budget.snapshot.value.failure)
+        assertEquals(RecoveryAction.FAIL, f.tick(2_000))
+        assertEquals(0, f.budget.snapshot.value.attempts)
+        assertNull(f.tick(60_000))
+    }
+
     @Test fun `live window position rollback rebases watchdog`() {
         val f = Fixture()
         f.tick(0, RecoverySample(true, ready = true, positionMs = 100_000))
@@ -180,6 +202,13 @@ class PlaybackRecoveryTest {
         assertEquals(RecoveryAction.FAIL, f.tick())
         f.budget.reset()
         assertEquals(120_000L, f.budget.notBeforeMs)
+    }
+
+    @Test fun `late provider cooldown extends an already pending stall retry`() {
+        val f = Fixture(); f.failure(RecoveryFailure.STALL)
+        f.budget.deferFor(120_000, f.now)
+        assertNull(f.tick(2_000))
+        assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(118_000))
     }
 
     @Test fun `unexpected ended stream gets bounded recovery`() {

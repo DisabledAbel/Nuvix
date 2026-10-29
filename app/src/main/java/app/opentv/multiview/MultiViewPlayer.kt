@@ -29,9 +29,6 @@ import app.opentv.player.RecoveryBudget
 import app.opentv.player.Media3PlaybackRecovery
 import app.opentv.player.BufferPolicy
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 /** Resolved URLs remain in memory for this attempt only, never in presentation/preset state. */
@@ -56,6 +53,7 @@ interface MultiViewPlayer {
     }
     val managesRecovery: Boolean get() = false
     fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {}
+    fun onRecoveryAllowedChanged() {}
     fun start(channel: ResolvedMultiViewChannel)
     fun setVolume(volume: Float)
     fun release()
@@ -81,8 +79,8 @@ class AndroidMultiViewPlayer(
     private var released = false
     private var recovery: Media3PlaybackRecovery? = null
     private var recoveryBudget: RecoveryBudget? = null
-    private var beginRecovery: (() -> Unit)? = null
-    private var prepareJob: Job? = null
+    private var preparation: DeferredPanelPreparation? = null
+    private var started = false
     private val http = OkHttpDataSource.Factory(httpClient)
     private val selector = DefaultTrackSelector(context).apply {
         parameters = buildUponParameters().setMaxVideoSize(1920, 1080)
@@ -149,29 +147,23 @@ class AndroidMultiViewPlayer(
     override fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {
         recoveryBudget = budget
         diagnostics.recoveryBudget = budget
-        beginRecovery = {
-            prepareJob = scope.launch {
-                val now = android.os.SystemClock.elapsedRealtime()
-                val remaining = budget.notBeforeMs - now
-                if (remaining > 0) {
-                    budget.publish(app.opentv.player.RecoveryState.WAITING, now, app.opentv.player.RecoveryFailure.RATE_LIMIT)
-                    delay(remaining)
-                }
-                if (released || !allowed()) return@launch
-                recovery = Media3PlaybackRecovery(player, scope, budget, allowed,
-                    { BufferPolicy(5_000, 15_000, 1_000, 2_000) }, reconnect,
-                    failed = { failure -> listener.failed(MultiViewFailure(
-                        when (failure) {
-                            app.opentv.player.RecoveryFailure.DECODER -> MultiViewFailureKind.DECODER
-                            app.opentv.player.RecoveryFailure.UNSUPPORTED -> MultiViewFailureKind.UNSUPPORTED
-                            app.opentv.player.RecoveryFailure.CONNECTION_LIMIT -> MultiViewFailureKind.PROVIDER_LIMIT
-                            else -> MultiViewFailureKind.STREAM
-                        }, PlaybackErrors.describeRecovery(failure))) })
-                player.prepare()
-                player.playWhenReady = true
-            }
+        preparation?.close()
+        preparation = DeferredPanelPreparation(scope, budget, android.os.SystemClock::elapsedRealtime, allowed) {
+            recovery = Media3PlaybackRecovery(player, scope, budget, allowed,
+                { BufferPolicy(5_000, 15_000, 1_000, 2_000) }, reconnect,
+                failed = { failure -> listener.failed(MultiViewFailure(
+                    when (failure) {
+                        app.opentv.player.RecoveryFailure.DECODER -> MultiViewFailureKind.DECODER
+                        app.opentv.player.RecoveryFailure.UNSUPPORTED -> MultiViewFailureKind.UNSUPPORTED
+                        app.opentv.player.RecoveryFailure.CONNECTION_LIMIT -> MultiViewFailureKind.PROVIDER_LIMIT
+                        else -> MultiViewFailureKind.STREAM
+                    }, PlaybackErrors.describeRecovery(failure))) })
+            player.prepare()
+            player.playWhenReady = true
         }
     }
+
+    override fun onRecoveryAllowedChanged() { if (started && !released) preparation?.resume() }
 
     override fun start(channel: ResolvedMultiViewChannel) {
         check(!released)
@@ -179,8 +171,9 @@ class AndroidMultiViewPlayer(
         val item = MediaItem.Builder().setMediaId(java.util.UUID.randomUUID().toString()).setUri(channel.url).build()
         diagnostics.beginSession(DiagnosticProtocol.identify(item), item.mediaId)
         player.setMediaItem(item)
-        val start = beginRecovery
-        if (start != null) start() else {
+        started = true
+        val deferred = preparation
+        if (deferred != null) deferred.resume() else {
             player.prepare()
             player.playWhenReady = true
         }
@@ -189,8 +182,8 @@ class AndroidMultiViewPlayer(
     override fun release() {
         if (released && player.isReleased) return
         released = true
-        prepareJob?.cancel(); prepareJob = null
-        recovery?.close(); recovery = null; beginRecovery = null; recoveryBudget = null
+        preparation?.close(); preparation = null
+        recovery?.close(); recovery = null; recoveryBudget = null
         surfaceOwner.clear()
         diagnostics.close()
         player.volume = 0f

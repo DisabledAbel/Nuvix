@@ -303,7 +303,10 @@ fun PlayerScreen(
     }
 
     if (diagnosticsVisible && diagnosticsEnabled && !inPip) {
-        controller?.let { StreamInformation(it.diagnostics) { diagnosticsVisible = false; reveal() } }
+        val currentController = controller
+        if (currentController != null) StreamInformation(currentController.diagnostics) { diagnosticsVisible = false; reveal() }
+        else StreamInformation(app.opentv.player.DiagnosticSnapshot(recovery = recovery, state = recovery.state.name),
+            onClear = liveSession::clearDiagnostics, onClose = { diagnosticsVisible = false; reveal() })
     }
 
     Box(
@@ -450,10 +453,10 @@ fun PlayerScreen(
                         )
                         Spacer(Modifier.height(24.dp))
                         Button(onClick = liveSession::retry) { Text(stringResource(R.string.common_try_again)) }
-                        if (variants.size > 1) Button(onClick = { panel = Panel.QUALITY; controlsVisible = true }) {
+                        if (variants.size > 1 && controller != null) Button(onClick = { panel = Panel.QUALITY; controlsVisible = true }) {
                             Text(stringResource(R.string.playback_choose_source))
                         }
-                        if (diagnosticsEnabled && controller != null) Button(onClick = { diagnosticsVisible = true }) {
+                        if (diagnosticsEnabled) Button(onClick = { diagnosticsVisible = true }) {
                             Text(stringResource(R.string.playback_view_information))
                         }
                         Button(onClick = onBack) { Text(stringResource(R.string.common_back)) }

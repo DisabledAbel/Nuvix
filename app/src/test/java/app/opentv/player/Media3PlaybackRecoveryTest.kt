@@ -33,6 +33,8 @@ class Media3PlaybackRecoveryTest {
         var playWhenReady = true
         var suppression = Player.PLAYBACK_SUPPRESSION_REASON_NONE
         var position = 0L
+        var videoCounters: androidx.media3.exoplayer.DecoderCounters? = null
+        var videoFormat: androidx.media3.common.Format? = null
         var error: androidx.media3.exoplayer.ExoPlaybackException? = null
         val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader, arrayOf(ExoPlayer::class.java)) { proxy, method, args ->
             when (method.name) {
@@ -43,7 +45,8 @@ class Media3PlaybackRecoveryTest {
                 "getPlaybackSuppressionReason" -> suppression
                 "getCurrentPosition" -> position
                 "getPlayerError" -> error
-                "getVideoDecoderCounters", "getVideoFormat" -> null
+                "getVideoDecoderCounters" -> videoCounters
+                "getVideoFormat" -> videoFormat
                 "getTotalBufferedDuration" -> 0L
                 "getCurrentLiveOffset" -> C.TIME_UNSET
                 "isCommandAvailable" -> true
@@ -117,6 +120,32 @@ class Media3PlaybackRecoveryTest {
         f.fake.fail(); f.advance(2_000)
         assertEquals(listOf("stop", "seek", "prepare"), f.fake.operations)
         assertEquals(1, f.budget.snapshot.value.attempts); f.adapter.close()
+    }
+
+    @Test fun `moving media position with frozen video counters triggers the adapter watchdog`() = runTest {
+        val f = Fixture(this)
+        f.fake.state = Player.STATE_READY
+        f.fake.videoCounters = androidx.media3.exoplayer.DecoderCounters().apply { renderedOutputBufferCount = 10 }
+        f.fake.videoFormat = androidx.media3.common.Format.Builder().setSampleMimeType("video/avc").build()
+        runCurrent()
+        repeat(32) { f.fake.position += 1_000; f.advance(1_000) }
+        assertEquals(listOf("stop", "seek", "prepare"), f.fake.operations)
+        assertEquals(1, f.budget.snapshot.value.attempts); f.adapter.close()
+    }
+
+    @Test fun `advancing video counters keep healthy playback free of adapter recovery`() = runTest {
+        val f = Fixture(this)
+        f.fake.state = Player.STATE_READY
+        f.fake.videoCounters = androidx.media3.exoplayer.DecoderCounters()
+        f.fake.videoFormat = androidx.media3.common.Format.Builder().setSampleMimeType("video/avc").build()
+        runCurrent()
+        repeat(90) {
+            f.fake.position += 1_000
+            f.fake.videoCounters!!.renderedOutputBufferCount += 15
+            f.advance(1_000)
+        }
+        assertTrue(f.fake.operations.isEmpty()); assertEquals(0, f.reconnects)
+        assertEquals(RecoveryState.HEALTHY, f.budget.snapshot.value.state); f.adapter.close()
     }
 
     @Test fun `stale error callback does not retry another request`() = runTest {

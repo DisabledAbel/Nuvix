@@ -47,6 +47,7 @@ class Provider(ThreadingHTTPServer):
         self.peak = 0
         self.requests = 0
         self.recovery_requests = {}
+        self.rate_request_times_ms = []
         super().__init__(("127.0.0.1", port), Handler)
 
     @property
@@ -122,6 +123,9 @@ class Handler(BaseHTTPRequestHandler):
             with self.server.lock:
                 count = self.server.recovery_requests.get(mode, 0) + 1
                 self.server.recovery_requests[mode] = count
+                if mode == "rate.ts":
+                    self.server.rate_request_times_ms.append(time.monotonic_ns() // 1_000_000)
+                    self.server.rate_request_times_ms = self.server.rate_request_times_ms[-16:]
             if mode == "rate.ts" and count == 1:
                 self.send_response(429)
                 self.send_header("Retry-After", "3")
@@ -195,7 +199,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/stats":
             with self.server.lock:
                 self.reply({"active": self.server.active, "peak": self.server.peak,
-                            "requests": self.server.requests})
+                            "requests": self.server.requests, "rate_request_times_ms": self.server.rate_request_times_ms})
         else:
             # Xtream-shaped paths map only known synthetic identities and stream IDs.
             aliases = {f"/live/fixture/fixture/{i}.{ext}": f"/{c}/index.m3u8" if ext == "m3u8" else f"/{c}.ts"

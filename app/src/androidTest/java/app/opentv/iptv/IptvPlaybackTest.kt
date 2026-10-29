@@ -309,7 +309,7 @@ class IptvPlaybackTest {
         }
         if (terminal) {
             val requests = JSONObject(body("/stats").decodeToString()).getInt("requests")
-            SystemClock.sleep(4_000)
+            SystemClock.sleep(12_000)
             assertEquals("An offline stream must stop retrying", requests + 1,
                 JSONObject(body("/stats").decodeToString()).getInt("requests"))
         }
@@ -320,7 +320,13 @@ class IptvPlaybackTest {
     @Test fun automaticStallRecoveryRenders() = automaticRecovery("stall", 1)
     @Test fun automaticControlledReconnectRenders() = automaticRecovery("reconnect", 2)
     @Test fun automaticOfflineRecoveryExhausts() = automaticRecovery("offline", 3, terminal = true)
-    @Test fun automaticRateLimitRecoveryRenders() = automaticRecovery("rate", 1)
+    @Test fun automaticRateLimitRecoveryRenders() {
+        automaticRecovery("rate", 1)
+        val requests = JSONObject(body("/stats").decodeToString()).getJSONArray("rate_request_times_ms")
+        assertTrue("The provider must observe the initial request and retry", requests.length() >= 2)
+        assertTrue("Retry-After must delay the second provider request by at least 3000 ms",
+            requests.getLong(1) - requests.getLong(0) >= 3_000)
+    }
     @Test fun delayedResponseDoesNotReconnect() = automaticRecovery("slow", 0)
 
     private fun body(path: String): ByteArray = http.newCall(Request.Builder().url(base + path).build()).execute().use {

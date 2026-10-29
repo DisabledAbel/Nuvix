@@ -55,6 +55,30 @@ class StreamInformationTest {
         assertThat(detailed["Available bandwidth (estimate)"]).isEqualTo("Unavailable")
         assertThat(diagnosticRows(DiagnosticSnapshot(), true, false).toMap()).doesNotContainKey("Audio codec")
     }
+    @Test fun `recovery-only diagnostics have unique row keys and work without a controller`() {
+        val budget = RecoveryBudget()
+        repeat(3) { budget.record(RecoveryEvent.STARTED, it.toLong()) }
+        budget.publish(RecoveryState.FAILED, 3, RecoveryFailure.NETWORK)
+        settings.setDiagnosticsDetailed(true)
+        val snapshot = DiagnosticSnapshot(state = "Failed", recovery = budget.snapshot.value)
+        val rows = diagnosticRows(snapshot, true, true)
+        assertThat(rows.map { it.first }.distinct()).hasSize(rows.size)
+        assertThat(rows.filter { it.first.startsWith("Recovery event") }.map { it.first })
+            .containsExactly("Recovery event 1", "Recovery event 2", "Recovery event 3").inOrder()
+        var cleared = false
+        var closed = false
+        compose.setContent { MaterialTheme {
+            StreamInformation(snapshot, onClear = { budget.clearHistory(); cleared = true }, onClose = { closed = true })
+        } }
+        compose.onNodeWithText("Stream Information").assertExists()
+        compose.onNodeWithText("Close").assertIsFocused()
+        select("Clear")
+        assertThat(cleared).isTrue()
+        assertThat(budget.snapshot.value.history).isEmpty()
+        select("Close")
+        assertThat(closed).isTrue()
+    }
+
     /** Checks: hidden until opened focus close and back never mutate playback or add listeners. */
     @Test fun `hidden until opened focus close and back never mutate playback or add listeners`() {
         val fake = DiagnosticPlayer().apply { state = Player.STATE_READY; playing = true }
