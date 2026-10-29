@@ -287,7 +287,19 @@ class RecoveryProviderTest(unittest.TestCase):
             self.assertEqual(503, error.exception.code)
         with self.assertRaises(urllib.error.HTTPError) as error:
             self.opener.open(self.server.base + "/recovery/rate.ts")
+        self.assertEqual(429, error.exception.code)
         self.assertEqual("3", error.exception.headers["Retry-After"])
+
+    def test_rate_request_timestamps_are_monotonic_milliseconds_in_stats(self):
+        with patch("iptv.fixtures.time.monotonic_ns", return_value=123_000_000_000) as clock:
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                self.opener.open(self.server.base + "/recovery/rate.ts")
+            self.assertEqual(429, error.exception.code)
+            clock.return_value = 126_000_000_000
+            with self.opener.open(self.server.base + "/recovery/rate.ts") as response:
+                self.assertEqual(0x47, response.read()[0])
+        with self.opener.open(self.server.base + "/stats") as response:
+            self.assertEqual([123_000, 126_000], json.load(response)["rate_request_times_ms"])
 
     def test_disconnect_delivers_media_before_truncated_body_then_recovers(self):
         import http.client

@@ -42,18 +42,24 @@ import java.util.Locale
 /** A separate focus window prevents remote keys from reaching channel/seek handlers underneath. */
 @Composable
 fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
-    val settings = rememberSettings()
-    val enabled by settings.diagnosticsEnabled.collectAsState()
-    val detailed by settings.diagnosticsDetailed.collectAsState()
-    val technical by settings.diagnosticsTechnical.collectAsState()
     val snapshot by diagnostics.snapshot.collectAsState()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    if (!enabled) { LaunchedEffect(Unit) { onClose() }; return }
     LaunchedEffect(diagnostics, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) { diagnostics.sample(); delay(1_000) }
         }
     }
+    StreamInformation(snapshot, diagnostics::clear, onClose)
+}
+
+/** Session recovery remains inspectable when no Media3 controller survived reconnection. */
+@Composable
+fun StreamInformation(snapshot: DiagnosticSnapshot, onClear: () -> Unit, onClose: () -> Unit) {
+    val settings = rememberSettings()
+    val enabled by settings.diagnosticsEnabled.collectAsState()
+    val detailed by settings.diagnosticsDetailed.collectAsState()
+    val technical by settings.diagnosticsTechnical.collectAsState()
+    if (!enabled) { LaunchedEffect(Unit) { onClose() }; return }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val closeFocus = remember { FocusRequester() }
         Column(Modifier.widthIn(max = 960.dp).fillMaxWidth(0.92f).fillMaxHeight(0.88f)
@@ -67,7 +73,7 @@ fun StreamInformation(diagnostics: PlaybackDiagnostics, onClose: () -> Unit) {
                 DiagnosticButton(if (detailed) "View: Detailed" else "View: Compact") {
                     settings.setDiagnosticsDetailed(!detailed)
                 }
-                DiagnosticButton("Clear", onClick = diagnostics::clear)
+                DiagnosticButton("Clear", onClick = onClear)
                 DiagnosticButton("Close", Modifier.focusRequester(closeFocus), onClose)
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -133,7 +139,7 @@ internal fun diagnosticRows(s: DiagnosticSnapshot, detailed: Boolean, technical:
         add("Last failure" to value(recovery.failure))
         add("Recovery duration" to seconds(recovery.durationMs))
         add("Since successful playback" to seconds(recovery.sinceSuccessMs))
-        if (detailed) recovery.history.forEach { add("Recovery event" to it.event.name) }
+        if (detailed) recovery.history.forEachIndexed { index, entry -> add("Recovery event ${index + 1}" to entry.event.name) }
     }
     s.transition.forEach { add(it.phase.label to "${it.elapsedMs} ms from selection") }
     add("Playback health" to s.health.label)

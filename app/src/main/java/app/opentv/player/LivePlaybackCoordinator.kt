@@ -149,7 +149,9 @@ internal class LivePlaybackCoordinator(
 
     /** User pause or disabled automatic recovery must also cancel a replacement still resolving. */
     fun cancelPendingTune() {
-        if (requestedId == null) return
+        if (requestedId == null && !recoveringResolution) return
+        val canceledRecovery = recoveringResolution
+        recoveringResolution = false
         generation++
         requestJob?.cancel()
         requestJob = null
@@ -159,7 +161,14 @@ internal class LivePlaybackCoordinator(
         _requestedChannelId.value = playingChannelId
         _requestedChannel.value = _currentChannel.value
         _preparingChannel.value = null
-        _state.value = engine?.state?.value ?: PlayerController.State.Idle
+        if (canceledRecovery) {
+            resolutionFailed = true
+            recoveryBudget?.record(RecoveryEvent.CANCELED, clock())
+            recoveryBudget?.publish(RecoveryState.CANCELED, clock(), RecoveryFailure.CANCELED)
+            _requestedChannelId.value = _currentChannel.value?.id
+            _state.value = PlayerController.State.Error(_currentChannel.value?.shownName.orEmpty(),
+                "Recovery canceled. Retry when you are ready to resume this channel.", true)
+        } else _state.value = engine?.state?.value ?: PlayerController.State.Idle
     }
 
     /** Starts a resolved request only if it still belongs to the current tune generation. */
@@ -299,8 +308,10 @@ internal class LivePlaybackCoordinator(
     /** Provider edits invalidate pending work without discarding the selected channel or touching DVR. */
     fun interrupt(message: String) {
         generation++; requestJob?.cancel(); requestJob = null; requestedId = null
-        resolving = false; resolutionFailed = true
+        resolving = false; resolutionFailed = true; recoveringResolution = false
         releaseEngine()
+        recoveryBudget?.record(RecoveryEvent.CANCELED, clock())
+        recoveryBudget?.publish(RecoveryState.CANCELED, clock(), RecoveryFailure.CANCELED)
         _preparingChannel.value = null
         _state.value = PlayerController.State.Error(_currentChannel.value?.shownName.orEmpty(), message, true)
     }

@@ -25,9 +25,11 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
@@ -261,6 +263,7 @@ class MultiViewSessionManager(
         }
     }
 
+    @kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun tune(record: PanelRecord, channelId: Long, preserveOriginal: Boolean = false, stillValid: () -> Boolean = { true }) {
         record.operation?.cancel()
         record.candidate?.let { close(it) }; record.candidate = null
@@ -269,167 +272,206 @@ class MultiViewSessionManager(
         record.generation = generation
         record.channelId = channelId
         record.operation = scope.launch {
-            admission.withLock {
-                if (!valid(record, generation)) return@withLock
-                var pendingToken: ReservationToken? = null
-                var runtime: Runtime? = null
-                try {
-                    if (!foreground && !inPip) { update(record.id) { it.copy(channelId = channelId, status = MultiViewPanelStatus.PAUSED) }; return@withLock }
-                    val channel = resolve(channelId)
+            var pendingToken: ReservationToken? = null
+            var runtime: Runtime? = null
+            var admissionHeld = false
+            suspend fun acquireAdmission() {
+                if (!admissionHeld) { admission.lock(); admissionHeld = true }
+            }
+            fun releaseAdmission() {
+                if (admissionHeld) { admissionHeld = false; admission.unlock() }
+            }
+            try {
+                acquireAdmission()
+                if (!valid(record, generation)) return@launch
+                if (!foreground && !inPip) { update(record.id) { it.copy(channelId = channelId, status = MultiViewPanelStatus.PAUSED) }; return@launch }
+                var channel = resolve(channelId)
+                coroutineContext.ensureActive()
+                if (!valid(record, generation)) return@launch
+                if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                    "The recording warning changed or expired. Your previous channel is retained where available."))
+                while (true) {
+                    connections.snapshot(channel.sourceId)?.accountKey?.let(record.recovery::attachAccount)
+                    val remaining = record.recovery.notBeforeMs - nowMs()
+                    if (remaining <= 0) break
+                    record.recovery.publish(app.opentv.player.RecoveryState.WAITING, nowMs(), app.opentv.player.RecoveryFailure.RATE_LIMIT)
+                    releaseAdmission()
+                    delay(remaining)
+                    acquireAdmission()
                     coroutineContext.ensureActive()
-                    if (!valid(record, generation)) return@withLock
+                    if (!valid(record, generation)) return@launch
                     if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
-                        "The recording warning changed or expired. Your previous channel is retained where available."))
-                    val snapshot = connections.snapshot(channel.sourceId)
-                    val maximum = snapshot?.effectiveMaximum
-                    val activePlayers = allocatedCount()
-                    val old = record.current
-                    val expected = expectedReferences[record.id]
-                    if (expected != null && (expected.sourceId != channel.sourceId ||
-                            (expected.accountId != null && expected.accountId != snapshot?.accountKey))) {
-                        throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
-                            "This saved channel's provider account changed. Choose the channel again to authorize its current account."))
+                        "The recording warning changed or expired. Review this panel before retrying."))
+                    // A provider URL/configuration may change during a long cooldown.
+                    channel = resolve(channelId)
+                    coroutineContext.ensureActive()
+                    if (!valid(record, generation)) return@launch
+                }
+                val snapshot = connections.snapshot(channel.sourceId)
+                val maximum = snapshot?.effectiveMaximum
+                val activePlayers = allocatedCount()
+                val old = record.current
+                val expected = expectedReferences[record.id]
+                if (expected != null && (expected.sourceId != channel.sourceId ||
+                        (expected.accountId != null && expected.accountId != snapshot?.accountKey))) {
+                    throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                        "This saved channel's provider account changed. Choose the channel again to authorize its current account."))
+                }
+                val usedWithoutOld = (snapshot?.locallyReserved ?: 0) -
+                    if (old?.token?.accountKey == snapshot?.accountKey && old != null) 1 else 0
+                if (maximum != null && usedWithoutOld >= maximum) {
+                    throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                        "This account's configured connection limit is in use. Recordings keep their reserved connections."))
+                }
+                // Unknown allowance never authorizes speculative make-before-break.
+                val seamless = old != null && maximum != null && (snapshot?.locallyReserved ?: 0) < maximum &&
+                    activePlayers < hardware.capability.maximumPlayers && activePlayers < 4
+                if (preserveOriginal && (old == null || old.token.accountKey == snapshot?.accountKey ||
+                        activePlayers >= hardware.capability.maximumPlayers || activePlayers >= 4 ||
+                        (maximum != null && !seamless))) {
+                    throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                        "A safe replacement needs an independent account and a spare decoder. Release a secondary panel or keep watching until recording starts."))
+                }
+                val retainOld = seamless || preserveOriginal
+                if (!retainOld) {
+                    if (old != null && !close(old)) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.DECODER,
+                        "The previous player could not close safely. Stop playback before starting another stream."))
+                    record.current = null
+                }
+                if (allocatedCount() >= minOf(4, hardware.capability.maximumPlayers)) {
+                    failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
+                        "This device cannot start another hardware-decoded panel. Use a smaller layout.")); return@launch
+                }
+                update(record.id) { if (retainOld) it.copy(error = null, failureKind = null) else it.copy(channelId = channelId, channelName = channel.channelName,
+                    providerName = channel.providerName, sourceId = channel.sourceId, accountKey = snapshot?.accountKey,
+                    status = if (seamless) it.status else MultiViewPanelStatus.STARTING,
+                    engineReady = seamless, error = null, failureKind = null, repeatedBuffering = false) }
+                val request = ConnectionRequest("$sessionId:${record.id}", generation, channel.sourceId, ConnectionPurpose.MULTIVIEW)
+                validateAdmission(channel, old?.token)
+                coroutineContext.ensureActive()
+                if (!valid(record, generation)) return@launch
+                var reserved = connections.reserve(request)
+                if (reserved is ReservationResult.ApprovalRequired) {
+                    val prompt = MultiViewApproval(channel.channelName, channel.providerName, reserved.challenge)
+                    val response = CompletableDeferred<UnknownConnectionApproval?>()
+                    approvalResponse = response
+                    _state.value = _state.value.copy(approval = prompt)
+                    val approval = try { response.await() } finally {
+                        connections.discard(prompt.challenge)
+                        if (approvalResponse === response) { approvalResponse = null; _state.value = _state.value.copy(approval = null) }
                     }
-                    val usedWithoutOld = (snapshot?.locallyReserved ?: 0) -
-                        if (old?.token?.accountKey == snapshot?.accountKey && old != null) 1 else 0
-                    if (maximum != null && usedWithoutOld >= maximum) {
-                        throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
-                            "This account's configured connection limit is in use. Recordings keep their reserved connections."))
-                    }
-                    // Unknown allowance never authorizes speculative make-before-break.
-                    val seamless = old != null && maximum != null && (snapshot?.locallyReserved ?: 0) < maximum &&
-                        activePlayers < hardware.capability.maximumPlayers && activePlayers < 4
-                    if (preserveOriginal && (old == null || old.token.accountKey == snapshot?.accountKey ||
-                            activePlayers >= hardware.capability.maximumPlayers || activePlayers >= 4 ||
-                            (maximum != null && !seamless))) {
-                        throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
-                            "A safe replacement needs an independent account and a spare decoder. Release a secondary panel or keep watching until recording starts."))
-                    }
-                    val retainOld = seamless || preserveOriginal
-                    if (!retainOld) {
-                        if (old != null && !close(old)) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.DECODER,
-                            "The previous player could not close safely. Stop playback before starting another stream."))
-                        record.current = null
-                    }
-                    if (allocatedCount() >= minOf(4, hardware.capability.maximumPlayers)) {
-                        failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
-                            "This device cannot start another hardware-decoded panel. Use a smaller layout.")); return@withLock
-                    }
-                    update(record.id) { if (retainOld) it.copy(error = null, failureKind = null) else it.copy(channelId = channelId, channelName = channel.channelName,
-                        providerName = channel.providerName, sourceId = channel.sourceId, accountKey = snapshot?.accountKey,
-                        status = if (seamless) it.status else MultiViewPanelStatus.STARTING,
-                        engineReady = seamless, error = null, failureKind = null, repeatedBuffering = false) }
-                    val request = ConnectionRequest("$sessionId:${record.id}", generation, channel.sourceId, ConnectionPurpose.MULTIVIEW)
+                    if (approval == null) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                        "The additional connection was canceled. This account's allowance is unknown."))
+                    // A user may leave Unknown consent open across a recording deadline.
                     validateAdmission(channel, old?.token)
                     coroutineContext.ensureActive()
-                    if (!valid(record, generation)) return@withLock
-                    var reserved = connections.reserve(request)
-                    if (reserved is ReservationResult.ApprovalRequired) {
-                        val prompt = MultiViewApproval(channel.channelName, channel.providerName, reserved.challenge)
-                        val response = CompletableDeferred<UnknownConnectionApproval?>()
-                        approvalResponse = response
-                        _state.value = _state.value.copy(approval = prompt)
-                        val approval = try { response.await() } finally {
-                            connections.discard(prompt.challenge)
-                            if (approvalResponse === response) { approvalResponse = null; _state.value = _state.value.copy(approval = null) }
-                        }
-                        if (approval == null) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
-                            "The additional connection was canceled. This account's allowance is unknown."))
-                        // A user may leave Unknown consent open across a recording deadline.
-                        validateAdmission(channel, old?.token)
-                        coroutineContext.ensureActive()
-                        if (!valid(record, generation)) return@withLock
-                        reserved = connections.reserve(request, approval)
-                    }
-                    val token = (reserved as? ReservationResult.Reserved)?.token ?: throw MultiViewStartException(
-                        MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, (reserved as? ReservationResult.Denied)?.reason
-                            ?: "Account settings changed. Retry this channel."))
-                    pendingToken = token
-                    if (token.accountKey != snapshot?.accountKey) throw MultiViewStartException(
-                        MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, "Provider account changed. Review this channel again."))
-                    coroutineContext.ensureActive()
-                    if (!valid(record, generation)) { connections.release(token); pendingToken = null; return@withLock }
-                    if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
-                        "The recording warning changed or expired. Your previous channel is retained where available."))
-                    val attempt = Runtime(token, channel, generation)
-                    runtime = attempt
-                    attempt.player = players.create(object : MultiViewPlayer.Listener {
-                        override fun ready() = onReady(record, attempt)
-                        override fun buffering() = onBuffering(record, attempt)
-                        override fun failed(failure: MultiViewFailure) = onFailure(record, attempt, failure)
-                    })
-                    record.candidate = attempt
-                    pendingToken = null
-                    connections.registerOwner(token, { if (_state.value.primaryPanelId == record.id) 2 else 1 }) {
-                        withContext(Dispatchers.Main.immediate) {
-                            if (owns(record, attempt)) {
-                                if (record.candidate == null || record.candidate === attempt) record.operation?.cancel()
-                                close(attempt)
-                                if (record.current === attempt) record.current = null
-                                if (record.candidate === attempt) record.candidate = null
-                                val message = "Paused to protect a recording on this account. Retry when capacity is available."
-                                if (record.current != null) showCurrent(record, "The replacement paused to protect a recording. Your previous channel is still playing.")
-                                else update(record.id) { it.copy(status = MultiViewPanelStatus.PAUSED, engineReady = false, error = message) }
-                                applyAudio()
-                            }
-                        }
-                    }
-                    if (!retainOld) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
-                    attempt.player.configureRecovery(scope, record.recovery,
-                        allowed = { canRecover(record, attempt) && (foreground || inPip) && !audioInterrupted },
-                        reconnect = {
-                            if (canRecover(record, attempt) && (foreground || inPip)) {
-                                // Always close before URL resolution; never create a fifth/speculative player.
-                                if (!close(attempt)) {
-                                    record.recovery.publish(app.opentv.player.RecoveryState.FAILED, nowMs(), app.opentv.player.RecoveryFailure.DEVICE_RESOURCE)
-                                    failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
-                                        "This player could not close safely. Stop playback before retrying; other panels keep playing."))
-                                    return@configureRecovery
-                                }
-                                record.recovery.record(app.opentv.player.RecoveryEvent.CONNECTION_CLOSED, nowMs())
-                                if (record.current === attempt) record.current = null
-                                if (record.candidate === attempt) record.candidate = null
-                                expectedReferences[record.id] = MultiViewChannelReference(channel.channelId, channel.sourceId, token.accountKey)
-                                tune(record, channel.channelId)
-                            }
-                        })
-                    record.recovery.attachAccount(token.accountKey)
-                    record.recovery.record(app.opentv.player.RecoveryEvent.RESERVATION_ACQUIRED, nowMs())
-                    attempt.player.start(channel)
-                    val ready = withTimeoutOrNull(if (attempt.player.managesRecovery) 240_000 else startupTimeoutMs) { attempt.ready.await() } == true
-                    coroutineContext.ensureActive()
-                    if (!valid(record, generation) || attempt.released) return@withLock
-                    if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
-                        "The recording warning changed or expired. Your previous channel is retained where available."))
-                    if (!ready) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.NETWORK,
-                        "This stream did not become ready. Retry or replace the channel; the other panels are still playing."))
-                    if (retainOld) old?.let(::close)
-                    record.current = attempt; record.candidate = null
-                    update(record.id) { it.copy(channelId = channel.channelId, channelName = channel.channelName,
-                        providerName = channel.providerName, sourceId = channel.sourceId, accountKey = token.accountKey,
-                        status = MultiViewPanelStatus.PLAYING, engineReady = true, error = null, failureKind = null,
-                        playbackGeneration = generation) }
-                    applyAudio()
-                } catch (cancelled: CancellationException) {
-                    pendingToken?.let(connections::release)
-                    runtime?.takeIf { it !== record.current || it.generation == generation }?.let(::close)
-                    if (record.candidate === runtime) record.candidate = null
-                    if (record.current?.released == true) record.current = null
-                    throw cancelled
-                } catch (failure: Exception) {
-                    pendingToken?.let(connections::release)
-                    runtime?.let { close(it, failed = true) }
-                    if (record.candidate === runtime) record.candidate = null
-                    if (record.current?.released == true) record.current = null
-                    if (valid(record, generation)) {
-                        val detail = (failure as? MultiViewStartException)?.failure ?: MultiViewFailure(MultiViewFailureKind.STREAM,
-                            "This channel could not start. Retry or replace it.")
-                        if (record.current != null) {
-                            showCurrent(record, detail.message, detail.kind)
-                        } else failPanel(record, detail)
-                    }
-                    applyAudio()
+                    if (!valid(record, generation)) return@launch
+                    reserved = connections.reserve(request, approval)
                 }
+                val token = (reserved as? ReservationResult.Reserved)?.token ?: throw MultiViewStartException(
+                    MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, (reserved as? ReservationResult.Denied)?.reason
+                        ?: "Account settings changed. Retry this channel."))
+                pendingToken = token
+                if (token.accountKey != snapshot?.accountKey) throw MultiViewStartException(
+                    MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT, "Provider account changed. Review this channel again."))
+                coroutineContext.ensureActive()
+                if (!valid(record, generation)) { connections.release(token); pendingToken = null; return@launch }
+                if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                    "The recording warning changed or expired. Your previous channel is retained where available."))
+                val attempt = Runtime(token, channel, generation)
+                runtime = attempt
+                attempt.player = players.create(object : MultiViewPlayer.Listener {
+                    override fun ready() = onReady(record, attempt)
+                    override fun buffering() = onBuffering(record, attempt)
+                    override fun failed(failure: MultiViewFailure) = onFailure(record, attempt, failure)
+                })
+                record.candidate = attempt
+                pendingToken = null
+                connections.registerOwner(token, { if (_state.value.primaryPanelId == record.id) 2 else 1 }) {
+                    withContext(Dispatchers.Main.immediate) {
+                        if (owns(record, attempt)) {
+                            if (record.candidate == null || record.candidate === attempt) record.operation?.cancel()
+                            close(attempt)
+                            if (record.current === attempt) record.current = null
+                            if (record.candidate === attempt) record.candidate = null
+                            val message = "Paused to protect a recording on this account. Retry when capacity is available."
+                            if (record.current != null) showCurrent(record, "The replacement paused to protect a recording. Your previous channel is still playing.")
+                            else update(record.id) { it.copy(status = MultiViewPanelStatus.PAUSED, engineReady = false, error = message) }
+                            applyAudio()
+                        }
+                    }
+                }
+                if (!retainOld) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
+                attempt.player.configureRecovery(scope, record.recovery,
+                    allowed = { canRecover(record, attempt) && (foreground || inPip) && !audioInterrupted },
+                    reconnect = {
+                        if (canRecover(record, attempt) && (foreground || inPip)) {
+                            // Always close before URL resolution; never create a fifth/speculative player.
+                            if (!close(attempt)) {
+                                record.recovery.publish(app.opentv.player.RecoveryState.FAILED, nowMs(), app.opentv.player.RecoveryFailure.DEVICE_RESOURCE)
+                                failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
+                                    "This player could not close safely. Stop playback before retrying; other panels keep playing."))
+                                return@configureRecovery
+                            }
+                            record.recovery.record(app.opentv.player.RecoveryEvent.CONNECTION_CLOSED, nowMs())
+                            if (record.current === attempt) record.current = null
+                            if (record.candidate === attempt) record.candidate = null
+                            expectedReferences[record.id] = MultiViewChannelReference(channel.channelId, channel.sourceId, token.accountKey)
+                            tune(record, channel.channelId)
+                        }
+                    })
+                record.recovery.attachAccount(token.accountKey)
+                record.recovery.record(app.opentv.player.RecoveryEvent.RESERVATION_ACQUIRED, nowMs())
+                if (attempt.player.managesRecovery) record.recovery.beginReadinessWindow(nowMs())
+                attempt.player.start(channel)
+                val ready = if (attempt.player.managesRecovery) {
+                    record.recovery.readinessDeadline.combine(record.recovery.cooldown) { deadline, cooldown -> deadline to cooldown }
+                        .mapLatest { (deadline, cooldown) ->
+                            // A late Retry-After extends the window and lets other panels admit.
+                            if (cooldown > nowMs()) releaseAdmission()
+                            withTimeoutOrNull((deadline - nowMs()).coerceAtLeast(0)) { attempt.ready.await() } == true
+                        }.first()
+                } else withTimeoutOrNull(startupTimeoutMs) { attempt.ready.await() } == true
+                acquireAdmission()
+                coroutineContext.ensureActive()
+                if (!valid(record, generation) || attempt.released) return@launch
+                if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
+                    "The recording warning changed or expired. Your previous channel is retained where available."))
+                if (!ready) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.NETWORK,
+                    "This stream did not become ready. Retry or replace the channel; the other panels are still playing."))
+                val currentCapacity = connections.snapshot(channel.sourceId)
+                if (currentCapacity?.accountKey != token.accountKey || currentCapacity.effectiveMaximum?.let { currentCapacity.locallyReserved > it } == true) {
+                    throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
+                        "Account capacity changed while waiting. Retry after reviewing this panel."))
+                }
+                if (retainOld) old?.let(::close)
+                record.current = attempt; record.candidate = null
+                update(record.id) { it.copy(channelId = channel.channelId, channelName = channel.channelName,
+                    providerName = channel.providerName, sourceId = channel.sourceId, accountKey = token.accountKey,
+                    status = MultiViewPanelStatus.PLAYING, engineReady = true, error = null, failureKind = null,
+                    playbackGeneration = generation) }
+                applyAudio()
+            } catch (cancelled: CancellationException) {
+                pendingToken?.let(connections::release)
+                runtime?.takeIf { it !== record.current || it.generation == generation }?.let(::close)
+                if (record.candidate === runtime) record.candidate = null
+                if (record.current?.released == true) record.current = null
+                throw cancelled
+            } catch (failure: Exception) {
+                pendingToken?.let(connections::release)
+                runtime?.let { close(it, failed = true) }
+                if (record.candidate === runtime) record.candidate = null
+                if (record.current?.released == true) record.current = null
+                if (valid(record, generation)) {
+                    val detail = (failure as? MultiViewStartException)?.failure ?: MultiViewFailure(MultiViewFailureKind.STREAM,
+                        "This channel could not start. Retry or replace it.")
+                    if (record.current != null) {
+                        showCurrent(record, detail.message, detail.kind)
+                    } else failPanel(record, detail)
+                }
+                applyAudio()
+            } finally {
+                releaseAdmission()
             }
         }
     }
@@ -604,6 +646,8 @@ class MultiViewSessionManager(
     }
 
     private fun applyAudio() {
+        records.values.flatMap { listOfNotNull(it.current, it.candidate) }.distinct()
+            .filterNot { it.released }.forEach { it.player.onRecoveryAllowedChanged() }
         // Mute the old owner before requesting focus or unmuting the new one.
         records.values.forEach { it.current?.takeUnless { r -> r.released }?.player?.setVolume(0f)
             it.candidate?.takeUnless { r -> r.released }?.player?.setVolume(0f) }
