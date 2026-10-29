@@ -62,6 +62,8 @@ class OpenTvApp : Application(), ImageLoaderFactory {
     /** Initializes background scheduling and application services at process startup. */
     override fun onCreate() {
         super.onCreate()
+        // Keep a bounded, local-only report of uncaught Java/Kotlin crashes for user review.
+        app.opentv.diagnostics.CrashDiagnostics.install(this)
         runCatching { app.opentv.cloud.CloudSync.initialize(this) }
         runCatching { app.opentv.update.UpdateScheduler.initialize(this) }
         val graph = ServiceLocator.get(this)
