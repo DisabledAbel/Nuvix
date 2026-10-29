@@ -244,7 +244,9 @@ At least two seconds of media progress verify recovery. Only 60 seconds of susta
 progress refill the automatic allowance; brief READY/playing periods do not. HTTP 401/403/451,
 missing streams, unsupported media, DRM, decoder/device-resource failures and unknown errors stop
 automatic attempts. Network/DNS/timeouts, temporary source reads, live-window loss, unexpected end
-and HTTP 429/5xx can retry. Supported Retry-After seconds/dates delay the next action. An offline
+and HTTP 429/5xx can retry. Supported Retry-After seconds/dates delay the next action.
+The account-bound cooldown survives observer replacement, foreground resumption and explicit Retry;
+selecting an independently authorized account does not inherit the other account’s cooldown. An offline
 stream eventually stops loading and offers explicit Retry. Provider configuration/allowance edits,
 channel changes, stop, destruction and background policy invalidate relevant pending work.
 

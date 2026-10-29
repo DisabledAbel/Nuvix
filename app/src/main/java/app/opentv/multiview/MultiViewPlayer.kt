@@ -29,6 +29,9 @@ import app.opentv.player.RecoveryBudget
 import app.opentv.player.Media3PlaybackRecovery
 import app.opentv.player.BufferPolicy
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 /** Resolved URLs remain in memory for this attempt only, never in presentation/preset state. */
@@ -78,6 +81,7 @@ class AndroidMultiViewPlayer(
     private var released = false
     private var recovery: Media3PlaybackRecovery? = null
     private var beginRecovery: (() -> Unit)? = null
+    private var prepareJob: Job? = null
     private val http = OkHttpDataSource.Factory(httpClient)
     private val selector = DefaultTrackSelector(context).apply {
         parameters = buildUponParameters().setMaxVideoSize(1920, 1080)
@@ -141,14 +145,26 @@ class AndroidMultiViewPlayer(
     override fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {
         diagnostics.recoveryBudget = budget
         beginRecovery = {
-            recovery = Media3PlaybackRecovery(player, scope, budget, allowed, { BufferPolicy.PREVIEW }, reconnect,
-                failed = { failure -> listener.failed(MultiViewFailure(
-                    when (failure) {
-                        app.opentv.player.RecoveryFailure.DECODER -> MultiViewFailureKind.DECODER
-                        app.opentv.player.RecoveryFailure.UNSUPPORTED -> MultiViewFailureKind.UNSUPPORTED
-                        app.opentv.player.RecoveryFailure.CONNECTION_LIMIT -> MultiViewFailureKind.PROVIDER_LIMIT
-                        else -> MultiViewFailureKind.STREAM
-                    }, PlaybackErrors.describeRecovery(failure))) })
+            prepareJob = scope.launch {
+                val now = android.os.SystemClock.elapsedRealtime()
+                val remaining = budget.notBeforeMs - now
+                if (remaining > 0) {
+                    budget.publish(app.opentv.player.RecoveryState.WAITING, now, app.opentv.player.RecoveryFailure.RATE_LIMIT)
+                    delay(remaining)
+                }
+                if (released || !allowed()) return@launch
+                recovery = Media3PlaybackRecovery(player, scope, budget, allowed,
+                    { BufferPolicy(5_000, 15_000, 1_000, 2_000) }, reconnect,
+                    failed = { failure -> listener.failed(MultiViewFailure(
+                        when (failure) {
+                            app.opentv.player.RecoveryFailure.DECODER -> MultiViewFailureKind.DECODER
+                            app.opentv.player.RecoveryFailure.UNSUPPORTED -> MultiViewFailureKind.UNSUPPORTED
+                            app.opentv.player.RecoveryFailure.CONNECTION_LIMIT -> MultiViewFailureKind.PROVIDER_LIMIT
+                            else -> MultiViewFailureKind.STREAM
+                        }, PlaybackErrors.describeRecovery(failure))) })
+                player.prepare()
+                player.playWhenReady = true
+            }
         }
     }
 
@@ -158,14 +174,17 @@ class AndroidMultiViewPlayer(
         val item = MediaItem.Builder().setMediaId(java.util.UUID.randomUUID().toString()).setUri(channel.url).build()
         diagnostics.beginSession(DiagnosticProtocol.identify(item), item.mediaId)
         player.setMediaItem(item)
-        beginRecovery?.invoke()
-        player.prepare()
-        player.playWhenReady = true
+        val start = beginRecovery
+        if (start != null) start() else {
+            player.prepare()
+            player.playWhenReady = true
+        }
     }
     override fun setVolume(volume: Float) { if (!released) player.volume = volume.coerceIn(0f, 1f) }
     override fun release() {
         if (released) return
         released = true
+        prepareJob?.cancel(); prepareJob = null
         recovery?.close(); recovery = null; beginRecovery = null
         surfaceOwner.clear()
         diagnostics.close()

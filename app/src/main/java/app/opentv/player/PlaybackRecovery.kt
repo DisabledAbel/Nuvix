@@ -42,6 +42,15 @@ data class RecoveryPolicy(
 
 /** Kept by the viewing owner across controlled player replacement, never persisted. Main thread only. */
 class RecoveryBudget(val policy: RecoveryPolicy = RecoveryPolicy(), private val diagnosticsEnabled: () -> Boolean = { true }) {
+    private var account: String? = null
+    internal var notBeforeMs = 0L
+    internal fun attachAccount(accountKey: String) {
+        if (account != null && account != accountKey) notBeforeMs = 0
+        account = accountKey
+    }
+    internal fun deferFor(delayMs: Long, now: Long) {
+        notBeforeMs = maxOf(notBeforeMs, now + delayMs.coerceIn(0, Long.MAX_VALUE - now))
+    }
     internal var epoch = 0L
     internal var attempts = 0
     internal var recoveringSince: Long? = null
@@ -119,7 +128,8 @@ class PlaybackRecoveryMonitor(private val budget: RecoveryBudget, private val cl
         } else {
             if (budget.recoveringSince == null) budget.recoveringSince = clock()
             val now = clock()
-            waitingUntil = now + maxOf(policy.backoffMs[budget.attempts], retryAfterMs.coerceAtLeast(0)).coerceAtMost(Long.MAX_VALUE - now)
+            budget.deferFor(retryAfterMs, now)
+            waitingUntil = maxOf(budget.notBeforeMs, now + policy.backoffMs[budget.attempts])
             budget.publish(RecoveryState.WAITING, clock(), category)
         }
     }

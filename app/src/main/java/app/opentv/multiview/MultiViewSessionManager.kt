@@ -370,9 +370,9 @@ class MultiViewSessionManager(
                     }
                     if (!retainOld) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
                     attempt.player.configureRecovery(scope, record.recovery,
-                        allowed = { owns(record, attempt) && valid(record, generation) && (foreground || inPip) && !audioInterrupted },
+                        allowed = { canRecover(record, attempt) && (foreground || inPip) && !audioInterrupted },
                         reconnect = {
-                            if (owns(record, attempt) && valid(record, generation) && (foreground || inPip)) {
+                            if (canRecover(record, attempt) && (foreground || inPip)) {
                                 // Always close before URL resolution; never create a fifth/speculative player.
                                 close(attempt)
                                 record.recovery.record(app.opentv.player.RecoveryEvent.CONNECTION_CLOSED, nowMs())
@@ -382,6 +382,7 @@ class MultiViewSessionManager(
                                 tune(record, channel.channelId)
                             }
                         })
+                    record.recovery.attachAccount(token.accountKey)
                     record.recovery.record(app.opentv.player.RecoveryEvent.RESERVATION_ACQUIRED, nowMs())
                     attempt.player.start(channel)
                     val ready = withTimeoutOrNull(if (attempt.player.managesRecovery) 240_000 else startupTimeoutMs) { attempt.ready.await() } == true
@@ -430,6 +431,10 @@ class MultiViewSessionManager(
     }
     private fun owns(record: PanelRecord, runtime: Runtime) = records[record.id] === record && !runtime.released &&
         (record.current === runtime || record.candidate === runtime)
+    private fun canRecover(record: PanelRecord, runtime: Runtime): Boolean = owns(record, runtime) &&
+        record.channelId == runtime.channel.channelId && (record.candidate == null || record.candidate === runtime) &&
+        (record.generation == runtime.generation || record.operation?.isActive != true)
+
     private fun onReady(record: PanelRecord, runtime: Runtime) {
         if (!owns(record, runtime)) return
         val now = nowMs()
