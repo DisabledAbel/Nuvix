@@ -486,6 +486,11 @@ class MultiViewSessionManager(
     private fun showCurrent(record: PanelRecord, error: String? = null, kind: MultiViewFailureKind? = null) {
         val runtime = record.current?.takeUnless { it.released } ?: return
         val channel = runtime.channel
+        if (record.channelId != channel.channelId || record.recovery.snapshot.value.state == app.opentv.player.RecoveryState.FAILED) {
+            // A rejected candidate must not transfer terminal state/cooldown to the retained stream.
+            record.recovery.reset()
+            record.recovery.attachAccount(runtime.token.accountKey)
+        }
         record.channelId = channel.channelId
         update(record.id) { it.copy(channelId = channel.channelId, channelName = channel.channelName,
             providerName = channel.providerName, sourceId = channel.sourceId, accountKey = runtime.token.accountKey,
