@@ -95,6 +95,7 @@ internal class LivePlaybackCoordinator(
     val playbackAllowed = _playbackAllowed.asStateFlow()
     private var recoveringResolution = false
     private var resolving = false
+    val recoveryBlocked: Boolean get() = resolving || resolutionFailed
     private var resolutionFailed = false
     private var engine: LivePlaybackEngine? = null
     private var engineStateJob: Job? = null

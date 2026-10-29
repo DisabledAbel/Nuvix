@@ -112,6 +112,13 @@ class Media3PlaybackRecoveryTest {
         f.advance(600_000); assertTrue(f.fake.operations.isEmpty()); assertTrue(f.fake.listeners.isEmpty())
         assertEquals(0, f.reconnects)
     }
+    @Test fun `explicit no-op selection rebinds its budget without disabling the retained watchdog`() = runTest {
+        val f = Fixture(this); runCurrent(); f.budget.reset(); f.advance(1_000)
+        f.fake.fail(); f.advance(2_000)
+        assertEquals(listOf("stop", "seek", "prepare"), f.fake.operations)
+        assertEquals(1, f.budget.snapshot.value.attempts); f.adapter.close()
+    }
+
     @Test fun `stale error callback does not retry another request`() = runTest {
         val f = Fixture(this); runCurrent()
         f.fake.listeners.forEach { it.onPlayerError(http(503)) }

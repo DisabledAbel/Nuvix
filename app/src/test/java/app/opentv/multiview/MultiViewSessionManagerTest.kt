@@ -255,6 +255,21 @@ class MultiViewSessionManagerTest {
         f.manager.release()
     }
 
+    @Test fun retainedPlayerCanRecoverAfterNewReplacementFails() = runTest {
+        val f = Fixture(this)
+        val id = f.addReady(1)
+        val retained = f.player(1)
+        f.manager.replace(id, 2); runCurrent()
+        assertFalse(retained.recoveryAllowed!!.invoke())
+        f.player(2).fail(); runCurrent()
+        assertEquals(1L, f.panel(1).channelId)
+        assertTrue(retained.recoveryAllowed!!.invoke())
+        retained.recoveryReconnect!!.invoke(); runCurrent()
+        assertEquals(1, retained.releases)
+        assertNotSame(retained, f.player(1))
+        f.player(1).ready(); runCurrent(); f.manager.release()
+    }
+
     @Test fun unknownAllowanceRecoveryNeverReusesAnotherConnectionsConsent() = runTest {
         val f = Fixture(this, maximum = null)
         f.addReady(1)

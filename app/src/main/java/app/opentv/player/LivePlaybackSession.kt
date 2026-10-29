@@ -298,6 +298,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         try {
             releaseCurrent()
             connectionToken = token
+            recoveryBudget.attachAccount(token.accountKey)
             connections.registerOwner(token) {
                 withContext(Dispatchers.Main.immediate) {
                     if (connectionToken == token) {
@@ -373,7 +374,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
 
     /** Launches an explicit channel selection through the shared live coordinator. */
     fun openChannel(id: Long) {
-        if (requestedChannelId.value != id) recoveryBudget.reset()
+        if (requestedChannelId.value != id || state.value is PlayerController.State.Error) recoveryBudget.reset()
         automaticSportsTune = false
         if (sportsSwitch.selection.value?.channelId != id) sportsSwitch.clear()
         multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id)
@@ -473,7 +474,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             dvr = graph.settings.livePauseEnabled.value,
             transitionDiagnostics = transitionDiagnostics,
             recoveryBudget = recoveryBudget,
-            recoveryAllowed = { implementation === this@ControllerEngine && coordinator.active.value &&
+            recoveryAllowed = { implementation === this@ControllerEngine && coordinator.active.value && !coordinator.recoveryBlocked &&
                 coordinator.requestedChannelId.value == coordinator.currentChannel.value?.id &&
                 coordinator.playbackAllowed.value && connectionPrompt.value == null },
             reconnectLive = {

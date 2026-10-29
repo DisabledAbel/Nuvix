@@ -28,6 +28,7 @@ import app.opentv.data.remote.StalkerApi
 import app.opentv.player.ChannelTransitionPhase
 import app.opentv.player.LivePlaybackSession
 import app.opentv.player.LivePresentation
+import app.opentv.player.RecoveryState
 import app.opentv.player.PlayerController
 import app.opentv.recording.RecordingCapture
 import java.io.ByteArrayOutputStream
@@ -282,8 +283,8 @@ class IptvPlaybackTest {
                 controller.diagnostics.sample()
             }
             val recovery = session.recoveryStatus.value
-            if (terminal) session.state.value is PlayerController.State.Error && recovery.state == app.opentv.player.RecoveryState.FAILED
-            else recovery.state in setOf(app.opentv.player.RecoveryState.RECOVERED, app.opentv.player.RecoveryState.HEALTHY) &&
+            if (terminal) session.state.value is PlayerController.State.Error && recovery.state == RecoveryState.FAILED
+            else recovery.state in setOf(RecoveryState.RECOVERED, RecoveryState.HEALTHY) &&
                 recovery.attempts == expectedAttempts && (controller?.diagnostics?.snapshot?.value?.renderedFrames ?: 0) > 0
         }
         if (!terminal) rendered(1, false)

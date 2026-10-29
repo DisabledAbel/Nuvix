@@ -24,7 +24,8 @@ class Media3PlaybackRecovery(
     private val failed: (RecoveryFailure) -> Unit,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : AutoCloseable {
-    private val monitor = PlaybackRecoveryMonitor(budget, clock)
+    private var monitor = PlaybackRecoveryMonitor(budget, clock)
+    private var budgetEpoch = budget.epoch
     private var closed = false
     private var seeking = false
     private var graceUntil = clock()
@@ -55,6 +56,13 @@ class Media3PlaybackRecovery(
             while (!closed && !detached) {
                 delay(1_000)
                 if (closed || detached) break
+                if (budgetEpoch != budget.epoch) {
+                    // An explicit selection can be a no-op on a retained healthy player.
+                    // Rebind only while this exact owner is still the selected playback generation.
+                    if (!allowed()) continue
+                    monitor = PlaybackRecoveryMonitor(budget, clock)
+                    budgetEpoch = budget.epoch
+                }
                 val expected = allowed() && player.playWhenReady &&
                     player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE &&
                     (player.playerError != null || (!seeking && clock() >= graceUntil))

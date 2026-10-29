@@ -174,6 +174,7 @@ class PlayerController(
     private val loadErrorPolicy = object : DefaultLoadErrorHandlingPolicy() {
         /** Chooses the retry delay for a recoverable media load failure. */
         override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+            recoveryBudget?.deferFor(PlaybackErrors.retryAfterMs(info.exception), android.os.SystemClock.elapsedRealtime())
             // Managed viewers have one bounded recovery owner, including HTTP failures.
             if (recoveryBudget != null && !sportsAutoSwitchover) return C_TIME_UNSET
             val statusCode =
@@ -349,6 +350,13 @@ class PlayerController(
         switchJob = scope.launch {
             if (debounce) delay(switchDebounceMillis)
             if (released || suspended || generation != switchGeneration) return@launch
+            val providerDelay = (recoveryBudget?.notBeforeMs ?: 0) - android.os.SystemClock.elapsedRealtime()
+            if (providerDelay > 0) {
+                _state.value = State.Buffering(request.title)
+                recoveryBudget?.publish(RecoveryState.WAITING, android.os.SystemClock.elapsedRealtime(), RecoveryFailure.RATE_LIMIT)
+                delay(providerDelay)
+                if (released || suspended || generation != switchGeneration) return@launch
+            }
 
             httpFactory.setDefaultRequestProperties(mapOf("User-Agent" to request.userAgent))
             _state.value = State.Buffering(request.title)
@@ -438,7 +446,8 @@ class PlayerController(
             val request = current ?: return
             // Lifecycle resume is not explicit Retry and cannot reopen terminal/exhausted media.
             if (_state.value is State.Error && recoveryBudget != null) return
-            if (loadedRequest != request) start(request, debounce = false, resetFailures = false)
+            if (loadedRequest != request || (recoveryBudget?.notBeforeMs ?: 0) > android.os.SystemClock.elapsedRealtime())
+                start(request, debounce = false, resetFailures = false)
             else {
                 player.playWhenReady = !_userPaused.value
                 monitorLive(request, generation)

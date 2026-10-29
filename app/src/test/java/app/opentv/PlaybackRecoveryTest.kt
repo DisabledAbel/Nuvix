@@ -162,6 +162,18 @@ class PlaybackRecoveryTest {
         val f = Fixture(); f.failure(RecoveryFailure.RATE_LIMIT, 120_000)
         assertNull(f.tick(119_999)); assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(1))
     }
+    @Test fun `provider retry after survives explicit retry and observer replacement on the same account`() {
+        val f = Fixture(); f.budget.attachAccount("account")
+        f.failure(RecoveryFailure.RATE_LIMIT, 120_000)
+        f.budget.reset(); f.budget.attachAccount("account")
+        val replacement = PlaybackRecoveryMonitor(f.budget) { f.now }
+        replacement.failure(RecoveryFailure.NETWORK)
+        f.now = 2_000; assertNull(replacement.sample(RecoverySample(true)))
+        f.now = 120_000; assertEquals(RecoveryAction.LIGHTWEIGHT, replacement.sample(RecoverySample(true)))
+        f.budget.attachAccount("different-authorized-account")
+        assertEquals(0L, f.budget.notBeforeMs)
+    }
+
     @Test fun `unexpected ended stream gets bounded recovery`() {
         val f = Fixture(); f.tick(sample = RecoverySample(true, ended = true))
         assertEquals(RecoveryAction.LIGHTWEIGHT, f.tick(2_000, RecoverySample(true, ended = true)))
