@@ -116,7 +116,7 @@ def android_results(directory):
             metrics = {}
             for key, value in row.get("metrics", {}).items():
                 if key not in PHASES | {"import_ms", "provider_ms", "release_ms", "prepare_ms", "request_ms",
-                                       "reservations", "failures", "media3_state", "rendered_frames", "error_code", "surface_bound", "attempts", "recovery_ms"}:
+                                       "reservations", "failures", "media3_state", "rendered_frames", "error_code", "surface_bound", "attempts", "recovery_ms", "stall_detected"}:
                     raise ProbeFailure("android_report_invalid")
                 if type(value) not in (int, float) or not 0 <= value <= 900000:
                     raise ProbeFailure("android_report_invalid")
@@ -133,6 +133,8 @@ def android_results(directory):
             if not {"attempts", "rendered_frames", "recovery_ms", "reservations"} <= row["metrics"].keys():
                 raise ProbeFailure("android_report_incomplete")
             if row["id"] != "auto-offline" and row["metrics"]["rendered_frames"] <= 0:
+                raise ProbeFailure("android_report_incomplete")
+            if row["id"] == "auto-stall" and row["metrics"].get("stall_detected") != 1:
                 raise ProbeFailure("android_report_incomplete")
         if row["status"] == "passed" and row["id"] in {"hls-one", "hls-spare", "ts-unknown", "stalker-one"} and not {"FIRST_FRAME", "READY", "release_ms"} <= row["metrics"].keys():
             raise ProbeFailure("android_report_incomplete")
