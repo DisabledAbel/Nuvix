@@ -541,7 +541,7 @@ class PlayerController(
 
     /** Releases the player, diagnostics and controller-owned resources. */
     fun release() {
-        if (released) return
+        if (released && player.isReleased) return
         released = true
         generation++
         current = null

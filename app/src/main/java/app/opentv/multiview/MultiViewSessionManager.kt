@@ -113,6 +113,7 @@ class MultiViewSessionManager(
         val hasPlayer: Boolean get() = ::player.isInitialized
         val ready = CompletableDeferred<Boolean>()
         var released = false
+        var resourcesClosed = false
         var bufferingCount = 0
         var wasReady = false
         var bufferingSince: Long? = null
@@ -127,6 +128,7 @@ class MultiViewSessionManager(
         var operation: Job? = null
     }
     private val records = linkedMapOf<String, PanelRecord>()
+    private val unclosedPlayers = mutableSetOf<Runtime>()
     private val admission = Mutex()
     private val sessionId = "multiview:${newId()}"
     // Presets can reuse panel IDs within this manager's lifetime. Attempts must still be newer
@@ -304,7 +306,11 @@ class MultiViewSessionManager(
                             "A safe replacement needs an independent account and a spare decoder. Release a secondary panel or keep watching until recording starts."))
                     }
                     val retainOld = seamless || preserveOriginal
-                    if (!retainOld) { old?.let(::close); record.current = null }
+                    if (!retainOld) {
+                        if (old != null && !close(old)) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.DECODER,
+                            "The previous player could not close safely. Stop playback before starting another stream."))
+                        record.current = null
+                    }
                     if (allocatedCount() >= minOf(4, hardware.capability.maximumPlayers)) {
                         failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
                             "This device cannot start another hardware-decoded panel. Use a smaller layout.")); return@withLock
@@ -374,7 +380,12 @@ class MultiViewSessionManager(
                         reconnect = {
                             if (canRecover(record, attempt) && (foreground || inPip)) {
                                 // Always close before URL resolution; never create a fifth/speculative player.
-                                close(attempt)
+                                if (!close(attempt)) {
+                                    record.recovery.publish(app.opentv.player.RecoveryState.FAILED, nowMs(), app.opentv.player.RecoveryFailure.DEVICE_RESOURCE)
+                                    failPanel(record, MultiViewFailure(MultiViewFailureKind.DECODER,
+                                        "This player could not close safely. Stop playback before retrying; other panels keep playing."))
+                                    return@configureRecovery
+                                }
                                 record.recovery.record(app.opentv.player.RecoveryEvent.CONNECTION_CLOSED, nowMs())
                                 if (record.current === attempt) record.current = null
                                 if (record.candidate === attempt) record.candidate = null
@@ -497,17 +508,26 @@ class MultiViewSessionManager(
             status = MultiViewPanelStatus.PLAYING, engineReady = true, playbackGeneration = runtime.generation,
             error = error, failureKind = kind) }
     }
-    private fun close(runtime: Runtime, failed: Boolean = false, knownLimit: Boolean = false) {
-        if (runtime.released) return
+    private fun close(runtime: Runtime, failed: Boolean = false, knownLimit: Boolean = false): Boolean {
+        if (runtime.resourcesClosed) return true
         runtime.released = true
         runtime.ready.complete(false)
         connections.beginRelease(runtime.token)
-        try { if (runtime.hasPlayer) { runtime.player.setVolume(0f); runtime.player.release() } } finally {
-            if (failed) connections.fail(runtime.token, knownLimit) else connections.release(runtime.token)
-        }
+        // Failed closure still consumes its real decoder and account slot. Never free on exception.
+        unclosedPlayers += runtime
+        try {
+            if (runtime.hasPlayer) {
+                runCatching { runtime.player.setVolume(0f) }
+                runtime.player.release()
+            }
+        } catch (_: Exception) { return false }
+        runtime.resourcesClosed = true
+        unclosedPlayers -= runtime
+        if (failed) connections.fail(runtime.token, knownLimit) else connections.release(runtime.token)
+        return true
     }
-    private fun allocatedCount() = records.values.flatMap { listOfNotNull(it.current, it.candidate) }
-        .distinct().count { !it.released }
+    private fun allocatedCount() = (records.values.flatMap { listOfNotNull(it.current, it.candidate) } + unclosedPlayers)
+        .distinct().count { !it.resourcesClosed }
 
     fun retry(panelId: String) {
         val record = records[panelId] ?: return
@@ -724,6 +744,7 @@ class MultiViewSessionManager(
         records.values.toList().forEach { record ->
             ++record.generation; record.operation?.cancel(); record.current?.let(::close); record.candidate?.let(::close)
         }
+        unclosedPlayers.toList().forEach { close(it) }
         records.clear(); expectedReferences.clear(); approvalResponse?.complete(null); approvalResponse = null
         _state.value.approval?.challenge?.let(connections::discard)
         started = false
