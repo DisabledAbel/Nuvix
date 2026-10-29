@@ -28,6 +28,7 @@ import app.opentv.data.remote.StalkerApi
 import app.opentv.player.ChannelTransitionPhase
 import app.opentv.player.LivePlaybackSession
 import app.opentv.player.LivePresentation
+import app.opentv.player.RecoveryEvent
 import app.opentv.player.RecoveryState
 import app.opentv.player.PlayerController
 import app.opentv.recording.RecordingCapture
@@ -95,7 +96,10 @@ class IptvPlaybackTest {
         dependency("database", db)
         dependency("settings", settings)
         dependency("httpClient", http)
-        dependency("streamingHttpClient", http)
+        // The stall fixture must outlast the app watchdog, rather than becoming a 5s HTTP timeout.
+        dependency("streamingHttpClient", http.newBuilder()
+            .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS).build())
         connections = AccountConnectionManager.createForTest(app)
         singleton(ServiceLocator::class.java, graph)
         singleton(AccountConnectionManager::class.java, connections)
@@ -293,6 +297,11 @@ class IptvPlaybackTest {
             assertEquals(expectedAttempts, recovery.attempts)
             assertEquals(1L, session.currentChannel.value?.id)
             assertEquals(1, requireNotNull(connections.snapshotForSource(1)).locallyReserved)
+            if (mode == "stall") {
+                assertTrue("The Media3 watchdog must detect the stalled stream",
+                    recovery.history.any { it.event == RecoveryEvent.STALL_DETECTED })
+                metrics.put("stall_detected", 1)
+            }
             metrics.put("attempts", recovery.attempts)
             metrics.put("recovery_ms", recovery.durationMs)
             metrics.put("rendered_frames", session.controller.diagnostics.snapshot.value.renderedFrames ?: 0)
