@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">다시 연결 중… %2$d회 중 %1$d회 시도</string>
+    <string name="playback_choose_source">다른 승인된 소스 선택</string>
+    <string name="playback_view_information">스트림 정보 보기</string>
+</resources>

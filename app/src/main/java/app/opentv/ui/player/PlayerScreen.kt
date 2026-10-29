@@ -171,6 +171,7 @@ fun PlayerScreen(
     var surfaceAvailable by remember { mutableStateOf(true) }
     val videoView = remember { arrayOfNulls<PlayerView>(1) }
 
+    val recovery by liveSession.recoveryStatus.collectAsState()
     val diagnosticsEnabled by graph.settings.diagnosticsEnabled.collectAsState()
     var diagnosticsVisible by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -407,6 +408,14 @@ fun PlayerScreen(
             }
         }
 
+        if (!inPip && (recovery.state == app.opentv.player.RecoveryState.WAITING ||
+                recovery.state == app.opentv.player.RecoveryState.RECOVERING)) {
+            Text(stringResource(R.string.playback_reconnecting, (recovery.attempts +
+                if (recovery.state == app.opentv.player.RecoveryState.WAITING) 1 else 0).coerceAtMost(recovery.maximum), recovery.maximum),
+                color = Color.White, modifier = Modifier.align(Alignment.TopCenter)
+                    .background(Color.Black.copy(alpha = 0.8f)).padding(16.dp))
+        }
+
         when (val current = state) {
             is PlayerController.State.Buffering -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -441,6 +450,13 @@ fun PlayerScreen(
                         )
                         Spacer(Modifier.height(24.dp))
                         Button(onClick = liveSession::retry) { Text(stringResource(R.string.common_try_again)) }
+                        if (variants.size > 1) Button(onClick = { panel = Panel.QUALITY; controlsVisible = true }) {
+                            Text(stringResource(R.string.playback_choose_source))
+                        }
+                        if (diagnosticsEnabled && controller != null) Button(onClick = { diagnosticsVisible = true }) {
+                            Text(stringResource(R.string.playback_view_information))
+                        }
+                        Button(onClick = onBack) { Text(stringResource(R.string.common_back)) }
                     }
                 }
             }

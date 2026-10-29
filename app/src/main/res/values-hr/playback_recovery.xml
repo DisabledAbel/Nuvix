@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Ponovno povezivanje… Pokušaj %1$d od %2$d</string>
+    <string name="playback_choose_source">Odaberi drugi odobreni izvor</string>
+    <string name="playback_view_information">Prikaži informacije o prijenosu</string>
+</resources>

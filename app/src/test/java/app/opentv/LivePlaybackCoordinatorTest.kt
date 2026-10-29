@@ -145,6 +145,49 @@ class LivePlaybackCoordinatorTest {
         assertThat(releases.last()).isEqualTo(2)
     }
 
+    @Test fun `recovery closes the engine and reservation before fresh URL resolution`() = runTest {
+        val engines = mutableListOf<FakeEngine>()
+        var releasedReservation = false
+        var resolvingRecovery = false
+        val session = LivePlaybackCoordinator(backgroundScope, { channel(it) }, {
+            if (resolvingRecovery) {
+                assertThat(engines.first().releases).isEqualTo(1)
+                assertThat(releasedReservation).isTrue()
+            }
+            resolved(it)
+        }, { FakeEngine().also(engines::add) }, afterEngineRelease = { releasedReservation = true })
+        session.openChannel(1); runCurrent(); resolvingRecovery = true
+        session.reconnect(); runCurrent()
+        assertThat(engines).hasSize(2)
+        assertThat(session.currentChannel.value?.id).isEqualTo(1)
+        assertThat(engines.last().requests.single().title).isEqualTo("Channel 1")
+        session.destroy()
+    }
+
+    @Test fun `pending channel selection blocks obsolete recovery and late reconnect resolution`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var recover = false
+        val f = Fixture(this) {
+            if (recover && it.id == 1L) withContext(NonCancellable) { gate.await() }
+            resolved(it)
+        }
+        f.session.openChannel(1); runCurrent(); recover = true
+        f.session.reconnect(); runCurrent()
+        f.session.openChannel(2); runCurrent(); gate.complete(Unit); runCurrent()
+        assertThat(f.session.currentChannel.value?.id).isEqualTo(2)
+        assertThat(f.engines.last().requests.single().title).isEqualTo("Channel 2")
+        f.session.destroy()
+    }
+
+    @Test fun `pause and background policy prevent automatic reconnect`() = runTest {
+        val f = Fixture(this); f.session.openChannel(1); runCurrent()
+        f.session.setPaused(true); f.session.reconnect(); runCurrent()
+        assertThat(f.engines).hasSize(1)
+        f.session.setPaused(false); f.session.setForeground(false); f.session.reconnect(); runCurrent()
+        assertThat(f.engines).hasSize(1); assertThat(f.engine.releases).isEqualTo(0)
+        f.session.destroy()
+    }
+
     /** Checks: denied replacement admission preserves the current player. */
     @Test fun `denied replacement admission preserves the current player`() = runTest {
         val engines = mutableListOf<FakeEngine>()

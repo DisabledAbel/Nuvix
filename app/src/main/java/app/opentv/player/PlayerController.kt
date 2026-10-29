@@ -88,6 +88,10 @@ class PlayerController(
      */
     private val liveRecording: Boolean = false,
     private val transitionDiagnostics: ChannelTransitionDiagnostics? = null,
+    private val recoveryBudget: RecoveryBudget? = null,
+    private val recoveryAllowed: () -> Boolean = { true },
+    private val reconnectLive: (() -> Unit)? = null,
+
 ) {
 
     /** Channel-surf debounce for this controller — longer for the preview so browsing is calm. */
@@ -124,6 +128,7 @@ class PlayerController(
 
     private var switchJob: Job? = null
     private var retryJob: Job? = null
+    private var recovery: Media3PlaybackRecovery? = null
     private var current: Request? = null
     private var loadedRequest: Request? = null
     private var consecutiveFailures = 0
@@ -162,21 +167,22 @@ class PlayerController(
     /**
      * Retry policy tuned for IPTV rather than for CDNs.
      *
-     * A provider under load returns 403, 429 or 500 for a few seconds and then serves the
-     * stream perfectly well. ExoPlayer's default is to give up almost immediately on those,
-     * which surfaces to the user as a channel that "doesn't work" but plays fine on the
-     * second try. We retry them with backoff instead. 401 and 404 are not retried — those
-     * genuinely will not fix themselves.
+     * Managed live viewers use the shared recovery budget. Other playback retains bounded
+     * load retries for temporary network/server failures. Authorization, missing streams and
+     * invalid requests are terminal; rate limits honor Retry-After.
      */
     private val loadErrorPolicy = object : DefaultLoadErrorHandlingPolicy() {
         /** Chooses the retry delay for a recoverable media load failure. */
         override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+            // Managed viewers have one bounded recovery owner, including HTTP failures.
+            if (recoveryBudget != null && !sportsAutoSwitchover) return C_TIME_UNSET
             val statusCode =
                 (info.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode
 
             return when (statusCode) {
-                401, 404, 410 -> C_TIME_UNSET
-                403, 405, 429, 500, 502, 503, 504 -> backoffFor(info.errorCount)
+                401, 403, 404, 405, 410, 451 -> C_TIME_UNSET
+                429 -> if (info.errorCount > MAX_LOAD_RETRIES) C_TIME_UNSET else maxOf(backoffFor(info.errorCount), PlaybackErrors.retryAfterMs(info.exception))
+                500, 502, 503, 504 -> backoffFor(info.errorCount)
                 null -> backoffFor(info.errorCount) // network blips
                 else -> super.getRetryDelayMsFor(info)
             }
@@ -272,6 +278,7 @@ class PlayerController(
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (released || suspended || current != loadedRequest || player.playerError !== error) return
+                    if (recoveryBudget != null && !sportsAutoSwitchover && current?.isLive == true) return
                     retryJob?.cancel()
                     consecutiveFailures++
                     val request = current
@@ -282,7 +289,8 @@ class PlayerController(
                     )
                     // One silent restart covers the common case of a provider dropping the
                     // connection when another device on the account starts streaming.
-                    if (!sportsAutoSwitchover && consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
+                    if (!sportsAutoSwitchover && PlaybackErrors.recoveryFailure(error).retryable &&
+                        consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
                         val token = generation
                         retryJob = scope.launch {
                             delay(AUTO_RESTART_DELAY_MILLIS)
@@ -330,6 +338,7 @@ class PlayerController(
         // reaches the player, so we never stack prepares.
         switchJob?.cancel()
         retryJob?.cancel()
+        recovery?.close(); recovery = null
         generation++
         val switchGeneration = generation
         val transitionGeneration = transitionDiagnostics?.generation ?: 0L
@@ -382,6 +391,23 @@ class PlayerController(
                 transitionDiagnostics?.record(transitionGeneration, ChannelTransitionPhase.PREPARE_STARTED)
                 prepare()
             }
+            monitorLive(request, switchGeneration)
+        }
+    }
+
+    private fun monitorLive(request: Request, switchGeneration: Long) {
+        recovery?.close(); recovery = null
+        if (request.isLive && !liveRecording && recoveryBudget != null && reconnectLive != null) {
+            recovery = Media3PlaybackRecovery(player, scope, recoveryBudget,
+                allowed = { !released && !suspended && !sportsAutoSwitchover && !_userPaused.value &&
+                    generation == switchGeneration && current == loadedRequest && recoveryAllowed() },
+                buffer = { bufferPolicy },
+                reconnect = { if (generation == switchGeneration && recoveryAllowed()) reconnectLive.invoke() },
+                failed = { category ->
+                    _state.value = State.Error(request.title,
+                        PlaybackErrors.describeRecovery(category), true)
+                })
+            diagnostics.recoveryBudget = recoveryBudget
         }
     }
 
@@ -393,6 +419,7 @@ class PlayerController(
     /** User intent is independent of lifecycle suspension and browsing audio suppression. */
     fun setUserPaused(paused: Boolean) {
         _userPaused.value = paused
+        if (paused) recovery?.suspendMonitoring()
         if (!released) player.playWhenReady = !paused && !suspended
     }
 
@@ -400,6 +427,7 @@ class PlayerController(
     fun setSuspended(value: Boolean) {
         if (released || suspended == value) return
         suspended = value
+        recovery?.suspendMonitoring()
         if (value) {
             switchJob?.cancel()
             retryJob?.cancel()
@@ -408,9 +436,12 @@ class PlayerController(
             player.stop()
         } else {
             val request = current ?: return
+            // Lifecycle resume is not explicit Retry and cannot reopen terminal/exhausted media.
+            if (_state.value is State.Error && recoveryBudget != null) return
             if (loadedRequest != request) start(request, debounce = false, resetFailures = false)
             else {
                 player.playWhenReady = !_userPaused.value
+                monitorLive(request, generation)
                 player.prepare()
             }
         }
@@ -490,6 +521,7 @@ class PlayerController(
         generation++
         switchJob?.cancel()
         retryJob?.cancel()
+        recovery?.close(); recovery = null
         current = null
         loadedRequest = null
         player.stop()
@@ -504,6 +536,7 @@ class PlayerController(
         released = true
         generation++
         current = null
+        recovery?.close(); recovery = null
         bufferJob.cancel()
         switchJob?.cancel()
         retryJob?.cancel()

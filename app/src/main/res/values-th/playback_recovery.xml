@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">กำลังเชื่อมต่อใหม่… ครั้งที่ %1$d จาก %2$d</string>
+    <string name="playback_choose_source">เลือกแหล่งอื่นที่ได้รับอนุญาต</string>
+    <string name="playback_view_information">ดูข้อมูลสตรีม</string>
+</resources>

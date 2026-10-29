@@ -132,3 +132,13 @@ USB/NAS behavior, alarms and process interruption. Automatic sports extensions r
 - RC1/code 22 is published; RC2/code 23 is prepared for review. Request a future release
   only after the [v1 checklist](V1-RELEASE-CHECKLIST.md). Stable must exceed all candidate codes.
   Nightly publishing remains removed. This preparation creates no release.
+
+## Advanced live playback recovery
+
+Implemented shared bounded stall/error recovery for existing live and Multi-View viewing owners,
+with progressive same-player recovery, controlled break-before-make reconnect, sustained-progress
+budget reset, safe admission and sanitized diagnostics. Enabled Sports Auto switchover retains sole
+ownership of Sports recovery. DVR capture remains independent. Deterministic and generated Media3
+regressions cover recovery and exhaustion; physical-device/provider acceptance and observed Actions
+results remain gates. See [behavior](live-playback.md#automatic-live-playback-recovery) and
+[hardware checklist](TESTING.md#automatic-playback-recovery). No release is authorized by this feature.

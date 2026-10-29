@@ -145,8 +145,8 @@ class IptvPlaybackTest {
         connections.setMaximumConnections(1, maximum)
     }
 
-    private fun await(description: String, condition: () -> Boolean) {
-        val deadline = SystemClock.elapsedRealtime() + 15_000
+    private fun await(description: String, timeoutMs: Long = 15_000, condition: () -> Boolean) {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (SystemClock.elapsedRealtime() < deadline) {
             if (main(condition)) return
             SystemClock.sleep(25)
@@ -264,6 +264,54 @@ class IptvPlaybackTest {
         rendered(2, true)
         completed = true
     }
+
+    /** Faults pass through the production session, Media3 decoding, first-frame and pixel checks. */
+    private fun automaticRecovery(mode: String, expectedAttempts: Int, terminal: Boolean = false) {
+        reportId = "auto-$mode"
+        seed(1, "ts")
+        runBlocking { db.channels().upsertAll(listOf(db.channels().byId(1)!!.copy(streamUrl = "$base/recovery/${when (mode) {
+            "reconnect" -> "twice"
+            else -> mode
+        }}.ts"))) }
+        main { session.openChannel(1) }
+        await("bounded automatic recovery", 150_000) {
+            val controller = session.controllerOrNull.value
+            if (controller != null) {
+                if (!surfaceAcquired) surfaceAcquired = session.attachVideoSurface(activity.video, LivePresentation.FULLSCREEN)
+                else session.attachVideoSurface(activity.video, LivePresentation.FULLSCREEN, rebind = true)
+                controller.diagnostics.sample()
+            }
+            val recovery = session.recoveryStatus.value
+            if (terminal) session.state.value is PlayerController.State.Error && recovery.state == app.opentv.player.RecoveryState.FAILED
+            else recovery.state in setOf(app.opentv.player.RecoveryState.RECOVERED, app.opentv.player.RecoveryState.HEALTHY) &&
+                recovery.attempts == expectedAttempts && (controller?.diagnostics?.snapshot?.value?.renderedFrames ?: 0) > 0
+        }
+        if (!terminal) rendered(1, false)
+        main {
+            val recovery = session.recoveryStatus.value
+            assertEquals(expectedAttempts, recovery.attempts)
+            assertEquals(1L, session.currentChannel.value?.id)
+            assertEquals(1, requireNotNull(connections.snapshotForSource(1)).locallyReserved)
+            metrics.put("attempts", recovery.attempts)
+            metrics.put("recovery_ms", recovery.durationMs)
+            metrics.put("rendered_frames", session.controller.diagnostics.snapshot.value.renderedFrames ?: 0)
+            metrics.put("reservations", 1)
+        }
+        if (terminal) {
+            val requests = JSONObject(body("/stats").decodeToString()).getInt("requests")
+            SystemClock.sleep(4_000)
+            assertEquals("An offline stream must stop retrying", requests + 1,
+                JSONObject(body("/stats").decodeToString()).getInt("requests"))
+        }
+        completed = true
+    }
+
+    @Test fun automaticDisconnectRecoveryRenders() = automaticRecovery("disconnect", 1)
+    @Test fun automaticStallRecoveryRenders() = automaticRecovery("stall", 1)
+    @Test fun automaticControlledReconnectRenders() = automaticRecovery("reconnect", 2)
+    @Test fun automaticOfflineRecoveryExhausts() = automaticRecovery("offline", 3, terminal = true)
+    @Test fun automaticRateLimitRecoveryRenders() = automaticRecovery("rate", 1)
+    @Test fun delayedResponseDoesNotReconnect() = automaticRecovery("slow", 0)
 
     private fun body(path: String): ByteArray = http.newCall(Request.Builder().url(base + path).build()).execute().use {
         check(it.isSuccessful)

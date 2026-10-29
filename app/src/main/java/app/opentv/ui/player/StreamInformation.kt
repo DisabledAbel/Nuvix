@@ -127,6 +127,14 @@ private fun rate(bps: Long?) = bps?.let { String.format(Locale.ROOT, "%.2f Mbps"
 
 /** Builds stream information rows from the current diagnostic snapshot and detail preferences. */
 internal fun diagnosticRows(s: DiagnosticSnapshot, detailed: Boolean, technical: Boolean): List<Pair<String, String>> = buildList {
+    s.recovery?.let { recovery ->
+        add("Recovery" to recovery.state.name)
+        add("Recovery attempts" to "${recovery.attempts} / ${recovery.maximum}")
+        add("Last failure" to value(recovery.failure))
+        add("Recovery duration" to seconds(recovery.durationMs))
+        add("Since successful playback" to seconds(recovery.sinceSuccessMs))
+        if (detailed) recovery.history.forEach { add("Recovery event" to it.event.name) }
+    }
     s.transition.forEach { add(it.phase.label to "${it.elapsedMs} ms from selection") }
     add("Playback health" to s.health.label)
     add("Playback status" to s.state)

@@ -4,6 +4,7 @@ import contextlib
 import json
 from pathlib import Path
 import socket
+import select
 import subprocess
 import threading
 import time
@@ -45,6 +46,7 @@ class Provider(ThreadingHTTPServer):
         self.active = 0
         self.peak = 0
         self.requests = 0
+        self.recovery_requests = {}
         super().__init__(("127.0.0.1", port), Handler)
 
     @property
@@ -112,6 +114,47 @@ class Handler(BaseHTTPRequestHandler):
                                  for i, c in enumerate(("a", "b"), 1)]},
                              "create_link": {"cmd": f"ffmpeg {base}/{'a' if query.get('cmd') == ['a'] else 'b'}.ts"}}
                 self.reply({"js": responses.get(action, [])})
+        elif path.startswith("/recovery/"):
+            mode = path.rsplit("/", 1)[-1]
+            if mode not in {"disconnect.ts", "stall.ts", "twice.ts", "offline.ts", "rate.ts", "slow.ts"}:
+                self.reply({}, status=404)
+                return
+            with self.server.lock:
+                count = self.server.recovery_requests.get(mode, 0) + 1
+                self.server.recovery_requests[mode] = count
+            if mode == "rate.ts" and count == 1:
+                self.send_response(429)
+                self.send_header("Retry-After", "3")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            elif mode == "offline.ts" or (mode == "twice.ts" and count <= 2):
+                self.reply({}, status=503)
+            elif mode == "slow.ts" and count == 1:
+                time.sleep(2)
+                self.reply((self.server.root / "a.ts").read_bytes(), "video/mp2t")
+            elif mode in {"disconnect.ts", "stall.ts"} and count == 1:
+                data = (self.server.root / "a.ts").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "video/mp2t")
+                self.send_header("Content-Length", str(len(data) * 10))
+                self.end_headers()
+                try:
+                    self.wfile.write(data)
+                    self.wfile.flush()
+                    if mode == "stall.ts":
+                        # A genuine media load stalls after valid decoded video, until the viewer
+                        # closes it. A bounded server deadline prevents fixture thread leakage.
+                        deadline = time.monotonic() + 90
+                        while time.monotonic() < deadline:
+                            readable, _, _ = select.select([self.connection], [], [], .25)
+                            if readable and not self.connection.recv(1, socket.MSG_PEEK):
+                                break
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass
+                self.close_connection = True
+            else:
+                self.reply((self.server.root / "a.ts").read_bytes(), "video/mp2t")
         elif path == "/fault/auth":
             self.reply({}, status=401)
         elif path == "/fault/slow":

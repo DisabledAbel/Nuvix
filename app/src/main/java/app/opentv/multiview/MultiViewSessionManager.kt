@@ -14,6 +14,7 @@ import app.opentv.connections.UnknownConnectionChallenge
 import app.opentv.core.ServiceLocator
 import app.opentv.data.model.shownName
 import app.opentv.player.PlayerSurfaceOwner
+import app.opentv.player.playbackConfiguration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -104,6 +105,7 @@ class MultiViewSessionManager(
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val startupTimeoutMs: Long = 15_000,
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val diagnosticsEnabled: () -> Boolean = { true },
     private val validateAdmission: suspend (ResolvedMultiViewChannel, ReservationToken?) -> Unit = { _, _ -> },
 ) {
     private class Runtime(val token: ReservationToken, val channel: ResolvedMultiViewChannel, val generation: Long) {
@@ -117,12 +119,12 @@ class MultiViewSessionManager(
         val meaningfulStalls = ArrayDeque<Long>()
         var lastSuggestionAt: Long? = null
     }
-    private class PanelRecord(val id: String, var channelId: Long) {
+    private inner class PanelRecord(val id: String, var channelId: Long) {
+        val recovery = app.opentv.player.RecoveryBudget(diagnosticsEnabled = diagnosticsEnabled)
         var generation = 0L
         var current: Runtime? = null
         var candidate: Runtime? = null
         var operation: Job? = null
-        var retryCount = 0
     }
     private val records = linkedMapOf<String, PanelRecord>()
     private val admission = Mutex()
@@ -176,7 +178,7 @@ class MultiViewSessionManager(
         if (duplicate != null) {
             _state.value = _state.value.copy(duplicate = MultiViewDuplicate(channelId, duplicate.id, panelId)); return
         }
-        record.retryCount = 0
+        record.recovery.reset()
         expectedReferences.remove(panelId)
         tune(record, channelId)
     }
@@ -367,8 +369,22 @@ class MultiViewSessionManager(
                         }
                     }
                     if (!retainOld) { record.current = attempt; update(record.id) { it.copy(engineReady = true) } }
+                    attempt.player.configureRecovery(scope, record.recovery,
+                        allowed = { owns(record, attempt) && valid(record, generation) && (foreground || inPip) && !audioInterrupted },
+                        reconnect = {
+                            if (owns(record, attempt) && valid(record, generation) && (foreground || inPip)) {
+                                // Always close before URL resolution; never create a fifth/speculative player.
+                                close(attempt)
+                                record.recovery.record(app.opentv.player.RecoveryEvent.CONNECTION_CLOSED, nowMs())
+                                if (record.current === attempt) record.current = null
+                                if (record.candidate === attempt) record.candidate = null
+                                expectedReferences[record.id] = MultiViewChannelReference(channel.channelId, channel.sourceId, token.accountKey)
+                                tune(record, channel.channelId)
+                            }
+                        })
+                    record.recovery.record(app.opentv.player.RecoveryEvent.RESERVATION_ACQUIRED, nowMs())
                     attempt.player.start(channel)
-                    val ready = withTimeoutOrNull(startupTimeoutMs) { attempt.ready.await() } == true
+                    val ready = withTimeoutOrNull(if (attempt.player.managesRecovery) 240_000 else startupTimeoutMs) { attempt.ready.await() } == true
                     coroutineContext.ensureActive()
                     if (!valid(record, generation) || attempt.released) return@withLock
                     if (!stillValid()) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.STREAM,
@@ -447,8 +463,20 @@ class MultiViewSessionManager(
         }
         applyAudio()
     }
-    private fun failPanel(record: PanelRecord, failure: MultiViewFailure) = update(record.id) {
-        it.copy(status = MultiViewPanelStatus.FAILED, engineReady = false, error = failure.message, failureKind = failure.kind)
+    private fun failPanel(record: PanelRecord, failure: MultiViewFailure) {
+        if (record.recovery.snapshot.value.state != app.opentv.player.RecoveryState.FAILED) {
+            record.recovery.record(app.opentv.player.RecoveryEvent.FAILED, nowMs())
+            record.recovery.publish(app.opentv.player.RecoveryState.FAILED, nowMs(), when (failure.kind) {
+                MultiViewFailureKind.NETWORK -> app.opentv.player.RecoveryFailure.NETWORK
+                MultiViewFailureKind.PROVIDER_LIMIT -> app.opentv.player.RecoveryFailure.CONNECTION_LIMIT
+                MultiViewFailureKind.DECODER -> app.opentv.player.RecoveryFailure.DECODER
+                MultiViewFailureKind.UNSUPPORTED -> app.opentv.player.RecoveryFailure.UNSUPPORTED
+                else -> app.opentv.player.RecoveryFailure.UNKNOWN
+            })
+        }
+        update(record.id) {
+            it.copy(status = MultiViewPanelStatus.FAILED, engineReady = false, error = failure.message, failureKind = failure.kind)
+        }
     }
     private fun showCurrent(record: PanelRecord, error: String? = null, kind: MultiViewFailureKind? = null) {
         val runtime = record.current?.takeUnless { it.released } ?: return
@@ -473,10 +501,24 @@ class MultiViewSessionManager(
 
     fun retry(panelId: String) {
         val record = records[panelId] ?: return
-        if (record.retryCount >= 3) { notice("Retry limit reached. Replace this channel or remove and add it again."); return }
-        record.retryCount++
+        record.recovery.reset()
         tune(record, record.channelId)
     }
+    /** Provider configuration changes close only affected viewers; recording owners are separate. */
+    fun invalidateSources(sourceIds: Set<Long>) {
+        records.values.filter { record ->
+            listOfNotNull(record.current, record.candidate).any { it.channel.sourceId in sourceIds }
+        }.forEach { record ->
+            pauseRecord(record)
+            update(record.id) { it.copy(error = "Provider settings changed. Retry to review access and capacity.") }
+        }
+        applyAudio()
+    }
+
+    fun clearRecoveryDiagnostics() { records.values.forEach { it.recovery.clearHistory() } }
+
+    fun recoveryStatus(panelId: String) = records[panelId]?.recovery?.snapshot
+
     fun remove(panelId: String) {
         val record = records.remove(panelId) ?: return
         expectedReferences.remove(panelId)
@@ -610,7 +652,7 @@ class MultiViewSessionManager(
     fun resume() {
         if (!foreground && !inPip) return
         val ordered = records.values.sortedBy { if (it.id == _state.value.primaryPanelId) 0 else 1 }
-        ordered.filter { it.current == null && it.candidate == null }.forEach { tune(it, it.channelId) }
+        ordered.filter { it.current == null && it.candidate == null }.forEach { it.recovery.reset(); tune(it, it.channelId) }
     }
     fun restorePanels(panels: List<Pair<String, Long>>, layout: MultiViewLayout,
         primaryPanelId: String? = null, audioPanelId: String? = null) {
@@ -718,6 +760,8 @@ class MultiViewSessionManager(
                 override fun registerOwner(token: ReservationToken, reclamationPriority: () -> Int, close: suspend () -> Unit) =
                     allocator.registerOwner(token, reclamationPriority, close)
             }, players = MultiViewPlayerFactory { AndroidMultiViewPlayer(application, graph.streamingHttpClient, it) },
+                nowMs = android.os.SystemClock::elapsedRealtime,
+                diagnosticsEnabled = { graph.settings.diagnosticsEnabled.value },
                 hardware = AndroidMultiViewHardware(application), audioFocus = AndroidMultiViewAudioFocus(application), beforeStart = beforeStart,
                 validateAdmission = { channel, old ->
                     val key = allocator.accountKeyForSource(channel.sourceId)
@@ -727,6 +771,22 @@ class MultiViewSessionManager(
                     if (!checked.canLoad) throw MultiViewStartException(MultiViewFailure(MultiViewFailureKind.PROVIDER_LIMIT,
                         "Channel availability or current recording capacity changed. Review this panel before retrying."))
                 })
+            manager.observerJobs += scope.launch {
+                var previous: Map<Long, app.opentv.data.model.Source>? = null
+                graph.sourceRepository.observeAll().collect { sources ->
+                    val current = sources.associate { it.id to it.playbackConfiguration() }
+                    previous?.let { old -> manager.invalidateSources(old.keys.filter { old[it] != current[it] }.toSet()) }
+                    previous = current
+                }
+            }
+            manager.observerJobs += scope.launch {
+                var policies = allocator.snapshots.value.associate { it.accountKey to it.policy }
+                allocator.snapshots.collect { snapshots ->
+                    val changed = snapshots.filter { policies[it.accountKey] != null && policies[it.accountKey] != it.policy }
+                    manager.invalidateSources(changed.flatMap { it.sourceIds }.toSet())
+                    policies = snapshots.associate { it.accountKey to it.policy }
+                }
+            }
             val checkpoints = MultiViewPresetStore(application)
             manager.checkpointStore = checkpoints
             manager.updatePreferences(graph.settings.multiViewPreferences.value)

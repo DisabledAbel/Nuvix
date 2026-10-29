@@ -227,3 +227,19 @@ never overwrite a reserved version or bypass signer, artifact or version-history
 - [ ] Update the beta guide's availability status with the real release link only after verification.
 - [ ] Publish any availability announcement only through a separately authorized communication;
       the [preparation announcement](BETA-DISCORD-ANNOUNCEMENT.md) makes no APK availability claim.
+
+## Advanced playback recovery acceptance
+
+- [ ] Review monitor/adapters and sustained-progress verification; confirm 2/5/10-second bounded
+  attempts cannot be reset by brief READY states or obsolete callbacks.
+- [ ] Observe passing unit, lint, APK, Python/security/release-identity and IPTV Playback Tests
+  workflows on the PR commit, including generated stall/disconnect/offline/rate-limit scenarios.
+- [ ] Complete the [Android TV/Google TV/Fire TV hardware checklist](TESTING.md#automatic-playback-recovery),
+  including provider allowances, four-panel audio/layout isolation, background DVR continuity,
+  remote actions, Sports compatibility, lifecycle and diagnostics privacy.
+- [ ] Record limitations and actual before/after evidence. Do not infer physical-device recovery
+  or provider certification from fake-player tests or emulator pixels.
+
+This feature preserves `com.nuvix.player`, permanent production signing, version metadata,
+update behavior, provider encrypted storage and manual publication. It creates no release tag,
+nightly workflow or v1.0.1 publication; merge/publication require their separate existing process.

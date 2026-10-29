@@ -55,6 +55,8 @@ data class LiveConnectionPrompt(val channelName: String, val challenge: UnknownC
 @OptIn(UnstableApi::class)
 class LivePlaybackSession(application: Application) : AndroidViewModel(application) {
     private val graph = ServiceLocator.get(application)
+    private val recoveryBudget = RecoveryBudget(diagnosticsEnabled = { graph.settings.diagnosticsEnabled.value })
+    val recoveryStatus = recoveryBudget.snapshot
     private val connections = AccountConnectionManager.get(application)
     private val connectionSessionId = "live:${UUID.randomUUID()}"
     private var connectionGeneration = 0L
@@ -76,7 +78,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         enabled = { graph.settings.diagnosticsEnabled.value },
     )
 
-    private val coordinator = LivePlaybackCoordinator(
+    private val coordinator: LivePlaybackCoordinator = LivePlaybackCoordinator(
         scope = viewModelScope,
         findChannel = { graph.catalogRepository.channel(it) },
         resolve = { channel ->
@@ -103,8 +105,11 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
         preparePlayback = ::reserveLiveConnection,
         beforeResolve = ::prepareLiveReplacement,
         transitionDiagnostics = transitionDiagnostics,
+        recoveryBudget = recoveryBudget,
+        clock = android.os.SystemClock::elapsedRealtime,
         afterEngineRelease = {
             connectionToken?.let(connections::release)
+            if (connectionToken != null) recoveryBudget.record(RecoveryEvent.CONNECTION_CLOSED, android.os.SystemClock.elapsedRealtime())
             connectionToken = null
         },
     )
@@ -185,6 +190,37 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             active.drop(1).collect { active -> if (!active) sportsSwitch.clear() }
         }
         viewModelScope.launch {
+            graph.settings.diagnosticsEnabled.collect { enabled -> if (!enabled) {
+                recoveryBudget.clearHistory()
+                multiView.clearRecoveryDiagnostics()
+            } }
+        }
+        viewModelScope.launch {
+            var previous: Map<Long, app.opentv.data.model.Source>? = null
+            graph.sourceRepository.observeAll().collect { sources ->
+                val current = sources.associate { it.id to it.playbackConfiguration() }
+                val selected = currentChannel.value?.sourceId
+                if (selected != null && previous?.containsKey(selected) == true && previous?.get(selected) != current[selected]) {
+                    sportsSwitch.clear()
+                    coordinator.interrupt("Provider settings changed. Retry to review current access and connection capacity.")
+                }
+                previous = current
+            }
+        }
+        viewModelScope.launch {
+            var policies = connections.snapshots.value.associate { it.accountKey to it.policy }
+            connections.snapshots.collect { snapshots ->
+                val next = snapshots.associate { it.accountKey to it.policy }
+                val key = connectionToken?.accountKey
+                if (key != null && policies[key] != null && policies[key] != next[key] &&
+                    recoveryStatus.value.state in setOf(RecoveryState.WAITING, RecoveryState.RECOVERING)) {
+                    sportsSwitch.clear()
+                    coordinator.interrupt("Connection settings changed. Retry to recheck available capacity.")
+                }
+                policies = next
+            }
+        }
+        viewModelScope.launch {
             SleepTimer.deadline.collectLatest { deadline ->
                 if (deadline != null) {
                     delay((deadline - System.currentTimeMillis()).coerceAtLeast(0))
@@ -258,6 +294,7 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
             (result as? ReservationResult.Denied)?.reason ?: "Connection settings changed. Please retry.",
         )
         transitionDiagnostics.record(transitionDiagnostics.generation, ChannelTransitionPhase.RESERVATION_ACQUIRED)
+        recoveryBudget.record(RecoveryEvent.RESERVATION_ACQUIRED, android.os.SystemClock.elapsedRealtime())
         try {
             releaseCurrent()
             connectionToken = token
@@ -336,12 +373,14 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
 
     /** Launches an explicit channel selection through the shared live coordinator. */
     fun openChannel(id: Long) {
+        if (requestedChannelId.value != id) recoveryBudget.reset()
         automaticSportsTune = false
         if (sportsSwitch.selection.value?.channelId != id) sportsSwitch.clear()
         multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.openChannel(id)
     }
     /** Only an explicit confirmed Sports game selection grants automatic same-game tuning. */
     fun openSportsChannel(eventId: String, id: Long) {
+        recoveryBudget.reset()
         automaticSportsTune = false
         _sportsNotice.value = null
         multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback()
@@ -359,25 +398,29 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     }
     /** Tunes the selected channel using the session's current live playback ownership. */
     fun tune(channel: Channel) {
+        recoveryBudget.reset()
         automaticSportsTune = false
         sportsSwitch.clear()
         multiView.stop(); releaseGuidePreview(); releaseNonLivePlayback(); coordinator.tune(channel)
     }
     /** Clears diagnostics belonging to the current live playback session. */
     fun clearDiagnostics() {
+        recoveryBudget.clearHistory()
+        multiView.clearRecoveryDiagnostics()
         transitionDiagnostics.clear()
         implementation?.controller?.diagnostics?.clear()
         nonLivePlayback?.diagnostics?.clear()
     }
     /** Retries the explicitly selected live channel. */
     fun retry() {
+        recoveryBudget.reset()
         automaticSportsTune = false
         _sportsNotice.value = null
         sportsSwitch.selection.value?.let { sportsSwitch.start(it.eventId, it.channelId) }
         coordinator.retry()
     }
     /** Stops the shared live playback session. */
-    fun stop() { sportsSwitch.clear(); multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
+    fun stop() { recoveryBudget.reset(); sportsSwitch.clear(); multiView.stop(); releaseGuidePreview(); coordinator.stopForOtherPlayback() }
     /** Capture admission closes only viewing sessions whose account capacity is needed. */
     fun recordChannel(channel: Channel, programme: Programme? = null) {
         viewModelScope.launch { graph.recordingEngine.startChannel(channel, programme) }
@@ -424,11 +467,20 @@ class LivePlaybackSession(application: Application) : AndroidViewModel(applicati
     /** Adapts the Media3 controller to the retained live engine interface. */
     private inner class ControllerEngine(application: Application) : LivePlaybackEngine {
         private val scope = CoroutineScope(SupervisorJob(viewModelScope.coroutineContext[Job]) + Dispatchers.Main.immediate)
-        val controller = PlayerController(
+        val controller: PlayerController = PlayerController(
             application, scope, graph.streamingHttpClient,
             subtitlesEnabled = graph.settings.subtitlesEnabled.value,
             dvr = graph.settings.livePauseEnabled.value,
             transitionDiagnostics = transitionDiagnostics,
+            recoveryBudget = recoveryBudget,
+            recoveryAllowed = { implementation === this@ControllerEngine && coordinator.active.value &&
+                coordinator.requestedChannelId.value == coordinator.currentChannel.value?.id &&
+                coordinator.playbackAllowed.value && connectionPrompt.value == null },
+            reconnectLive = {
+                if (implementation === this@ControllerEngine && coordinator.playbackAllowed.value && !paused.value) {
+                    coordinator.reconnect()
+                }
+            },
         )
         override val state = controller.state
         override val paused = controller.userPaused

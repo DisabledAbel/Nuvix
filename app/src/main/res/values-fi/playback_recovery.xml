@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">Yhdistetään uudelleen… Yritys %1$d/%2$d</string>
+    <string name="playback_choose_source">Valitse toinen sallittu lähde</string>
+    <string name="playback_view_information">Näytä suoratoiston tiedot</string>
+</resources>

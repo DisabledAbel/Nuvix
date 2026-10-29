@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_reconnecting">جارٍ إعادة الاتصال… المحاولة %1$d من %2$d</string>
+    <string name="playback_choose_source">اختيار مصدر آخر مصرح به</string>
+    <string name="playback_view_information">عرض معلومات البث</string>
+</resources>

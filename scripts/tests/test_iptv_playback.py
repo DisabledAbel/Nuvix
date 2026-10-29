@@ -259,5 +259,53 @@ class ReportTest(unittest.TestCase):
         self.assertEqual("not_comparable", runner.comparison(current, previous)["status"])
 
 
+class RecoveryProviderTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        root = Path(self.directory.name)
+        (root / "a.ts").write_bytes(b"\x47" + bytes(187 * 100))
+        self.context = serve(root)
+        self.server = self.context.__enter__()
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def tearDown(self):
+        self.context.__exit__(None, None, None)
+        self.directory.cleanup()
+
+    def test_two_failures_then_valid_transport(self):
+        for _ in range(2):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                self.opener.open(self.server.base + "/recovery/twice.ts")
+            self.assertEqual(503, error.exception.code)
+        with self.opener.open(self.server.base + "/recovery/twice.ts") as response:
+            self.assertEqual(0x47, response.read(1)[0])
+
+    def test_offline_never_self_recovers_and_rate_limit_has_retry_after(self):
+        for _ in range(4):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                self.opener.open(self.server.base + "/recovery/offline.ts")
+            self.assertEqual(503, error.exception.code)
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.opener.open(self.server.base + "/recovery/rate.ts")
+        self.assertEqual("3", error.exception.headers["Retry-After"])
+
+    def test_disconnect_delivers_media_before_truncated_body_then_recovers(self):
+        import http.client
+        with self.opener.open(self.server.base + "/recovery/disconnect.ts") as response:
+            with self.assertRaises(http.client.IncompleteRead) as error:
+                response.read()
+            self.assertEqual(0x47, error.exception.partial[0])
+        with self.opener.open(self.server.base + "/recovery/disconnect.ts") as response:
+            self.assertEqual(0x47, response.read()[0])
+
+    def test_stall_yields_valid_media_and_next_connection_recovers(self):
+        with self.opener.open(self.server.base + "/recovery/stall.ts", timeout=.2) as response:
+            self.assertEqual(0x47, response.read(1)[0])
+            with self.assertRaises(TimeoutError):
+                response.read()
+        with self.opener.open(self.server.base + "/recovery/stall.ts") as response:
+            self.assertEqual(0x47, response.read()[0])
+
+
 if __name__ == "__main__":
     unittest.main()

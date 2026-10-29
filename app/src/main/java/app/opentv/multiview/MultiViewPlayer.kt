@@ -25,6 +25,10 @@ import app.opentv.player.DiagnosticProtocol
 import app.opentv.player.PlaybackDiagnostics
 import app.opentv.player.PlaybackErrors
 import app.opentv.player.PlayerSurfaceOwner
+import app.opentv.player.RecoveryBudget
+import app.opentv.player.Media3PlaybackRecovery
+import app.opentv.player.BufferPolicy
+import kotlinx.coroutines.CoroutineScope
 import okhttp3.OkHttpClient
 
 /** Resolved URLs remain in memory for this attempt only, never in presentation/preset state. */
@@ -47,6 +51,8 @@ interface MultiViewPlayer {
         fun buffering()
         fun failed(failure: MultiViewFailure)
     }
+    val managesRecovery: Boolean get() = false
+    fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {}
     fun start(channel: ResolvedMultiViewChannel)
     fun setVolume(volume: Float)
     fun release()
@@ -70,6 +76,8 @@ class AndroidMultiViewPlayer(
     private val listener: MultiViewPlayer.Listener,
 ) : MultiViewPlayer {
     private var released = false
+    private var recovery: Media3PlaybackRecovery? = null
+    private var beginRecovery: (() -> Unit)? = null
     private val http = OkHttpDataSource.Factory(httpClient)
     private val selector = DefaultTrackSelector(context).apply {
         parameters = buildUponParameters().setMaxVideoSize(1920, 1080)
@@ -84,7 +92,10 @@ class AndroidMultiViewPlayer(
             }
         }
     private val player = ExoPlayer.Builder(context, renderers)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+        .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+            .setLoadErrorHandlingPolicy(object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy() {
+                override fun getRetryDelayMsFor(info: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo) = C.TIME_UNSET
+            }))
         .setTrackSelector(selector)
         .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(5_000, 15_000, 1_000, 2_000)
             .setTargetBufferBytes(12 * 1024 * 1024).setPrioritizeTimeOverSizeThresholds(false).build())
@@ -99,12 +110,12 @@ class AndroidMultiViewPlayer(
                     when (playbackState) {
                         Player.STATE_READY -> listener.ready()
                         Player.STATE_BUFFERING -> listener.buffering()
-                        Player.STATE_ENDED -> listener.failed(MultiViewFailure(MultiViewFailureKind.STREAM,
+                        Player.STATE_ENDED -> if (recovery == null) listener.failed(MultiViewFailure(MultiViewFailureKind.STREAM,
                             "The live stream ended. Retry or replace this channel."))
                     }
                 }
                 override fun onPlayerError(error: PlaybackException) {
-                    if (released) return
+                    if (released || recovery != null) return
                     val kind = when (error.errorCode) {
                         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                         PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
@@ -126,12 +137,28 @@ class AndroidMultiViewPlayer(
     override val surfaceOwner = PlayerSurfaceOwner { if (released) null else player }
     override val diagnostics = PlaybackDiagnostics(player)
 
+    override val managesRecovery = true
+    override fun configureRecovery(scope: CoroutineScope, budget: RecoveryBudget, allowed: () -> Boolean, reconnect: () -> Unit) {
+        diagnostics.recoveryBudget = budget
+        beginRecovery = {
+            recovery = Media3PlaybackRecovery(player, scope, budget, allowed, { BufferPolicy.PREVIEW }, reconnect,
+                failed = { failure -> listener.failed(MultiViewFailure(
+                    when (failure) {
+                        app.opentv.player.RecoveryFailure.DECODER -> MultiViewFailureKind.DECODER
+                        app.opentv.player.RecoveryFailure.UNSUPPORTED -> MultiViewFailureKind.UNSUPPORTED
+                        app.opentv.player.RecoveryFailure.CONNECTION_LIMIT -> MultiViewFailureKind.PROVIDER_LIMIT
+                        else -> MultiViewFailureKind.STREAM
+                    }, PlaybackErrors.describeRecovery(failure))) })
+        }
+    }
+
     override fun start(channel: ResolvedMultiViewChannel) {
         check(!released)
         http.setUserAgent(channel.userAgent)
         val item = MediaItem.Builder().setMediaId(java.util.UUID.randomUUID().toString()).setUri(channel.url).build()
         diagnostics.beginSession(DiagnosticProtocol.identify(item), item.mediaId)
         player.setMediaItem(item)
+        beginRecovery?.invoke()
         player.prepare()
         player.playWhenReady = true
     }
@@ -139,6 +166,7 @@ class AndroidMultiViewPlayer(
     override fun release() {
         if (released) return
         released = true
+        recovery?.close(); recovery = null; beginRecovery = null
         surfaceOwner.clear()
         diagnostics.close()
         player.volume = 0f
