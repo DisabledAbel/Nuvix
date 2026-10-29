@@ -292,6 +292,11 @@ interface ChannelDao {
     )
     suspend fun channelCountsByCategory(): List<CategoryChannelCount>
 
+    /** Same grouped projection as the manager, observed only while its Manager session is open. */
+    @Query("SELECT sourceId, categoryId, COUNT(*) AS count FROM channels WHERE categoryId IS NOT NULL GROUP BY sourceId, categoryId")
+    fun observeChannelCountsByCategory(): Flow<List<CategoryChannelCount>>
+
+
     /** Observes a bounded name search over visible channels, prioritizing favorites and user order. */
     @Query(
         """

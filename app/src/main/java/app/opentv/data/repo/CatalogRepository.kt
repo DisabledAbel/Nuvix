@@ -604,6 +604,10 @@ class CatalogRepository(
     suspend fun categoryChannelCounts(): List<app.opentv.data.db.CategoryChannelCount> =
         channelDao.channelCountsByCategory()
 
+    /** Live grouped counts, without materializing channel entities for language detection. */
+    fun observeCategoryChannelCounts(): Flow<List<app.opentv.data.db.CategoryChannelCount>> =
+        channelDao.observeChannelCountsByCategory()
+
     /** One category's channels, hidden included, optionally scoped to a single source. */
     suspend fun channelsInCategoryForManager(sourceId: Long?, categoryId: String): List<Channel> =
         channelDao.channelsInCategoryIncludingHidden(sourceId, categoryId)

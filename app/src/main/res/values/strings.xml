@@ -553,4 +553,33 @@
     <string name="playback_reconnecting">Reconnecting… Attempt %1$d of %2$d</string>
     <string name="playback_choose_source">Choose Another Authorized Source</string>
     <string name="playback_view_information">View Stream Information</string>
+    <!-- Optional session-only review. English fallback until community translations are supplied. -->
+    <string name="english_groups_title" tools:ignore="MissingTranslation">Find English Groups</string>
+    <string name="english_groups_explanation" tools:ignore="MissingTranslation">Review local provider labels. Confidence describes the label, not verified English audio. Choose groups before applying a temporary Channel Manager view filter.</string>
+    <string name="english_groups_scan" tools:ignore="MissingTranslation">Scan provider groups</string>
+    <string name="english_groups_select_likely" tools:ignore="MissingTranslation">Select all high-confidence suggestions</string>
+    <string name="english_groups_clear_selection" tools:ignore="MissingTranslation">Clear selection</string>
+    <string name="english_groups_apply" tools:ignore="MissingTranslation">Apply view filter</string>
+    <string name="english_groups_clear_filter" tools:ignore="MissingTranslation">Show All Groups</string>
+    <string name="english_groups_cancel" tools:ignore="MissingTranslation">Cancel without changes</string>
+    <string name="english_groups_selection_count" tools:ignore="MissingTranslation">Selected groups: %1$d</string>
+    <string name="english_groups_channel_count" tools:ignore="MissingTranslation">Channels (including hidden): %1$d</string>
+    <string name="english_groups_filter_active" tools:ignore="MissingTranslation">English group view filter active</string>
+    <string name="english_groups_catalog_changed" tools:ignore="MissingTranslation">Provider groups changed. Stale selections and the temporary filter were cleared. Scan again to review current groups.</string>
+    <string name="english_groups_scanning" tools:ignore="MissingTranslation">Scanning local group metadata…</string>
+    <string name="english_groups_not_scanned" tools:ignore="MissingTranslation">Choose Scan provider groups to begin. No filter is applied by scanning.</string>
+    <string name="english_groups_empty" tools:ignore="MissingTranslation">No provider groups are available. Import or refresh an authorized provider, then scan again.</string>
+    <string name="english_groups_none_likely" tools:ignore="MissingTranslation">No high-confidence suggestions. You can still review and select groups manually.</string>
+    <string name="english_groups_empty_section" tools:ignore="MissingTranslation">No groups in this section.</string>
+    <string name="english_groups_likely" tools:ignore="MissingTranslation">Likely English · high confidence</string>
+    <string name="english_groups_review" tools:ignore="MissingTranslation">Needs review · uncertain</string>
+    <string name="english_groups_unknown" tools:ignore="MissingTranslation">No reliable English evidence · unknown</string>
+    <string name="english_groups_reason_explicit" tools:ignore="MissingTranslation">The original group name has an explicit English language label. Audio has not been verified.</string>
+    <string name="english_groups_reason_mixed" tools:ignore="MissingTranslation">The label mentions multiple languages or mixed content. Review before selecting.</string>
+    <string name="english_groups_reason_ambiguous" tools:ignore="MissingTranslation">English may describe subtitles, a competition, or another ambiguous context. Audio is unknown.</string>
+    <string name="english_groups_reason_unknown" tools:ignore="MissingTranslation">No explicit English language label. Geography and channel brands do not prove audio language.</string>
+    <string name="english_groups_reason_unusable" tools:ignore="MissingTranslation">The group name is missing or cannot be classified safely. Audio is unknown.</string>
+    <string name="english_groups_unnamed" tools:ignore="MissingTranslation">Unnamed provider group</string>
+    <string name="english_groups_selected" tools:ignore="MissingTranslation">Selected</string>
+    <string name="english_groups_unselected" tools:ignore="MissingTranslation">Not selected</string>
 </resources>

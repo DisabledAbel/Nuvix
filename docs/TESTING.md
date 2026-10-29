@@ -871,3 +871,9 @@ Physical acceptance remains pending on Android TV, Google TV and Fire TV:
 Fake players and emulator pixels do not certify hardware, provider limits on other devices, or
 guaranteed recovery. Record actual commands/results and GitHub Actions status in the PR; keep it
 in draft when substantial validation is missing. No release/tag is part of this work.
+
+## Unreleased English group detection
+
+See [English group detection validation](english-group-detection.md#implementation-and-validation)
+for focused Kotlin/Robolectric commands, synthetic provider fixtures, 20,000-item checks and
+the physical TV remote/accessibility acceptance checklist. No real IPTV credentials are used.

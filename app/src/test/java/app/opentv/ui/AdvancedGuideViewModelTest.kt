@@ -2,6 +2,7 @@
 package app.opentv.ui
 
 import android.app.Application
+import app.opentv.channels.ProviderGroupKey
 import android.content.Context
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
@@ -32,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -56,6 +58,7 @@ class AdvancedGuideViewModelTest {
     private lateinit var settings: AppSettings
     private lateinit var store: ViewModelStore
     private lateinit var collectors: CoroutineScope
+    private lateinit var mainDispatcher: kotlinx.coroutines.test.TestDispatcher
     private var savedGraph: Any? = null
     private var savedRecent: Any? = null
     private var vmCount = 0
@@ -67,7 +70,8 @@ class AdvancedGuideViewModelTest {
         listOf("opentv_settings", "nuvix_private_settings", "nuvix_recent_channels").forEach {
             app.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
         }
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        mainDispatcher = UnconfinedTestDispatcher()
+        Dispatchers.setMain(mainDispatcher)
         collectors = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         store = ViewModelStore()
         database = Room.inMemoryDatabaseBuilder(app, OpenTvDatabase::class.java)
@@ -297,4 +301,87 @@ class AdvancedGuideViewModelTest {
         assertThat(moved.first().programmes).isEmpty()
         assertThat(moved[70].now?.title).isEqualTo("Offline programme 71")
     }
+    /** Manager-only view filtering retains source identity even when provider category IDs collide. */
+    @Test fun englishGroupReviewFiltersManagerOnlyAndClearingRestoresOriginalOrder(): Unit = runBlocking {
+        source(1); source(2)
+        val categories = listOf(
+            Category("same", 1, "English", StreamKind.LIVE, 0),
+            Category("other", 1, "News", StreamKind.LIVE, 1),
+            Category("same", 2, "English", StreamKind.LIVE, 0),
+            Category("other", 2, "French", StreamKind.LIVE, 2),
+        )
+        database.categories().upsertAll(categories)
+        database.channels().upsertAll(listOf(
+            channel(1, favourite = true, hidden = true).copy(categoryId = "same", name = "Fixture One"),
+            channel(2, 2).copy(categoryId = "same", name = "Fixture Two"),
+            channel(3).copy(categoryId = "other", name = "Fixture Three"),
+        ))
+        val vm = viewModel()
+        vm.managerCategoryGroups.launchIn(collectors)
+        vm.managerRows.launchIn(collectors)
+        vm.managerResults.launchIn(collectors)
+        vm.managerEnglishCatalog.onEach { vm.englishGroups.updateCatalog(it) }.launchIn(collectors)
+        val original = withTimeout(10_000) { vm.managerCategoryGroups.first { it.size == 3 } }
+        withTimeout(10_000) { vm.managerEnglishCatalog.first { it.size == 4 } }
+        val before = database.channels().allForMatching()
+        vm.englishGroups.scan()
+        withTimeout(10_000) { vm.englishGroups.state.first { it.scanned } }
+        assertThat(vm.managerCategoryGroups.value).isEqualTo(original)
+        vm.englishGroups.toggle(ProviderGroupKey(1, "same"))
+        assertThat(vm.englishGroups.apply()).isTrue()
+        val filtered = withTimeout(10_000) { vm.managerCategoryGroups.first { it.size == 1 } }
+        vm.selectManagerCategory(filtered.single().key)
+        val rows = withTimeout(10_000) { vm.managerRows.first { it.isNotEmpty() } }
+        assertThat(rows.flatMap { it.variants }.map { it.id }).containsExactly(1L)
+        assertThat(rows.single().primary.hidden).isTrue()
+        assertThat(rows.single().primary.favourite).isTrue()
+        vm.setManagerQuery("Fixture")
+        mainDispatcher.scheduler.advanceTimeBy(250)
+        mainDispatcher.scheduler.runCurrent()
+        val searched = withTimeout(10_000) { vm.managerResults.first { it.isNotEmpty() } }
+        assertThat(searched.flatMap { it.variants }.map { it.id }).containsExactly(1L)
+        vm.selectManagerSource(2)
+        withTimeout(10_000) { vm.managerCategoryGroups.first { it.isEmpty() } }
+        vm.englishGroups.clearFilter()
+        withTimeout(10_000) { vm.managerCategoryGroups.first { it.size == 2 } }
+        vm.selectManagerSource(null)
+        assertThat(withTimeout(10_000) { vm.managerCategoryGroups.first { it.size == 3 } }).isEqualTo(original)
+        assertThat(database.channels().allForMatching()).isEqualTo(before)
+        assertThat(database.categories().allByKind(StreamKind.LIVE)).containsExactlyElementsIn(categories)
+        assertThat(vm.selectedSource.value).isNull()
+        assertThat(vm.selectedCategory.value).isNull()
+    }
+
+    @Test fun englishFilterPreservesFoldedOrderAndDisambiguatesSelectedGroupsWithTheSameId(): Unit = runBlocking {
+        source(1); source(2)
+        database.categories().upsertAll(listOf(
+            Category("early", 1, "English Movies SD", StreamKind.LIVE, 0),
+            Category("news", 1, "English News", StreamKind.LIVE, 1),
+            Category("late", 1, "English Movies HD", StreamKind.LIVE, 2),
+            Category("late", 2, "French", StreamKind.LIVE, 3),
+        ))
+        database.channels().upsertAll(listOf(
+            channel(1).copy(categoryId = "late"),
+            channel(2).copy(categoryId = "news"),
+            channel(3, 2).copy(categoryId = "late"),
+        ))
+        val vm = viewModel()
+        vm.managerCategoryGroups.launchIn(collectors)
+        vm.managerRows.launchIn(collectors)
+        val original = withTimeout(10_000) { vm.managerCategoryGroups.first { it.size == 3 } }
+        vm.englishGroups.updateCatalog(withTimeout(10_000) { vm.managerEnglishCatalog.first { it.size == 4 } })
+        vm.englishGroups.scan()
+        withTimeout(10_000) { vm.englishGroups.state.first { it.scanned } }
+        listOf(1L to "late", 1L to "news", 2L to "late").forEach { (source, id) ->
+            vm.englishGroups.toggle(ProviderGroupKey(source, id))
+        }
+        assertThat(vm.englishGroups.apply()).isTrue()
+        val filtered = withTimeout(10_000) { vm.managerCategoryGroups.first { it.firstOrNull()?.ids == listOf("late") } }
+        assertThat(filtered.map { it.key }).containsExactlyElementsIn(original.map { it.key }).inOrder()
+        assertThat(filtered.map { it.label }).containsExactlyElementsIn(original.map { it.label }).inOrder()
+        vm.selectManagerCategory(filtered.first().key)
+        val rows = withTimeout(10_000) { vm.managerRows.first { it.isNotEmpty() } }
+        assertThat(rows.flatMap { it.variants }.map { it.id }).containsExactly(1L)
+    }
+
 }
