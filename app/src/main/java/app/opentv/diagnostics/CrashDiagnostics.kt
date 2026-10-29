@@ -50,9 +50,10 @@ object CrashDiagnostics {
         val file = atomic(context)
         var stream: FileOutputStream? = null
         try {
-            stream = file.startWrite()
-            stream.write(report.toByteArray(Charsets.UTF_8))
-            file.finishWrite(stream)
+            val output = file.startWrite()
+            stream = output
+            output.write(report.toByteArray(Charsets.UTF_8))
+            file.finishWrite(output)
         } catch (_: Throwable) {
             stream?.let {
                 try { file.failWrite(it) } catch (_: Throwable) { /* Best effort only. */ }
@@ -92,7 +93,7 @@ internal object CrashReportFormatter {
         var cause: Throwable? = throwable
         var depth = 0
         while (cause != null && depth < 3) {
-            val current = cause
+            val current = cause ?: break
             appendLine("Exception ${depth + 1}: ${current.javaClass.name.takeIf(symbol::matches) ?: "Unknown"}")
             var accepted = 0
             for (frame in current.stackTrace.take(30)) {
