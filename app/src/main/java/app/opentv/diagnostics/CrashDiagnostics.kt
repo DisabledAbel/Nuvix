@@ -2,6 +2,9 @@
 package app.opentv.diagnostics
 
 import android.content.Context
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
+import android.os.Build
 import android.util.AtomicFile
 import com.disabledabel.nuvix.BuildConfig
 import java.io.File
@@ -68,6 +71,32 @@ object CrashDiagnostics {
         }
     } catch (_: Exception) {
         null
+    }
+
+    /**
+     * Android 11+ exposes process termination categories without reading logcat or private traces.
+     * An older exit can remain in system history; never describe it as a current fatal crash.
+     */
+    fun latestSystemExit(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return try {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return null
+            val exit = manager.getHistoricalProcessExitReasons(context.packageName, 0, 1)
+                .firstOrNull() ?: return null
+            val label = when (exit.reason) {
+                ApplicationExitInfo.REASON_CRASH -> "Uncaught Java/Kotlin crash"
+                ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native process crash"
+                ApplicationExitInfo.REASON_ANR -> "App not responding"
+                ApplicationExitInfo.REASON_LOW_MEMORY -> "Low-memory system termination"
+                ApplicationExitInfo.REASON_USER_REQUESTED -> "User or system-requested stop"
+                ApplicationExitInfo.REASON_EXIT_SELF -> "App requested exit"
+                else -> "Other process exit (reason ${exit.reason})"
+            }
+            "Last Android process exit: $label (Unix ms ${exit.timestamp})"
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** Explicit user action, independent of playback diagnostics and app data. */
