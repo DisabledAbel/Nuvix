@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -33,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -81,9 +83,23 @@ fun ChannelManagerScreen(
     viewModel: ChannelsViewModel = viewModel(),
 ) {
     var editingGroups by remember { mutableStateOf(false) }
-    if (editingGroups) {
-        CustomGroupsScreen(onBack = { editingGroups = false })
-        return
+    var reviewingEnglish by remember { mutableStateOf(false) }
+    var restoreEnglishFocus by remember { mutableStateOf(false) }
+    val englishActionFocus = remember { FocusRequester() }
+    val railListState = rememberLazyListState()
+    val englishState by viewModel.englishGroups.state.collectAsState()
+    // One subscription per Manager session; classification only happens on explicit Scan.
+    LaunchedEffect(viewModel) {
+        viewModel.managerEnglishCatalog.collect { viewModel.englishGroups.updateCatalog(it) }
+    }
+    DisposableEffect(viewModel) { onDispose { viewModel.englishGroups.close() } }
+    LaunchedEffect(reviewingEnglish, restoreEnglishFocus, editingGroups) {
+        if (!reviewingEnglish && !editingGroups && restoreEnglishFocus) {
+            railListState.scrollToItem(0)
+            delay(80)
+            runCatching { englishActionFocus.requestFocus() }
+            restoreEnglishFocus = false
+        }
     }
     val sources by viewModel.sources.collectAsState()
     val categoryGroups by viewModel.managerCategoryGroups.collectAsState()
@@ -113,19 +129,50 @@ fun ChannelManagerScreen(
     // manager never displayed any. Re-runs when the category set changes (e.g. after switching
     // source, which clears the selection) so a newly-chosen source immediately shows its channels.
     LaunchedEffect(categoryGroups, searchMode) {
-        if (!searchMode && selectedCategory == null && categoryGroups.isNotEmpty()) {
-            viewModel.selectManagerCategory(categoryGroups.first().key)
+        if (!searchMode && categoryGroups.none { it.key == selectedCategory }) {
+            viewModel.selectManagerCategory(categoryGroups.firstOrNull()?.key)
         }
     }
     // One-time: drop focus onto the rail once there is something to focus. Guarded so an incidental
     // category re-emit later (a background sync) never yanks focus out of the channel list.
     var initialFocusDone by remember { mutableStateOf(false) }
     LaunchedEffect(categoryGroups, searchMode) {
-        if (!initialFocusDone && !searchMode && categoryGroups.isNotEmpty()) {
+        if (!initialFocusDone && !restoreEnglishFocus && !searchMode && !reviewingEnglish && !editingGroups && categoryGroups.isNotEmpty()) {
             delay(80)
             runCatching { railFocusRequester.requestFocus() }
             initialFocusDone = true
         }
+    }
+
+    if (reviewingEnglish) {
+        EnglishGroupsScreen(
+            state = englishState,
+            onScan = viewModel.englishGroups::scan,
+            onToggle = viewModel.englishGroups::toggle,
+            onSelectLikely = viewModel.englishGroups::selectLikely,
+            onClearSelection = viewModel.englishGroups::clearSelection,
+            onApply = {
+                if (viewModel.englishGroups.apply()) {
+                    reviewingEnglish = false
+                    restoreEnglishFocus = true
+                }
+            },
+            onClearFilter = {
+                viewModel.englishGroups.clearFilter()
+                reviewingEnglish = false
+                restoreEnglishFocus = true
+            },
+            onBack = {
+                viewModel.englishGroups.cancelReview()
+                reviewingEnglish = false
+                restoreEnglishFocus = true
+            },
+        )
+        return
+    }
+    if (editingGroups) {
+        CustomGroupsScreen(onBack = { editingGroups = false })
+        return
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -145,6 +192,7 @@ fun ChannelManagerScreen(
         Row(Modifier.weight(1f).fillMaxWidth()) {
             // ---- LEFT pane: Search, an optional source filter, and the category list ----------
             LazyColumn(
+                state = railListState,
                 modifier = Modifier
                     .width(280.dp)
                     .fillMaxHeight()
@@ -152,6 +200,21 @@ fun ChannelManagerScreen(
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                item {
+                    RailEntry(
+                        label = stringResource(R.string.english_groups_title),
+                        selected = false,
+                        onClick = { viewModel.englishGroups.beginReview(); reviewingEnglish = true },
+                        modifier = Modifier.focusRequester(englishActionFocus),
+                    )
+                }
+                if (englishState.activeFilter != null) item {
+                    RailEntry(
+                        label = stringResource(R.string.english_groups_clear_filter),
+                        selected = false,
+                        onClick = { viewModel.englishGroups.clearFilter(); restoreEnglishFocus = true },
+                    )
+                }
                 item {
                     RailEntry(
                         label = stringResource(R.string.nav_search),

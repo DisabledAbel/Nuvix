@@ -8,6 +8,9 @@
 package app.opentv.ui
 
 import android.app.Application
+import app.opentv.channels.EnglishGroupSession
+import app.opentv.channels.englishProviderGroups
+import app.opentv.channels.ProviderGroupKey
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.opentv.core.GuideChannelFilter
@@ -278,7 +281,12 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
      * filter across every underlying id at once. This is the on-device version of what
      * Viewella did on a server it had to pay for.
      */
-    data class CategoryGroup(val key: String, val label: String, val ids: List<String>)
+    data class CategoryGroup(
+        val key: String,
+        val label: String,
+        val ids: List<String>,
+        val providerKeys: Set<ProviderGroupKey>,
+    )
 
     val categoryGroups: StateFlow<List<CategoryGroup>> =
         combine(
@@ -298,14 +306,15 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
      * [managerCategoryGroups] so both group the rail identically.
      */
     private fun foldCategories(raw: List<Category>): List<CategoryGroup> {
-        val groups = LinkedHashMap<String, Pair<String, MutableList<String>>>()
+        val groups = LinkedHashMap<String, Triple<String, MutableList<String>, MutableSet<ProviderGroupKey>>>()
         for (category in raw) {
             val n = ChannelNameNormalizer.normalize(category.name)
             val key = n.groupKey.ifEmpty { category.id }
-            val entry = groups.getOrPut(key) { n.baseName to mutableListOf() }
+            val entry = groups.getOrPut(key) { Triple(n.baseName, mutableListOf(), mutableSetOf()) }
             entry.second += category.id
+            entry.third += ProviderGroupKey(category.sourceId, category.id)
         }
-        return groups.map { (key, value) -> CategoryGroup(key, value.first, value.second) }
+        return groups.map { (key, value) -> CategoryGroup(key, value.first, value.second, value.third) }
     }
 
     /**
@@ -636,8 +645,13 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
             .distinctUntilChanged()
             .flatMapLatest { q ->
                 if (q.length < 2) flowOf(emptyList())
-                else graph.catalogRepository.searchChannelsIncludingHidden(q)
-                    .map { channels -> buildRows(channels, emptyMap(), System.currentTimeMillis()) }
+                else combine(graph.catalogRepository.searchChannelsIncludingHidden(q),
+                    englishGroups.state.map { it.activeFilter }.distinctUntilChanged(), managerSelectedSource) { channels, englishFilter, source ->
+                    val filtered = englishFilter?.let { keys -> channels.filter {
+                        (source == null || it.sourceId == source) && ProviderGroupKey(it.sourceId, it.categoryId.orEmpty()) in keys
+                    } } ?: channels
+                    buildRows(filtered, emptyMap(), System.currentTimeMillis())
+                }.flowOn(Dispatchers.Default)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -647,6 +661,16 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
     // provider (cardiodoc's "keep sources separate"), and it includes HIDDEN channels so they can
     // be brought back. Always scoped to one category, never the whole catalogue, so the right pane
     // stays a size a remote can scroll (no flat 20k-row list).
+
+    /** Only Channel Manager subscribes; no scan, persistence or guide-side effects on startup. */
+    val englishGroups = EnglishGroupSession(viewModelScope)
+    val managerEnglishCatalog = combine(
+        graph.catalogRepository.observeCategories(StreamKind.LIVE),
+        graph.sourceRepository.observeAll(),
+        graph.catalogRepository.observeCategoryChannelCounts(),
+    ) { categories, providers, counts ->
+        englishProviderGroups(categories, providers, counts)
+    }.flowOn(Dispatchers.Default)
 
     /** Provider filter for the manager. null = every source ("All sources"). */
     val managerSelectedSource = MutableStateFlow<Long?>(null)
@@ -668,10 +692,20 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
         combine(
             graph.catalogRepository.observeCategories(StreamKind.LIVE),
             managerSelectedSource,
-        ) { raw, sourceId ->
+            englishGroups.state.map { it.activeFilter }.distinctUntilChanged(),
+        ) { raw, sourceId, englishFilter ->
             val scoped = if (sourceId == null) raw else raw.filter { it.sourceId == sourceId }
-            foldCategories(scoped)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            val original = foldCategories(scoped)
+            if (englishFilter == null) original else {
+                val allowed = foldCategories(scoped.filter { ProviderGroupKey(it.sourceId, it.id) in englishFilter })
+                    .associateBy { it.key }
+                // Preserve original rail order and labels, including codec-folded groups.
+                original.mapNotNull { group -> allowed[group.key]?.let { selected ->
+                    group.copy(ids = selected.ids, providerKeys = selected.providerKeys)
+                } }
+            }
+        }.flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Channels in the selected manager category (and source), grouped into [Row]s exactly like the
@@ -680,15 +714,19 @@ class ChannelsViewModel(app: Application) : AndroidViewModel(app) {
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val managerRows: StateFlow<List<Row>> =
-        combine(managerSelectedSource, managerSelectedCategory, managerCategoryGroups) { source, key, groups ->
-            val ids = key?.let { k -> groups.firstOrNull { it.key == k }?.ids }
-            source to ids
+        combine(managerSelectedSource, managerSelectedCategory, managerCategoryGroups,
+            englishGroups.state.map { it.activeFilter }.distinctUntilChanged()) { source, key, groups, englishFilter ->
+            val group = key?.let { k -> groups.firstOrNull { it.key == k } }
+            Triple(source, group?.ids, englishFilter?.intersect(group?.providerKeys.orEmpty()))
         }
             .distinctUntilChanged()
-            .flatMapLatest { (source, ids) ->
+            .flatMapLatest { (source, ids, englishFilter) ->
                 if (ids.isNullOrEmpty()) flowOf(emptyList())
                 else graph.catalogRepository.observeChannelsInIncludingHidden(source, ids)
-                    .map { channels -> buildRows(channels, emptyMap(), System.currentTimeMillis()) }
+                    .map { channels ->
+                        val filtered = englishFilter?.let { keys -> channels.filter { ProviderGroupKey(it.sourceId, it.categoryId.orEmpty()) in keys } } ?: channels
+                        buildRows(filtered, emptyMap(), System.currentTimeMillis())
+                    }
             }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

@@ -35,6 +35,13 @@ for manual runs, optional Apple/Mux availability checks, sanitized reports and e
 
 Recording, playback, and launcher support depend on your device and provider. Cloud sync is disabled by default; new categories require explicit opt-in. Provider credentials, stream URLs, device permissions, and playback tuning stay local.
 
+## Unreleased Channel Manager work
+
+[Smart English Group Detection](docs/english-group-detection.md) adds an optional local scan,
+reviewable confidence levels and an explicitly applied, reversible session-only group view
+filter. Provider labels do not guarantee English audio. Existing channel data and custom groups
+are preserved. This branch feature is not described as part of the stable v1.0.0 release.
+
 ## Screenshot
 
 Nuvix Home on an Android TV emulator, with no provider configured.

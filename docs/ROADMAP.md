@@ -1,5 +1,14 @@
 # Nuvix development roadmap
 
+## Unreleased: optional English group review
+
+[Smart English Group Detection](english-group-detection.md) adds conservative local provider
+metadata classification and a user-confirmed, session-only Channel Manager filter. Default
+behavior, original catalog data, custom groups and synchronization remain intact. Unit,
+provider-fixture and remote UI regression coverage accompany the implementation; physical TV,
+font-scaling, accessibility and low-memory acceptance remain required before release. This is
+unreleased work after the stable v1.0.0 baseline, not a change to the published APK.
+
 ## v1.0 community beta preparation
 
 [RC1](https://github.com/DisabledAbel/Nuvix/releases/tag/v1.0.0-rc.1) is published with code `22`.
