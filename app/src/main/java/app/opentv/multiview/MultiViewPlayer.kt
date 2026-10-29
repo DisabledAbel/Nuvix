@@ -187,7 +187,7 @@ class AndroidMultiViewPlayer(
     }
     override fun setVolume(volume: Float) { if (!released) player.volume = volume.coerceIn(0f, 1f) }
     override fun release() {
-        if (released) return
+        if (released && player.isReleased) return
         released = true
         prepareJob?.cancel(); prepareJob = null
         recovery?.close(); recovery = null; beginRecovery = null; recoveryBudget = null

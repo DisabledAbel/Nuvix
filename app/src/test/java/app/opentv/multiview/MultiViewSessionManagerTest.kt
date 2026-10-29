@@ -77,12 +77,13 @@ class MultiViewSessionManagerTest {
         }
         val starts = mutableListOf<ResolvedMultiViewChannel>()
         val volumes = mutableListOf<Float>()
+        var failRelease = false
         var releases = 0
             private set
         val currentVolume: Float get() = volumes.lastOrNull() ?: 0f
         override fun start(channel: ResolvedMultiViewChannel) { starts += channel }
         override fun setVolume(volume: Float) { volumes += volume; onVolumeChange() }
-        override fun release() { releases++; onRelease() }
+        override fun release() { if (failRelease) error("Synthetic device cleanup failure"); releases++; onRelease() }
         fun ready() = listener.ready()
         fun fail(kind: MultiViewFailureKind = MultiViewFailureKind.NETWORK) =
             listener.failed(MultiViewFailure(kind, "Test playback failure"))
@@ -196,6 +197,25 @@ class MultiViewSessionManagerTest {
         f.manager.release()
         runCurrent()
         assertTrue(f.players.all { it.releases == 1 })
+        assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
+    }
+
+    @Test fun failedCloseRetainsAccountAndDecoderCapacityWithoutRestartingOtherPanels() = runTest {
+        val f = Fixture(this, maximum = 8)
+        (1L..4L).forEach { f.addReady(it) }
+        val failed = f.player(2)
+        failed.failRelease = true
+        failed.recoveryReconnect!!.invoke(); runCurrent()
+        assertEquals(4, f.players.size)
+        assertEquals(4, f.connections.snapshot(1)!!.locallyReserved)
+        assertEquals(MultiViewPanelStatus.FAILED, f.panel(2).status)
+        assertTrue(listOf(1L, 3L, 4L).all { f.player(it).releases == 0 })
+        f.manager.remove(f.panel(2).id)
+        f.manager.add(5); runCurrent()
+        assertEquals(4, f.players.size) // The uncertain decoder is counted even after panel removal.
+        failed.failRelease = false
+        f.manager.stop()
+        assertEquals(1, failed.releases)
         assertEquals(0, f.connections.snapshot(1)!!.locallyReserved)
     }
 
