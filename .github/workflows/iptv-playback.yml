@@ -65,7 +65,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
       - name: Restore previous successful comparable playback report
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: work/iptv-baseline.json
           key: iptv-media3-v1-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
@@ -90,7 +90,7 @@ jobs:
       - name: Save successful baseline
         if: success()
         run: cp work/iptv-android.json work/iptv-baseline.json
-      - uses: actions/cache/save@v5
+      - uses: actions/cache/save@v6
         if: success()
         with:
           path: work/iptv-baseline.json
